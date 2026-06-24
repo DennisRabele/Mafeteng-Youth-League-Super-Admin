@@ -17,5 +17,11 @@ dependencies = [
   "supabase>=2.0,<3.0",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "api*"]
+exclude = ["tests*", "__pycache__*"]
+namespaces = false
+
 [tool.vercel]
 entrypoint = "api.super_admin:app"
