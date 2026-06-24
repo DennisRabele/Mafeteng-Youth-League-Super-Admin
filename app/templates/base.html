@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <script src="{{ url_for('static', path='/js/dashboard.js') }}" defer></script>
+  </head>
+  <body>
+    <div class="loading-overlay" data-loading-overlay>
+      <div class="loading-ring">
+        <img src="{{ assets.league_logo }}" alt="{{ app_name }} loading logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';">
+        <span class="loading-fallback">YDL</span>
+      </div>
+    </div>
+    <header class="topbar">
+      <a data-loading-trigger class="brand" href="/">
+        <span class="brand-logo-frame">
+          <img class="brand-logo" src="{{ assets.league_logo }}" alt="{{ app_name }} logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';">
+          <span class="fallback-logo">YDL</span>
+        </span>
+        <span class="brand-copy">{{ app_name }}</span>
+      </a>
+      <nav class="topnav">
+        {% if current_user and current_user.role == 'super_admin' %}
+          <a data-loading-trigger href="/super-admin">Dashboard</a>
+          <form data-loading-form method="post" action="/logout">
+            <button class="button button-outline" type="submit">Logout</button>
+          </form>
+        {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
+          <a data-loading-trigger href="/team-admin/dashboard">Dashboard</a>
+          <a data-loading-trigger href="/team-admin/account">My Account</a>
+          <form data-loading-form method="post" action="/logout">
+            <button class="button button-outline" type="submit">Logout</button>
+          </form>
+        {% else %}
+          {% if app_mode == 'team_admin' %}
+            <a data-loading-trigger class="active" href="/">Home</a>
+            <a data-loading-trigger href="/login">Fixtures</a>
+            <a data-loading-trigger href="/login">Tables</a>
+            <a data-loading-trigger href="/login">Performances</a>
+            <a data-loading-trigger href="/login">About</a>
+            <a data-loading-trigger href="/login">Contact</a>
+          {% elif app_mode == 'super_admin' %}
+            <a data-loading-trigger class="active" href="/">Home</a>
+          {% endif %}
+          <a data-loading-trigger href="/login">Login</a>
+          {% if app_mode == 'super_admin' %}
+            <a data-loading-trigger class="button button-primary" href="/register/super-admin">Register</a>
+          {% elif app_mode != 'super_admin' %}
+            <a data-loading-trigger class="button button-primary" href="/register/team-admin">Register</a>
+          {% endif %}
+        {% endif %}
+      </nav>
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="app-footer">
+      <span>{{ app_name }}</span>
+      <span>Teams, players, fixtures, tables and performances</span>
+    </footer>
+  </body>
+</html>

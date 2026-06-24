@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-shell narrow">
+  <div class="page-title">
+    <p class="eyebrow">Team Admin Registration</p>
+    <h1>Submit your application</h1>
+  </div>
+  <form class="form-card" method="post" action="/register/team-admin" enctype="multipart/form-data">
+    {% if message %}<p class="alert success">{{ message }}</p>{% endif %}
+    {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+    
+    <!-- Ask if this is first admin -->
+    {% if is_first is none %}
+    <fieldset style="margin-bottom: 30px;">
+      <legend style="font-weight: 600; margin-bottom: 15px;">Is this the first team admin registration for your team?</legend>
+      <label style="display: block; margin-bottom: 10px;">
+        <input type="radio" name="is_first_admin" value="true" required onchange="document.getElementById('team_id_field').style.display='none'; document.getElementById('team_name_field').style.display='block';">
+        Yes, this is the first team admin for this team
+      </label>
+      <label style="display: block;">
+        <input type="radio" name="is_first_admin" value="false" onchange="document.getElementById('team_id_field').style.display='block'; document.getElementById('team_name_field').style.display='none';">
+        No, there are other team admins for this team
+      </label>
+    </fieldset>
+    {% else %}
+    <input type="hidden" name="is_first_admin" value="{% if is_first %}true{% else %}false{% endif %}">
+    {% endif %}
+    
+    <div class="form-grid two">
+      <label>Full Name
+        <input name="full_name" required pattern="[A-Za-z\s]+" title="Full name can only contain letters and spaces">
+      </label>
+      <label id="team_name_field" {% if is_first == false %}style="display:none;"{% endif %}>Team Name
+        <input name="team_name" {% if is_first != false %}required{% endif %}>
+      </label>
+      <label id="team_id_field" {% if is_first != false %}style="display:none;"{% endif %}>Team ID
+        <input name="team_id" type="number" {% if is_first == false %}required{% endif %} placeholder="Enter the team ID">
+      </label>
+      <label>National ID
+        <input name="national_id" required pattern="[0-9]+" title="National ID must contain only numbers" inputmode="numeric">
+      </label>
+      <label>Phone Number
+        <input name="phone" required pattern="[0-9+\-\s]+" title="Phone can contain numbers, +, -, or spaces" inputmode="tel">
+      </label>
+      <label>Email Address
+        <input name="email" type="email" required>
+      </label>
+      <label>Password
+        <input name="password" type="password" required minlength="8" autocomplete="new-password">
+      </label>
+      <label>Confirm Password
+        <input name="confirm_password" type="password" required minlength="8" autocomplete="new-password">
+      </label>
+      <label>Profile Photo
+        <input name="photo" type="file" accept="image/*">
+      </label>
+    </div>
+    <div class="form-actions">
+      <a class="button button-muted" href="/">Cancel</a>
+      <button class="button button-primary" type="submit">Submit Registration</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

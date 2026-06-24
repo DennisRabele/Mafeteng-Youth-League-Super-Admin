@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="ydl-home super-admin-home">
+  <div class="ydl-hero">
+    <div class="ydl-hero-copy">
+      <p class="eyebrow">Super Admin Portal</p>
+      <h1>League <span>Control</span> Room</h1>
+      <p>Approve team admins, clubs, player registrations, renewals, and transfers before they become official league records.</p>
+      <div class="hero-actions">
+        <a data-loading-trigger class="button button-primary" href="/login">Login</a>
+        <a data-loading-trigger class="button button-outline" href="/register/super-admin">Register</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="home-feature-grid">
+    <a data-loading-trigger class="feature-card dark" href="/register/super-admin">
+      <span class="feature-icon">01</span>
+      <strong>Secure Access</strong>
+      <small>Create a Super Admin account for the approval desk.</small>
+    </a>
+    <a data-loading-trigger class="feature-card light" href="/login">
+      <span class="feature-icon">02</span>
+      <strong>Pending Approvals</strong>
+      <small>Review registrations, renewals, and transfers in one place.</small>
+    </a>
+    <a data-loading-trigger class="feature-card dark" href="/login">
+      <span class="feature-icon">03</span>
+      <strong>Age Checks</strong>
+      <small>See the calculated age for every player-related submission.</small>
+    </a>
+    <a data-loading-trigger class="feature-card light" href="/login">
+      <span class="feature-icon">04</span>
+      <strong>Category Control</strong>
+      <small>Keep teams aligned with their eligible youth registration period.</small>
+    </a>
+  </div>
+</section>
+{% endblock %}

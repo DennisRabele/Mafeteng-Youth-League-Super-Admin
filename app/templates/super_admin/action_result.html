@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-shell narrow">
+  <div class="form-card compact">
+    {% if error %}
+      <h1>Action Failed</h1>
+      <p class="alert error">{{ error }}</p>
+    {% else %}
+      <h1>Approval Complete</h1>
+      <p class="alert success">{{ message }}</p>
+      {% if generated_code %}
+        <div class="credential-box">
+          <span>Generated ID</span>
+          <strong>{{ generated_code }}</strong>
+        </div>
+      {% endif %}
+      {% if credential_email %}
+        <div class="credential-box">
+          <span>Approved Email</span>
+          <strong>{{ credential_email }}</strong>
+          <span>Password</span>
+          <strong>Hidden for security. The Team Admin uses the password created during registration.</strong>
+        </div>
+      {% endif %}
+    {% endif %}
+    <a class="button button-primary" href="/super-admin">Back To Dashboard</a>
+  </div>
+</section>
+{% endblock %}

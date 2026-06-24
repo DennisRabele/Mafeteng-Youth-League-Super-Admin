@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-shell">
+  <div class="form-card compact code-card">
+    <h1>{{ title or 'Code Verification' }}</h1>
+    {% if message %}<p class="alert success">{{ message }}</p>{% endif %}
+    {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+    <form class="stacked-form" method="post" action="{{ action }}">
+      <label>One Time Code
+        <input name="{{ code_field }}" required inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" autofocus>
+      </label>
+      <button class="button button-primary" type="submit">{{ submit_label or 'Continue' }}</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

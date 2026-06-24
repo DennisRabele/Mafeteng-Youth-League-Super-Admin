@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-shell narrow">
+  <div class="page-title">
+    <p class="eyebrow">Super Admin Registration</p>
+    <h1>Create Super Admin Account</h1>
+    <p class="limit-copy">{{ super_admin_count }} of {{ super_admin_limit }} Super Admin accounts are currently registered.</p>
+  </div>
+  <form class="form-card" method="post" action="/register/super-admin" enctype="multipart/form-data">
+    {% if message %}<p class="alert success">{{ message }}</p>{% endif %}
+    {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+    <div class="form-grid two">
+      <label>Full Name
+        <input name="full_name" required>
+      </label>
+      <label>Email Address
+        <input name="email" type="email" required>
+      </label>
+      <label>Password
+        <input name="password" type="password" required minlength="8" autocomplete="new-password">
+      </label>
+      <label>Confirm Password
+        <input name="confirm_password" type="password" required minlength="8" autocomplete="new-password">
+      </label>
+      <label>Profile Photo
+        <input name="photo" type="file" accept="image/*">
+      </label>
+    </div>
+    <div class="form-actions">
+      <a class="button button-muted" href="/login">Cancel</a>
+      <button class="button button-primary" type="submit">Register Super Admin</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

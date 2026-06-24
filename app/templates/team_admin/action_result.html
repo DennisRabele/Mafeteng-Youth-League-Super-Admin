@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-shell narrow">
+  <div class="form-card compact">
+    <h1>Registration</h1>
+    {% if error %}
+      <p class="alert error">{{ error }}</p>
+    {% else %}
+      <p class="alert success">{{ message }}</p>
+    {% endif %}
+    <a class="button button-primary" href="/team-admin/dashboard">Back To Dashboard</a>
+  </div>
+</section>
+{% endblock %}

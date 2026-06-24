@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="ydl-home">
+  <div class="ydl-hero">
+    <div class="ydl-hero-copy">
+      <h1>Developing Today's <span>Talent</span> For Tomorrow</h1>
+      <p>The official platform for managing players, teams, fixtures, tables and performance tracking across all leagues.</p>
+      <div class="hero-actions">
+        <a data-loading-trigger class="button button-primary" href="/login">Login</a>
+        <a data-loading-trigger class="button button-outline" href="/register/team-admin">Register</a>
+      </div>
+    </div>
+  </div>
+  <div class="home-feature-grid">
+    <a data-loading-trigger class="feature-card dark" href="/register/team-admin">
+      <span class="feature-icon">01</span>
+      <strong>Player Registration</strong>
+      <small>Register and manage player information</small>
+    </a>
+    <a data-loading-trigger class="feature-card light" href="/login">
+      <span class="feature-icon">02</span>
+      <strong>Fixtures</strong>
+      <small>View and manage all league fixtures</small>
+    </a>
+    <a data-loading-trigger class="feature-card dark" href="/login">
+      <span class="feature-icon">03</span>
+      <strong>League Tables</strong>
+      <small>Check standings and team rankings</small>
+    </a>
+    <a data-loading-trigger class="feature-card light" href="/login">
+      <span class="feature-icon">04</span>
+      <strong>Performances</strong>
+      <small>Track player and team performances</small>
+    </a>
+  </div>
+</section>
+{% endblock %}

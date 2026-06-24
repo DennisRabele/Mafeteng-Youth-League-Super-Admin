@@ -1,0 +1,513 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="app-layout">
+  <aside class="sidebar">
+    <span class="menu-label">Menu</span>
+    <button class="side-button active" type="button" data-section-target="team-admins">Team Admins</button>
+    <button class="side-button" type="button" data-section-target="teams">Teams</button>
+    <button class="side-button" type="button" data-section-target="players">Players</button>
+    <button class="side-button" type="button" data-section-target="renewals">Renewals</button>
+    <button class="side-button" type="button" data-section-target="transfers">Transfers</button>
+  </aside>
+
+  <div class="workspace">
+    <div class="admin-hero">
+      <div>
+        <p class="eyebrow">Super Admin</p>
+        <h1>Registration Approval Dashboard</h1>
+        <p>Review Team Admins, teams and players before they enter official league records.</p>
+      </div>
+      <div class="admin-hero-badge">
+        <span>Pending</span>
+        <strong>{{ counts.pending }}</strong>
+      </div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric"><span>Pending</span><strong>{{ counts.pending }}</strong></div>
+      <div class="metric"><span>Super Admins</span><strong>{{ counts.super_admins }}/5</strong></div>
+      <div class="metric"><span>Team Admins</span><strong>{{ counts.team_admins }}</strong></div>
+      <div class="metric"><span>Teams</span><strong>{{ counts.teams }}</strong></div>
+      <div class="metric"><span>Players</span><strong>{{ counts.players }}</strong></div>
+    </div>
+
+    <div class="section-switcher">
+      <button class="switch-button active" type="button" data-section-target="team-admins">Team Admins</button>
+      <button class="switch-button" type="button" data-section-target="teams">Teams</button>
+      <button class="switch-button" type="button" data-section-target="players">Players</button>
+      <button class="switch-button" type="button" data-section-target="renewals">Renewals</button>
+      <button class="switch-button" type="button" data-section-target="transfers">Transfers</button>
+    </div>
+
+    <section class="panel dashboard-section" id="team-admins" data-dashboard-section="team-admins">
+      <div class="panel-heading">
+        <h2>Team Admins</h2>
+      </div>
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+        <button class="button button-primary small" type="button" onclick="filterSuperAdminTable('team-admins', 'all')" data-filter="all">All</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('team-admins', 'approved')" data-filter="approved">Approved</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('team-admins', 'rejected')" data-filter="rejected">Rejected</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('team-admins', 'pending')" data-filter="pending">Pending</button>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <div class="table-scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Photo</th>
+              <th>Team Name</th>
+              <th>National ID</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Approved By</th>
+              <th>Decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in all_team_admins %}
+            <tr data-row data-status="{{ item.status }}">
+              <td>{{ item.user.full_name }}</td>
+              <td>
+                {% if item.user.photo_path %}
+                  <img class="thumb" src="{{ item.user.photo_path }}" alt="{{ item.user.full_name }}">
+                {% else %}
+                  <span class="no-image">No photo</span>
+                {% endif %}
+              </td>
+              <td>{{ item.requested_team_name }}</td>
+              <td>{{ item.user.national_id }}</td>
+              <td>{{ item.phone }}</td>
+              <td>{{ item.user.email }}</td>
+              <td><span class="status {{ item.status }}">{{ item.status }}</span></td>
+              <td>{% if item.approver_user %}{{ item.approver_user.full_name }}{% else %}-{% endif %}</td>
+              <td class="actions-cell">
+                {% if item.status != 'approved' %}
+                <form method="post" action="/super-admin/team-admins/{{ item.team_admin_id }}/approve">
+                  <button class="button button-primary small" type="submit">Approve</button>
+                </form>
+                {% endif %}
+                {% if item.status != 'rejected' %}
+                <form method="post" action="/super-admin/team-admins/{{ item.team_admin_id }}/reject">
+                  <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
+                  <button class="button button-danger small" type="submit">Reject</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="empty">No Team Admin registrations.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="teams" data-dashboard-section="teams" hidden>
+      <div class="panel-heading">
+        <h2>Teams</h2>
+      </div>
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+        <button class="button button-primary small" type="button" onclick="filterSuperAdminTable('teams', 'all')" data-filter="all">All</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('teams', 'approved')" data-filter="approved">Approved</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('teams', 'rejected')" data-filter="rejected">Rejected</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('teams', 'pending')" data-filter="pending">Pending</button>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <div class="table-scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th>Logo</th>
+              <th>Category</th>
+              <th>Team Admin</th>
+              <th>Contact</th>
+              <th>Address</th>
+              <th>Training Ground</th>
+              <th>Home Ground</th>
+              <th>Status</th>
+              <th>Approved By</th>
+              <th>Decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for team in all_teams %}
+            <tr data-row data-status="{{ team.status }}">
+              <td>{{ team.team_name }}</td>
+              <td>
+                {% if team.logo %}
+                  <img class="thumb" src="{{ team.logo }}" alt="{{ team.team_name }}">
+                {% else %}
+                  <span class="no-image">No logo</span>
+                {% endif %}
+              </td>
+              <td>{{ team.category.category_name }}</td>
+              <td>{{ team.team_admin.user.full_name }}</td>
+              <td>{{ team.contact_information }}</td>
+              <td>{{ team.team_address }}</td>
+              <td>{{ team.training_ground }}</td>
+              <td>{{ team.home_ground }}</td>
+              <td><span class="status {{ team.status }}">{{ team.status }}</span></td>
+              <td>{% if team.approver_user %}{{ team.approver_user.full_name }}{% else %}-{% endif %}</td>
+              <td class="actions-cell">
+                {% if team.status != 'approved' %}
+                <form method="post" action="/super-admin/teams/{{ team.team_id }}/approve">
+                  <button class="button button-primary small" type="submit">Approve</button>
+                </form>
+                {% endif %}
+                {% if team.status != 'rejected' %}
+                <form method="post" action="/super-admin/teams/{{ team.team_id }}/reject">
+                  <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
+                  <button class="button button-danger small" type="submit">Reject</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="11" class="empty">No team registrations.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="players" data-dashboard-section="players" hidden>
+      <div class="panel-heading">
+        <h2>Players</h2>
+      </div>
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="button button-primary small" type="button" onclick="filterSuperAdminTable('players', 'all')" data-filter="all">All</button>
+          <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('players', 'approved')" data-filter="approved">Approved</button>
+          <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('players', 'rejected')" data-filter="rejected">Rejected</button>
+          <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('players', 'pending')" data-filter="pending">Pending</button>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+            Team:
+            <select id="team-filter" onchange="filterPlayersByTeam()">
+              <option value="">All Teams</option>
+              {% for team in teams_list %}
+                <option value="{{ team.team_id }}">{{ team.team_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+            Category:
+            <select id="category-filter" onchange="filterPlayersByCategory()">
+              <option value="">All Categories</option>
+              <option value="U13">U13</option>
+              <option value="U15">U15</option>
+              <option value="U17">U17</option>
+              <option value="U20">U20</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <div class="table-scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Player ID</th>
+              <th>Photo</th>
+              <th>Team</th>
+              <th>Gender</th>
+              <th>Age</th>
+              <th>Age Group</th>
+              <th>Parent</th>
+              <th>Documents</th>
+              <th>Status</th>
+              <th>Approved By</th>
+              <th>Decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for player in all_players %}
+            <tr data-row data-status="{{ player.status }}" data-team="{{ player.team.team_id }}" data-category="{{ player.age_group }}">
+              <td>{{ player.full_name }}</td>
+              <td>{{ player.player_code or 'Pending' }}</td>
+              <td>
+                {% if player.photo_path %}
+                  <img class="thumb" src="{{ player.photo_path }}" alt="{{ player.full_name }}">
+                {% else %}
+                  <span class="no-image">No photo</span>
+                {% endif %}
+              </td>
+              <td>{{ player.team.team_name }}</td>
+              <td>{{ player.gender }}</td>
+              <td>{{ player.calculated_age if player.calculated_age is not none else '-' }}</td>
+              <td>{{ player.age_group }}</td>
+              <td>{% if player.parent %}{{ player.parent.name }}{% endif %}</td>
+              <td>
+                <div class="doc-list">
+                  {% if player.agreement_form_path %}
+                    <a href="{{ player.agreement_form_path }}" target="_blank">Parent/Guardian Consent Form</a>
+                  {% endif %}
+                  {% for document in player.documents %}
+                    <a href="{{ document.file_path }}" target="_blank">{{ document.document_type }}</a>
+                  {% else %}
+                    {% if not player.agreement_form_path %}
+                      <span class="no-image">No docs</span>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </td>
+              <td><span class="status {{ player.status }}">{{ player.status }}</span></td>
+              <td>{% if player.approver_user %}{{ player.approver_user.full_name }}{% else %}-{% endif %}</td>
+              <td class="actions-cell">
+                {% if player.status != 'approved' %}
+                <form method="post" action="/super-admin/players/{{ player.player_id }}/approve">
+                  <button class="button button-primary small" type="submit">Approve</button>
+                </form>
+                {% endif %}
+                {% if player.status != 'rejected' %}
+                <form method="post" action="/super-admin/players/{{ player.player_id }}/reject">
+                  <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
+                  <button class="button button-danger small" type="submit">Reject</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="12" class="empty">No player registrations.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="renewals" data-dashboard-section="renewals" hidden>
+      <div class="panel-heading">
+        <h2>Player Renewals</h2>
+      </div>
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+        <button class="button button-primary small" type="button" onclick="filterSuperAdminTable('renewals', 'all')" data-filter="all">All</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('renewals', 'approved')" data-filter="approved">Approved</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('renewals', 'rejected')" data-filter="rejected">Rejected</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('renewals', 'pending')" data-filter="pending">Pending</button>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <div class="table-scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Age</th>
+              <th>Team</th>
+              <th>Registration Period</th>
+              <th>Documents</th>
+              <th>Status</th>
+              <th>Submitted By</th>
+              <th>Approved By</th>
+              <th>Decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for renewal in all_renewals %}
+            <tr data-row data-status="{{ renewal.status }}">
+              <td>{{ renewal.player.full_name }}</td>
+              <td>{{ renewal.player.calculated_age if renewal.player.calculated_age is not none else '-' }}</td>
+              <td>{{ renewal.player.team.team_name }}</td>
+              <td>{{ renewal.registration_period }} Year(s)</td>
+              <td>
+                <div class="doc-list">
+                  {% if renewal.agreement_form_path %}
+                    <a href="{{ renewal.agreement_form_path }}" target="_blank">Renewal Parent/Guardian Consent Form</a>
+                  {% endif %}
+                  {% for document in renewal.player.documents %}
+                    <a href="{{ document.file_path }}" target="_blank">{{ document.document_type }}</a>
+                  {% else %}
+                    {% if not renewal.agreement_form_path %}
+                      <span class="no-image">No docs</span>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </td>
+              <td><span class="status {{ renewal.status }}">{{ renewal.status }}</span></td>
+              <td>{{ renewal.requested_by.user.full_name }}</td>
+              <td>{% if renewal.approver_user %}{{ renewal.approver_user.full_name }}{% else %}-{% endif %}</td>
+              <td class="actions-cell">
+                {% if renewal.status != 'approved' %}
+                <form method="post" action="/super-admin/renewals/{{ renewal.registration_id }}/approve">
+                  <button class="button button-primary small" type="submit">Approve</button>
+                </form>
+                {% endif %}
+                {% if renewal.status != 'rejected' %}
+                <form method="post" action="/super-admin/renewals/{{ renewal.registration_id }}/reject">
+                  <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
+                  <button class="button button-danger small" type="submit">Reject</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="9" class="empty">No renewal registrations.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="transfers" data-dashboard-section="transfers" hidden>
+      <div class="panel-heading">
+        <h2>Player Transfers</h2>
+      </div>
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+        <button class="button button-primary small" type="button" onclick="filterSuperAdminTable('transfers', 'all')" data-filter="all">All</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('transfers', 'approved')" data-filter="approved">Approved</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('transfers', 'rejected')" data-filter="rejected">Rejected</button>
+        <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('transfers', 'pending')" data-filter="pending">Pending</button>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <div class="table-scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Age</th>
+              <th>From Team</th>
+              <th>To Team</th>
+              <th>Transfer Type</th>
+              <th>Documents</th>
+              <th>Status</th>
+              <th>Requested By</th>
+              <th>Approved By</th>
+              <th>Decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for transfer in all_transfers %}
+            <tr data-row data-status="{{ transfer.status }}">
+              <td>{{ transfer.player.full_name }}</td>
+              <td>{{ transfer.player.calculated_age if transfer.player.calculated_age is not none else '-' }}</td>
+              <td>{% if transfer.transfer_request %}{{ transfer.transfer_request.from_team.team_name }}{% else %}-{% endif %}</td>
+              <td>{{ transfer.team.team_name }}</td>
+              <td>{% if transfer.transfer_request %}{{ transfer.transfer_request.transfer_type }}{% else %}Transfer{% endif %}</td>
+              <td>
+                <div class="doc-list">
+                  {% if transfer.agreement_form_path %}
+                    <a href="{{ transfer.agreement_form_path }}" target="_blank">Parent/Guardian Consent Form</a>
+                  {% endif %}
+                  {% for document in transfer.player.documents %}
+                    <a href="{{ document.file_path }}" target="_blank">{{ document.document_type }}</a>
+                  {% endfor %}
+                  {% if false %}
+                    <span style="color: #28a745;">✓ Consent Form</span>
+                  {% endif %}
+                  {% if transfer.transfer_request %}
+                    <span>Period: {{ transfer.transfer_request.registration_period }} Year(s)</span>
+                    {% if transfer.transfer_request.loan_period %}
+                      <span>Loan: {{ transfer.transfer_request.loan_period }}</span>
+                    {% endif %}
+                  {% endif %}
+                  {% if not transfer.agreement_form_path and not transfer.player.documents %}
+                    <span class="no-image">No docs</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td><span class="status {{ transfer.status }}">{{ transfer.status }}</span></td>
+              <td>{{ transfer.requested_by.user.full_name }}</td>
+              <td>{% if transfer.approver_user %}{{ transfer.approver_user.full_name }}{% else %}-{% endif %}</td>
+              <td class="actions-cell">
+                {% if transfer.status != 'approved' %}
+                <form method="post" action="/super-admin/transfers/{{ transfer.registration_id }}/approve">
+                  <button class="button button-primary small" type="submit">Approve</button>
+                </form>
+                {% endif %}
+                {% if transfer.status != 'rejected' %}
+                <form method="post" action="/super-admin/transfers/{{ transfer.registration_id }}/reject">
+                  <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
+                  <button class="button button-danger small" type="submit">Reject</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="10" class="empty">No transfer registrations.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>
+
+<script>
+  function filterSuperAdminTable(tableId, status) {
+    const rows = document.querySelectorAll(`#${tableId} table tbody tr[data-row]`);
+    const buttons = document.querySelectorAll(`#${tableId} [data-filter]`);
+    
+    buttons.forEach(btn => btn.classList.remove('button-primary'));
+    buttons.forEach(btn => btn.classList.add('button-muted'));
+    event.target.classList.remove('button-muted');
+    event.target.classList.add('button-primary');
+    
+    rows.forEach(row => {
+      if (status === 'all') {
+        row.style.display = '';
+      } else if (row.dataset.status === status) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+  
+  function filterPlayersByTeam() {
+    const teamId = document.getElementById('team-filter').value;
+    const categoryId = document.getElementById('category-filter').value;
+    const rows = document.querySelectorAll('#players table tbody tr[data-row]');
+    
+    rows.forEach(row => {
+      const rowTeam = row.dataset.team;
+      const rowCategory = row.dataset.category;
+      
+      let show = true;
+      if (teamId && rowTeam !== teamId) show = false;
+      if (categoryId && rowCategory !== categoryId) show = false;
+      
+      row.style.display = show ? '' : 'none';
+    });
+  }
+  
+  function filterPlayersByCategory() {
+    filterPlayersByTeam();
+  }
+</script>
+
+{% endblock %}

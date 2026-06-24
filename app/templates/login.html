@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-shell">
+  <form class="form-card compact" method="post" action="/login">
+    <h1>Login</h1>
+    {% if message %}<p class="alert success">{{ message }}</p>{% endif %}
+    {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+    <label>Email Address
+      <input name="email" type="email" required autocomplete="email" value="{{ email or '' }}">
+    </label>
+    <label>Password
+      <input name="password" type="password" required autocomplete="current-password">
+    </label>
+    <button class="button button-primary" type="submit">Continue</button>
+    <a class="button button-danger" href="/forgot-password" style="text-align: center; text-decoration: none; display: block; margin-top: 0.5rem;">Forgot Password?</a>
+    {% if app_mode == 'super_admin' %}
+      <a class="form-link" href="/register/super-admin">Register a Super Admin account</a>
+    {% elif app_mode == 'team_admin' %}
+      <a class="form-link" href="/register/team-admin">Register as a Team Admin</a>
+    {% endif %}
+  </form>
+</section>
+{% endblock %}

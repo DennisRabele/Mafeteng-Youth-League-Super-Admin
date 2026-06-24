@@ -1,0 +1,1233 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="app-layout">
+  <aside class="sidebar">
+    <span class="menu-label">Menu</span>
+    <button class="side-button active" type="button" data-section-target="team-form">Team registration</button>
+    <button class="side-button" type="button" data-section-target="player-form">Players Registration</button>
+    <button class="side-button" type="button" data-section-target="my-teams">MY clubs</button>
+    <button class="side-button" type="button" data-section-target="my-players">My Players</button>
+    <button class="side-button" type="button" data-section-target="my-account">My Account</button>
+  </aside>
+
+  <div class="workspace">
+    <div class="page-title">
+      <p class="eyebrow">Team Admin</p>
+      <h1>Registration Workspace</h1>
+    </div>
+
+    {% if team_admin.status != 'approved' %}
+      <div class="alert alert-warning" style="margin-bottom: 1.5rem; padding: 1rem; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; color: #333;">
+        <strong>Approval Pending</strong><br>
+        Your Team Admin account is currently pending approval. Once approved, you'll have full access to all features. Please review your account details and check your email for updates.
+      </div>
+    {% endif %}
+
+    <section class="panel dashboard-section" id="team-form" data-dashboard-section="team-form">
+      <div class="panel-heading">
+        <h2>Team Registration</h2>
+      </div>
+      <form class="form-grid two" method="post" action="/team-admin/teams" enctype="multipart/form-data">
+        <label>Team Name
+          <input name="team_name" required pattern="[A-Za-z0-9\s]+" title="Team name must contain only letters, numbers, and spaces">
+        </label>
+        <label>Category
+          <select name="category_id" required>
+            {% for category in categories %}
+              <option value="{{ category.category_id }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Contact Information
+          <input name="contact_information" required>
+        </label>
+        <label>Team Address
+          <input name="team_address" required>
+        </label>
+        <label>Training Grounds
+          <input name="training_ground" required>
+        </label>
+        <label>Home Grounds
+          <input name="home_ground" required>
+        </label>
+        <label>Team Logo
+          <input name="logo" type="file" accept="image/*">
+        </label>
+        <div class="form-actions wide">
+          <button class="button button-primary" type="submit">Submit Team Registration</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="dashboard-section" id="player-form" data-dashboard-section="player-form" hidden>
+      <div class="player-registration-shell">
+        <div class="page-title compact-title">
+          <h1>Players Registration</h1>
+          <p class="breadcrumb">Dashboard / Players Registration</p>
+        </div>
+
+        <!-- Registration Type Selection Screen -->
+        <div id="registration-type-selector" class="registration-type-selector" style="display: block;">
+          <section class="panel" style="text-align: center; padding: 2rem;">
+            <h2>Select Registration Type</h2>
+            <p style="color: #666; margin-bottom: 2rem;">Choose what you want to do:</p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+              <button type="button" class="button button-primary large" onclick="selectRegistrationType('new')" style="padding: 1.5rem;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">➕</div>
+                New Player
+              </button>
+              <button type="button" class="button button-primary large" onclick="selectRegistrationType('renewal')" style="padding: 1.5rem;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔄</div>
+                Renewal
+              </button>
+              <button type="button" class="button button-primary large" onclick="selectRegistrationType('transfer')" style="padding: 1.5rem;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔀</div>
+                Transfer
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <!-- New Player Registration Form -->
+        <div id="new-player-form" class="registration-form" style="display: none;">
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">← Back</button>
+          <section class="panel form-section">
+            <div class="panel-heading">
+              <h2>New Player Registration</h2>
+              <a class="button button-danger small" href="/team-admin/parent-consent-template" target="_blank">Download Parent/Guardian Consent Form</a>
+            </div>
+            {% if approved_teams %}
+            <form class="player-registration-form" method="post" action="/team-admin/players" enctype="multipart/form-data">
+              <div class="player-form-main">
+                <section class="form-section">
+                  <h2>Personal Information</h2>
+                  <div class="form-grid two">
+                    <label>Full Name
+                      <input name="full_name" placeholder="Enter full name" required pattern="[A-Za-z\s]+" title="Full name can only contain letters and spaces">
+                    </label>
+                    <label>Date Of Birth
+                      <input name="dob" type="date" required onchange="updatePlayerCategory(this)">
+                    </label>
+                    <label>Gender
+                      <select name="gender" required onchange="updatePlayerCategory(this)">
+                        <option value="">Select Gender</option>
+                        <option>Male</option>
+                        <option>Female</option>
+                      </select>
+                    </label>
+                    <div id="category-info" style="padding: 1rem; background-color: #f0f8ff; border-radius: 4px; grid-column: 1 / -1; display: none;">
+                      <strong>Eligible Category:</strong> <span id="category-display">-</span>
+                    </div>
+                    <label>Nationality
+                      <input name="nationality" placeholder="Enter nationality" required pattern="[A-Za-z\s]+" title="Nationality can only contain letters">
+                    </label>
+                    <label>Phone Number
+                      <input name="parent_contact" placeholder="Enter parent phone number" required pattern="[0-9+\-\s]+" title="Phone can contain numbers, +, -, or spaces" inputmode="tel">
+                    </label>
+                    <label>Email (Optional)
+                      <input name="player_email" type="email" placeholder="Optional email">
+                    </label>
+                    <label>Residential Address
+                      <textarea name="player_address" placeholder="Enter residential address"></textarea>
+                    </label>
+                    <label>School Name
+                      <input name="school_name" placeholder="Enter school name">
+                    </label>
+                    <label>Parent/Guardian Name
+                      <input name="parent_name" placeholder="Enter parent or guardian name" required pattern="[A-Za-z\s]+" title="Name can only contain letters and spaces">
+                    </label>
+                  </div>
+                </section>
+
+                <section class="form-section">
+                  <h2>Team Information</h2>
+                  <div class="form-grid two">
+                    <label>Team
+                      <select name="team_id" required>
+                        <option value="">Select team</option>
+                        {% for team in approved_teams %}
+                          <option
+                            value="{{ team.team_id }}"
+                            data-category="{{ team.category.category_name }}"
+                            data-gender="{% if team.category.category_name.lower().startswith('female') %}Female{% elif team.category.category_name.lower().startswith('male') %}Male{% endif %}"
+                          >{{ team.team_name }} - {{ team.category.category_name }}</option>
+                        {% endfor %}
+                      </select>
+                    </label>
+                    <label>Position
+                      <select name="position">
+                        <option value="">Select Position</option>
+                        <option>Goalkeeper</option>
+                        <option>Defender</option>
+                        <option>Midfielder</option>
+                        <option>Forward</option>
+                      </select>
+                    </label>
+                    <label>Registration Period
+                      <select name="registration_period" id="registration-period-select" required>
+                        <option value="1">1 Year</option>
+                        <option value="2">2 Years</option>
+                        <option value="3">3 Years</option>
+                      </select>
+                      <small id="registration-period-suggestion" style="display: block; margin-top: 0.35rem; color: #2e7d32;">Choose date of birth to see the suggested period.</small>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="form-section">
+                  <h2>Parent/Guardian Consent Form</h2>
+                  <table class="consent-form-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                      <tr style="background-color: #f5f5f5;">
+                        <th style="padding: 1rem; text-align: left; border: 1px solid #ddd;">Document</th>
+                        <th style="padding: 1rem; text-align: left; border: 1px solid #ddd;">Status</th>
+                        <th style="padding: 1rem; text-align: left; border: 1px solid #ddd;">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td style="padding: 1rem; border: 1px solid #ddd;">Parent/Guardian Consent Form (Signed)</td>
+                        <td style="padding: 1rem; border: 1px solid #ddd;"><span id="consent-status">Not Uploaded</span></td>
+                        <td style="padding: 1rem; border: 1px solid #ddd;">
+                          <label class="button button-small" style="cursor: pointer;">
+                            Upload
+                            <input name="parent_consent_picture" type="file" accept=".pdf,.doc,.docx,.txt,image/*" required onchange="updateConsentStatus(this)">
+                          </label>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+              </div>
+
+              <aside class="player-form-side">
+                <section class="upload-panel">
+                  <h2>Player Photo</h2>
+                  <label class="upload-box">Click to upload photo
+                    <span>PNG, JPG up to 5MB</span>
+                    <input name="passport_photo" type="file" accept="image/*">
+                  </label>
+                </section>
+
+                <section class="upload-panel">
+                  <h2>Identity Documents</h2>
+                  <label>Identity Document Type
+                    <select name="identity_document_type" required>
+                      <option>Birth Certificate</option>
+                      <option>Passport</option>
+                      <option>National ID</option>
+                    </select>
+                  </label>
+                  <label class="document-upload">Identity Document
+                    <input name="identity_document" type="file" accept=".pdf,.doc,.docx,.txt,image/*" required>
+                  </label>
+                  <label class="document-upload">Medical Certificate (Optional)
+                    <input name="medical_certificate" type="file" accept=".pdf,.doc,.docx,.txt,image/*">
+                  </label>
+                </section>
+              </aside>
+
+              <div class="player-form-actions">
+                <button class="button button-muted" type="reset">Clear Form</button>
+                <button class="button button-primary" type="submit">Submit New Player</button>
+              </div>
+            </form>
+            {% else %}
+              <p class="empty">An approved team is required before player registration can begin.</p>
+            {% endif %}
+          </section>
+        </div>
+
+        <!-- Renewal Registration Form -->
+        <div id="renewal-form" class="registration-form" style="display: none;">
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">← Back</button>
+          <section class="panel form-section">
+            <div class="panel-heading">
+              <h2>Renewal Registration</h2>
+              <a class="button button-danger small" href="/team-admin/parent-consent-template" target="_blank">Download Parent/Guardian Consent Form</a>
+            </div>
+            <form class="form-grid two" method="post" action="/team-admin/players/renewals" enctype="multipart/form-data">
+              <label>Player
+                <select name="player_id" required>
+                  {% for player in approved_players %}
+                    <option value="{{ player.player_id }}">{{ player.full_name }} - {{ player.team.team_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label>Registration Period
+                <select name="registration_period" required>
+                  <option value="">Select period</option>
+                  <option value="1">1 Year</option>
+                  <option value="2">2 Years</option>
+                  <option value="3">3 Years</option>
+                </select>
+              </label>
+              <label style="grid-column: 1 / -1;">
+                <div style="margin-bottom: 0.5rem; font-weight: 600;">Parent/Guardian Consent Form (Signed)</div>
+                <input name="parent_consent_picture" type="file" accept=".pdf,.doc,.docx,.txt,image/*" required>
+              </label>
+              <div class="form-actions wide">
+                <button class="button button-muted" type="button" onclick="backToSelector()">Cancel</button>
+                <button class="button button-primary" type="submit">Submit Renewal</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <!-- Transfer Registration Forms -->
+        <div id="transfer-form" class="registration-form" style="display: none;">
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">← Back</button>
+          
+          <!-- Request Transfer Section -->
+          <section class="panel form-section" style="margin-bottom: 2rem;">
+            <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
+              <h2 style="margin: 0;">Request Transfer (Send)</h2>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">▼</button>
+            </div>
+            <div class="section-content" style="display: none;">
+            <form class="form-grid" method="post" action="/team-admin/transfers">
+              <label style="grid-column: 1 / 2;">Player to Transfer (Type Name)
+                <input name="player_name" type="text" placeholder="Type player name to search" required list="players-list">
+                <datalist id="players-list">
+                  {% for player in approved_players %}
+                    <option value="{{ player.full_name }} ({{ player.player_id }})">
+                  {% endfor %}
+                </datalist>
+                <input name="player_id" type="hidden" required>
+              </label>
+              <label style="grid-column: 2 / 3;">Transfer To Team
+                <select name="to_team_id" required>
+                  <option value="">Select destination team</option>
+                  {% for team in all_teams %}
+                    <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label style="grid-column: 2 / 3;">Transfer Type
+                <select name="transfer_type" required onchange="toggleTransferFields(this)">
+                  <option value="">Select type</option>
+                  <option value="Loan Transfer">Loan Transfer</option>
+                  <option value="Permanent Transfer">Permanent Transfer</option>
+                </select>
+              </label>
+              <label id="loan-period-label" style="grid-column: 2 / 3; display: none;">Loan Period
+                <select name="loan_period">
+                  <option value="6 months">6 Months</option>
+                  <option value="1 year">1 Year</option>
+                </select>
+              </label>
+              <label id="registration-period-label" style="grid-column: 2 / 3;">Registration Period
+                <select name="registration_period">
+                  <option value="1">1 Year</option>
+                  <option value="2">2 Years</option>
+                  <option value="3">3 Years</option>
+                </select>
+              </label>
+              <label style="grid-column: 1 / -1;">Player Details
+                <textarea name="player_details" required placeholder="Enter player details (skills, achievements, current performance)..." style="min-height: 80px;"></textarea>
+              </label>
+              <label style="grid-column: 1 / -1;">Transfer Conditions
+                <textarea name="transfer_conditions" required placeholder="Enter transfer conditions (duration, return policy, etc.)..." style="min-height: 80px;"></textarea>
+              </label>
+              <div class="form-actions wide">
+                <button class="button button-muted" type="button" onclick="backToSelector()">Cancel</button>
+                <button class="button button-primary" type="submit">Send Transfer Request</button>
+              </div>
+            </form>
+            </div>
+          </section>
+
+          <!-- Incoming Transfers Section -->
+          <section class="panel form-section" style="margin-bottom: 2rem;">
+            <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
+              <h2 style="margin: 0;">Incoming Transfer Requests</h2>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">▼</button>
+            </div>
+            <div class="section-content" style="display: none;">
+            <div class="transfer-list">
+              {% if incoming_transfers %}
+                {% for transfer in incoming_transfers %}
+                  <article style="margin-bottom: 2rem; padding: 1.5rem; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    
+                    <!-- Player Info Header -->
+                    <div style="display: grid; grid-template-columns: 100px 1fr; gap: 1.5rem; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #eee;">
+                      <div style="text-align: center;">
+                        {% if transfer.player.photo_path %}
+                          <img src="{{ transfer.player.photo_path }}" alt="{{ transfer.player.full_name }}" style="width: 100px; height: 100px; border-radius: 8px; object-fit: cover;">
+                        {% else %}
+                          <div style="width: 100px; height: 100px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999;">No Photo</div>
+                        {% endif %}
+                      </div>
+                      <div>
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.3rem;">{{ transfer.player.full_name }}</h3>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.95rem;">
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>From Team:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.from_team.team_name }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>To Team:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.to_team.team_name }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Transfer Type:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.transfer_type }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Status:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;"><span class="status {{ transfer.status }}" style="padding: 0.3rem 0.6rem; border-radius: 3px; font-size: 0.9rem;">{{ transfer.status }}</span></td>
+                          </tr>
+                        </table>
+                      </div>
+                    </div>
+
+                    <!-- Transfer Details -->
+                    <div style="margin-bottom: 1.5rem;">
+                      <h4 style="margin-bottom: 0.5rem;">Transfer Details</h4>
+                      <p><strong>Conditions:</strong></p>
+                      <p style="padding: 0.5rem; background: #f9f9f9; border-radius: 3px; margin: 0;">{{ transfer.transfer_conditions }}</p>
+                    </div>
+
+                    <!-- Actions based on status -->
+                    {% if transfer.status == 'pending' %}
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <form class="form-grid" method="post" action="/team-admin/transfers/{{ transfer.transfer_id }}/respond">
+                          <label style="grid-column: 1 / -1;">Approve Transfer
+                            <button class="button button-primary" type="submit" name="decision" value="approved" style="width: 100%; margin-top: 0.5rem;">✓ Approve</button>
+                          </label>
+                        </form>
+                        <form class="form-grid" method="post" action="/team-admin/transfers/{{ transfer.transfer_id }}/respond">
+                          <label style="grid-column: 1 / -1;">Rejection Reason
+                            <textarea name="rejection_reason" required placeholder="Explain why you're rejecting this transfer..." style="min-height: 60px;"></textarea>
+                          </label>
+                          <button class="button button-muted" type="submit" name="decision" value="rejected" style="width: 100%; margin-top: 0.5rem;">✗ Reject</button>
+                        </form>
+                      </div>
+                    {% elif transfer.status == 'approved' %}
+                      <div class="form-grid">
+                        <div style="grid-column: 1 / -1; padding: 1rem; background: #e8f5e9; border-radius: 4px; margin-bottom: 1rem;">
+                          <p style="margin: 0; color: #2e7d32;"><strong>✓ Transfer Approved</strong></p>
+                          <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #2e7d32;">The player has been released for the requesting team. Registration continues from their Register Transferred Players section.</p>
+                        </div>
+                        <label style="grid-column: 1 / -1; display: none;">Parent/Guardian Consent Form (Download, Sign, Upload)
+                          <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; margin-top: 0.5rem;">
+                            <a href="/team-admin/parent-consent-template" target="_blank" class="button button-danger" style="padding: 0.5rem 1rem;">⬇ Download Form</a>
+                            <input name="player_consent_form" type="file" accept=".pdf,.doc,.docx,.txt,image/*" required style="padding: 0.5rem;">
+                          </div>
+                        </label>
+                        <div class="form-actions wide" style="grid-column: 1 / -1;">
+                          <span class="status approved">Source Team Approved</span>
+                        </div>
+                      </div>
+                    {% elif transfer.status == 'rejected' %}
+                      <div style="padding: 1rem; background: #ffebee; border-radius: 4px;">
+                        <p style="margin: 0; color: #c62828;"><strong>✗ Transfer Rejected</strong></p>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #c62828;">{{ transfer.rejection_reason }}</p>
+                      </div>
+                    {% endif %}
+                  </article>
+                {% endfor %}
+              {% else %}
+                <p class="empty">No incoming transfer requests.</p>
+              {% endif %}
+            </div>
+            </div>
+          </section>
+
+          <!-- Outgoing Transfers Status Section -->
+          <section class="panel form-section" style="margin-bottom: 2rem;">
+            <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
+              <h2 style="margin: 0;">Outgoing Transfer Requests Status</h2>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">▼</button>
+            </div>
+            <div class="section-content" style="display: none;">
+            <div class="transfer-list">
+              {% if outgoing_transfers %}
+                {% for transfer in outgoing_transfers %}
+                  <article style="margin-bottom: 1.5rem; padding: 1rem; background: white; border-left: 4px solid {% if transfer.status == 'approved' %}#4caf50{% elif transfer.status == 'rejected' %}#f44336{% else %}#ff9800{% endif %}; border-radius: 2px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: center;">
+                      <div>
+                        <h4 style="margin: 0 0 0.3rem 0;">{{ transfer.player.full_name }}</h4>
+                        <p style="margin: 0; font-size: 0.9rem; color: #666;">{{ transfer.from_team.team_name }} → {{ transfer.to_team.team_name }}</p>
+                      </div>
+                      <div>
+                        <p style="margin: 0;"><strong>Type:</strong> {{ transfer.transfer_type }}</p>
+                        <p style="margin: 0; font-size: 0.9rem; color: #666;">{{ transfer.created_at.strftime('%Y-%m-%d') }}</p>
+                      </div>
+                      <div>
+                        {% if transfer.status == 'approved' %}
+                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #4caf50; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">✓ Approved</span>
+                        {% elif transfer.status == 'rejected' %}
+                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #f44336; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">✗ Rejected</span>
+                        {% else %}
+                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #ff9800; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">⏳ Pending</span>
+                        {% endif %}
+                      </div>
+                      {% if transfer.rejection_reason %}
+                        <details style="cursor: pointer;">
+                          <summary style="font-weight: 600; color: #f44336;">View Reason</summary>
+                          <p style="margin-top: 0.5rem; padding: 0.5rem; background: #ffebee; border-radius: 3px;">{{ transfer.rejection_reason }}</p>
+                        </details>
+                      {% endif %}
+                    </div>
+                  </article>
+                {% endfor %}
+              {% else %}
+                <p class="empty">No outgoing transfer requests.</p>
+              {% endif %}
+            </div>
+            </div>
+          </section>
+
+          <!-- Request for Player Section -->
+          <section class="panel form-section" style="margin-bottom: 2rem;">
+            <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
+              <h2 style="margin: 0;">Request Player from Another Team</h2>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">▼</button>
+            </div>
+            <div class="section-content" style="display: none;">
+            <form class="form-grid" method="post" action="/team-admin/player-requests">
+              <label style="grid-column: 1 / 2;">Player Name (Type Name)
+                <input name="player_name" type="text" placeholder="Type player name to search" required list="request-players-list">
+                <datalist id="request-players-list">
+                  {% for player in all_registered_players %}
+                    <option value="{{ player.full_name }} ({{ player.player_id }})">
+                  {% endfor %}
+                </datalist>
+                <input name="player_id" type="hidden" required>
+              </label>
+              <label style="grid-column: 2 / 3;">From Team
+                <select name="from_team_id" required>
+                  <option value="">Select team</option>
+                  {% for team in all_teams %}
+                    <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label style="grid-column: 1 / 2;">Register To Team
+                <select name="to_team_id" required>
+                  <option value="">Select your team</option>
+                  {% for team in approved_teams %}
+                    <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label style="grid-column: 2 / 3;">Request Type
+                <select name="request_type" required onchange="toggleRequestFields(this)">
+                  <option value="">Select type</option>
+                  <option value="Loan Request">Loan Request</option>
+                  <option value="Permanent Request">Permanent Request</option>
+                </select>
+              </label>
+              <label id="request-loan-period-label" style="grid-column: 2 / 3; display: none;">Loan Period
+                <select name="request_loan_period">
+                  <option value="6 months">6 Months</option>
+                  <option value="1 year">1 Year</option>
+                </select>
+              </label>
+              <label id="request-registration-period-label" style="grid-column: 2 / 3;">Registration Period
+                <select name="request_registration_period">
+                  <option value="1">1 Year</option>
+                  <option value="2">2 Years</option>
+                  <option value="3">3 Years</option>
+                </select>
+              </label>
+              <label style="grid-column: 1 / -1;">Request Details
+                <textarea name="request_details" required placeholder="Enter request details (reasons, player skills, etc.)..." style="min-height: 80px;"></textarea>
+              </label>
+              <div class="form-actions wide">
+                <button class="button button-muted" type="button" onclick="backToSelector()">Cancel</button>
+                <button class="button button-primary" type="submit">Send Player Request</button>
+              </div>
+            </form>
+            </div>
+          </section>
+
+          <!-- Register Transferred Players Section -->
+          <section class="panel form-section" style="margin-bottom: 2rem;">
+            <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
+              <div>
+                <h2 style="margin: 0;">Unregister and Register Transfered Players</h2>
+                <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.95rem;">Approved transfers are automatically released from the old team. Verify player and transfer details, then upload the new team's Parent/Guardian Consent Form.</p>
+              </div>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; flex-shrink: 0;">▼</button>
+            </div>
+            <div class="section-content" style="display: none;">
+            <div class="transfer-list">
+              {% if approved_transfers_for_registration %}
+                {% for transfer in approved_transfers_for_registration %}
+                  <article style="margin-bottom: 2rem; padding: 1.5rem; background: white; border: 1px solid #4caf50; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    
+                    <!-- Player Info Header -->
+                    <div style="display: grid; grid-template-columns: 100px 1fr; gap: 1.5rem; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #eee;">
+                      <div style="text-align: center;">
+                        {% if transfer.player.photo_path %}
+                          <img src="{{ transfer.player.photo_path }}" alt="{{ transfer.player.full_name }}" style="width: 100px; height: 100px; border-radius: 8px; object-fit: cover;">
+                        {% else %}
+                          <div style="width: 100px; height: 100px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999;">No Photo</div>
+                        {% endif %}
+                      </div>
+                      <div>
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.3rem;">{{ transfer.player.full_name }}</h3>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.95rem;">
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Age Group:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.player.age_group }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>From Team:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.from_team.team_name }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>To Team (Your Team):</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.to_team.team_name }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Transfer Type:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.transfer_type }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Registration Period:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.registration_period }} Year(s)</td>
+                          </tr>
+                          {% if transfer.loan_period %}
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Loan Period:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.loan_period }}</td>
+                          </tr>
+                          {% endif %}
+                        </table>
+                      </div>
+                    </div>
+
+                    <!-- Transfer Details -->
+                    <div style="margin-bottom: 1.5rem;">
+                      <h4 style="margin-bottom: 0.5rem;">Transfer Details</h4>
+                      <p><strong>Conditions:</strong></p>
+                      <p style="padding: 0.5rem; background: #f9f9f9; border-radius: 3px; margin: 0;">{{ transfer.transfer_conditions }}</p>
+                    </div>
+
+                    <!-- Existing Documents -->
+                    <div style="margin-bottom: 1.5rem;">
+                      <h4 style="margin-bottom: 0.5rem;">Existing Documents</h4>
+                      <div style="padding: 0.5rem; background: #f9f9f9; border-radius: 3px;">
+                        {% for document in transfer.player.documents %}
+                          <p style="margin: 0.3rem 0;"><a href="{{ document.file_path }}" target="_blank">✓ {{ document.document_type }}</a></p>
+                        {% else %}
+                          <p style="margin: 0; color: #999;">No documents on file</p>
+                        {% endfor %}
+                      </div>
+                    </div>
+
+                    <!-- Registration Form -->
+                    <form method="post" action="/team-admin/transfers/{{ transfer.transfer_id }}/register-transferred-player" enctype="multipart/form-data">
+                      <div style="padding: 1rem; background: #e8f5e9; border-radius: 4px; margin-bottom: 1rem;">
+                        <p style="margin: 0; color: #2e7d32;"><strong>✓ Transfer Approved by Both Teams</strong></p>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #2e7d32;">Complete registration by uploading Parent/Guardian Consent Form for the new team.</p>
+                      </div>
+                      
+                      <label style="display: block; margin-bottom: 1rem;">Parent/Guardian Consent Form (Download, Sign, Upload)
+                        <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; margin-top: 0.5rem;">
+                          <a href="/team-admin/parent-consent-template" target="_blank" class="button button-danger" style="padding: 0.5rem 1rem;">⬇ Download Form</a>
+                          <input name="consent_form" type="file" accept=".pdf,.doc,.docx,.txt,image/*" required style="padding: 0.5rem;">
+                        </div>
+                      </label>
+                      
+                      <div style="display: flex; gap: 1rem;">
+                        <button class="button button-primary" type="submit">Register Transferred Player</button>
+                      </div>
+                    </form>
+                  </article>
+                {% endfor %}
+              {% else %}
+                <p class="empty">No approved transfers pending registration.</p>
+              {% endif %}
+            </div>
+            </div>
+          </section>
+
+          <!-- Unregister Transferred Players Section -->
+          <section class="panel form-section" style="margin-bottom: 2rem;">
+            <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
+              <div>
+                <h2 style="margin: 0;">Released Transfer Status</h2>
+                <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.95rem;">Approved outgoing transfers are released automatically. Loans stay visible but blurred until the loan period ends.</p>
+              </div>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; flex-shrink: 0;">▼</button>
+            </div>
+            <div class="section-content" style="display: none;">
+            <div class="transfer-list">
+              {% if approved_transfers_for_unregistration %}
+                {% for transfer in approved_transfers_for_unregistration %}
+                  <article style="margin-bottom: 2rem; padding: 1.5rem; background: white; border-left: 4px solid #ff9800; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    
+                    <!-- Player Info Header -->
+                    <div style="display: grid; grid-template-columns: 100px 1fr; gap: 1.5rem; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #eee;">
+                      <div style="text-align: center;">
+                        {% if transfer.player.photo_path %}
+                          <img src="{{ transfer.player.photo_path }}" alt="{{ transfer.player.full_name }}" style="width: 100px; height: 100px; border-radius: 8px; object-fit: cover;">
+                        {% else %}
+                          <div style="width: 100px; height: 100px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999;">No Photo</div>
+                        {% endif %}
+                      </div>
+                      <div>
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.3rem;">{{ transfer.player.full_name }}</h3>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.95rem;">
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>From Team (Your Team):</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.from_team.team_name }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>To Team:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.to_team.team_name }}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Transfer Type:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.transfer_type }}</td>
+                          </tr>
+                          {% if transfer.loan_period %}
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Loan Period:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.loan_period }}</td>
+                          </tr>
+                          {% endif %}
+                        </table>
+                      </div>
+                    </div>
+
+                    <!-- Unregistration Form -->
+                    <div>
+                      <div style="padding: 1rem; background: #fff3cd; border-radius: 4px; margin-bottom: 1rem;">
+                        <p style="margin: 0; color: #856404;"><strong>⚠ Confirm Unregistration</strong></p>
+                        {% if transfer.transfer_type == 'Loan Transfer' %}
+                          <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #856404;">This player will be marked as on loan and will return to your roster after the loan period ({{ transfer.loan_period }}).</p>
+                        {% else %}
+                          <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #856404;">This is a permanent transfer. The player will be removed from your team records.</p>
+                        {% endif %}
+                      </div>
+                      
+                      <div style="display: flex; gap: 1rem;">
+                        <span class="status approved">Already Released</span>
+                      </div>
+                    </div>
+                  </article>
+                {% endfor %}
+              {% else %}
+                <p class="empty">No approved transfers pending unregistration.</p>
+              {% endif %}
+            </div>
+            </div>
+          </section>
+        </div>
+
+        <script>
+          // Toggle section content visibility
+          function toggleSection(heading) {
+            const content = heading.nextElementSibling;
+            const btn = heading.querySelector('.toggle-btn');
+            if (content && content.classList.contains('section-content')) {
+              const isHidden = content.style.display === 'none';
+              content.style.display = isHidden ? 'block' : 'none';
+              btn.textContent = isHidden ? '▲' : '▼';
+            }
+          }
+
+          function selectRegistrationType(type) {
+            document.getElementById('registration-type-selector').style.display = 'none';
+            document.getElementById('new-player-form').style.display = 'none';
+            document.getElementById('renewal-form').style.display = 'none';
+            document.getElementById('transfer-form').style.display = 'none';
+            
+            if (type === 'new') {
+              document.getElementById('new-player-form').style.display = 'block';
+            } else if (type === 'renewal') {
+              document.getElementById('renewal-form').style.display = 'block';
+            } else if (type === 'transfer') {
+              document.getElementById('transfer-form').style.display = 'block';
+            }
+          }
+
+          function backToSelector() {
+            document.getElementById('registration-type-selector').style.display = 'block';
+            document.getElementById('new-player-form').style.display = 'none';
+            document.getElementById('renewal-form').style.display = 'none';
+            document.getElementById('transfer-form').style.display = 'none';
+          }
+
+          // Enhance player search with AJAX for both forms
+          const playerNameInputs = document.querySelectorAll('input[name="player_name"]');
+          function applySelectedPlayer(form, selectedValue) {
+            const match = selectedValue.match(/\((\d+)\)$/);
+            const playerIdInput = form.querySelector('input[name="player_id"]');
+            if (!match || !playerIdInput) {
+              if (playerIdInput) playerIdInput.value = '';
+              return;
+            }
+
+            const playerId = match[1];
+            playerIdInput.value = playerId;
+            const selectedPlayer = form.playerSearchResults?.find((player) => String(player.player_id) === playerId);
+            const fromTeamSelect = form.querySelector('select[name="from_team_id"]');
+            if (selectedPlayer && fromTeamSelect) {
+              fromTeamSelect.value = String(selectedPlayer.team_id);
+            }
+          }
+
+          playerNameInputs.forEach(playerNameInput => {
+            playerNameInput.addEventListener('input', async function(e) {
+              const searchTerm = e.target.value.trim();
+              const form = this.closest('form');
+              const dataListId = form.querySelector('datalist')?.id || 'request-players-list';
+              
+              if (searchTerm.length < 2) {
+                const datalist = document.getElementById(dataListId);
+                if (datalist) datalist.innerHTML = '';
+                return;
+              }
+              
+              try {
+                const response = await fetch(`/api/search-players-by-name?name=${encodeURIComponent(searchTerm)}`);
+                const data = await response.json();
+                const datalist = document.getElementById(dataListId);
+                if (!datalist) return;
+                
+                form.playerSearchResults = data.players;
+                datalist.innerHTML = '';
+                data.players.forEach(player => {
+                  const option = document.createElement('option');
+                  option.value = `${player.player_name} (${player.player_id})`;
+                  option.label = `${player.player_name} - ${player.team_name} (${player.age_group})`;
+                  datalist.appendChild(option);
+                });
+              } catch (error) {
+                console.error('Error searching players:', error);
+              }
+            });
+            
+            // Parse player ID from selected value on change
+            playerNameInput.addEventListener('change', function() {
+              const form = this.closest('form');
+              applySelectedPlayer(form, this.value);
+            });
+            
+            // Also parse on blur in case change doesn't fire reliably
+            playerNameInput.addEventListener('blur', function() {
+              if (this.value && !this.dataset.processed) {
+                const match = this.value.match(/\((\d+)\)$/);
+                const form = this.closest('form');
+                const playerIdInput = form.querySelector('input[name="player_id"]');
+                if (match && playerIdInput && !playerIdInput.value) {
+                  applySelectedPlayer(form, this.value);
+                  this.dataset.processed = 'true';
+                }
+              }
+            });
+          });
+
+          // Form validation to ensure player_id is set
+          const formsWithPlayerSelect = document.querySelectorAll('form[action="/team-admin/player-requests"], form[action="/team-admin/transfers"]');
+          formsWithPlayerSelect.forEach(form => {
+            form.addEventListener('submit', function(e) {
+              const playerIdInput = this.querySelector('input[name="player_id"]');
+              const playerNameInput = this.querySelector('input[name="player_name"]');
+              
+              // If player_id is not set, try to extract it from player_name
+              if (!playerIdInput?.value || !playerIdInput.value.trim()) {
+                if (playerNameInput?.value) {
+                  const match = playerNameInput.value.match(/\((\d+)\)$/);
+                  if (match) {
+                    playerIdInput.value = match[1];
+                    // Allow form to submit with extracted ID
+                    return true;
+                  }
+                }
+                // No player_id and couldn't extract from name
+                e.preventDefault();
+                alert('Please select a valid player from the dropdown list.');
+                playerNameInput?.focus();
+                return false;
+              }
+            });
+          });
+
+          function updateRegistrationPeriodSuggestion(age) {
+            const periodSelect = document.getElementById('registration-period-select');
+            const suggestion = document.getElementById('registration-period-suggestion');
+            if (!periodSelect || !suggestion) return;
+
+            const periodOptions = Array.from(periodSelect.options).filter((option) => option.value);
+            if (age === null || Number.isNaN(age)) {
+              periodSelect.disabled = false;
+              periodOptions.forEach((option) => {
+                option.disabled = false;
+              });
+              suggestion.textContent = 'Choose date of birth to see the suggested period.';
+              suggestion.style.color = '#666';
+              return;
+            }
+
+            let maxPeriod = null;
+            if (age >= 0 && age <= 13) maxPeriod = Math.min(3, 13 - age + 1);
+            else if (age > 13 && age <= 15) maxPeriod = Math.min(3, 15 - age + 1);
+            else if (age > 15 && age <= 17) maxPeriod = Math.min(3, 17 - age + 1);
+            else if (age > 17 && age <= 20) maxPeriod = Math.min(3, 20 - age + 1);
+
+            if (maxPeriod === null) {
+              periodSelect.disabled = true;
+              periodOptions.forEach((option) => {
+                option.disabled = true;
+              });
+              suggestion.textContent = 'This player is not eligible for a youth registration period.';
+              suggestion.style.color = '#dc3545';
+              return;
+            }
+
+            periodSelect.disabled = false;
+            periodOptions.forEach((option) => {
+              option.disabled = Number(option.value) > maxPeriod;
+            });
+            periodSelect.value = String(maxPeriod);
+            suggestion.textContent = `Suggested registration period: ${maxPeriod} year${maxPeriod === 1 ? '' : 's'}.`;
+            suggestion.style.color = '#2e7d32';
+          }
+
+          function updatePlayerCategory(element) {
+            const dobInput = document.querySelector('input[name="dob"]');
+            const genderInput = document.querySelector('select[name="gender"]');
+            const teamSelect = document.querySelector('select[name="team_id"]');
+
+            if (!dobInput.value) {
+              updateRegistrationPeriodSuggestion(null);
+              const categoryInfo = document.getElementById('category-info');
+              const categoryDisplay = document.getElementById('category-display');
+              categoryInfo.style.display = 'none';
+              categoryDisplay.textContent = 'Not Eligible for any age category';
+              categoryDisplay.style.color = '#dc3545';
+              return;
+            }
+
+            const dob = new Date(dobInput.value);
+            const today = new Date();
+            let age = today.getFullYear() - dob.getFullYear();
+            const monthDiff = today.getMonth() - dob.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+              age--;
+            }
+
+            updateRegistrationPeriodSuggestion(age);
+
+            let category = 'Not Eligible';
+            if (age >= 0 && age <= 13) category = 'U13';
+            else if (age > 13 && age <= 15) category = 'U15';
+            else if (age > 15 && age <= 17) category = 'U17';
+            else if (age > 17 && age <= 20) category = 'U20';
+
+            const categoryInfo = document.getElementById('category-info');
+            const categoryDisplay = document.getElementById('category-display');
+
+            if (category !== 'Not Eligible') {
+              categoryInfo.style.display = 'block';
+              categoryDisplay.textContent = category;
+              categoryDisplay.style.color = '#28a745';
+              categoryDisplay.style.fontWeight = 'bold';
+
+              if (teamSelect && genderInput.value) {
+                const options = Array.from(teamSelect.options);
+                const gender = genderInput.value;
+                const exactMatch = options.find((option) => {
+                  return option.dataset.category?.includes(category) && option.dataset.gender === gender;
+                });
+                const neutralAgeMatch = options.find((option) => {
+                  return option.dataset.category?.includes(category) && !option.dataset.gender;
+                });
+                const match = exactMatch || neutralAgeMatch;
+                if (match) {
+                  teamSelect.value = match.value;
+                } else {
+                  teamSelect.value = '';
+                }
+              }
+            } else {
+              categoryInfo.style.display = 'none';
+              categoryDisplay.textContent = 'Not Eligible for any age category';
+              categoryDisplay.style.color = '#dc3545';
+            }
+          }
+
+          function updateConsentStatus(element) {
+            const status = document.getElementById('consent-status');
+            if (element.files && element.files.length > 0) {
+              status.textContent = '✓ Uploaded';
+              status.style.color = '#28a745';
+            }
+          }
+
+          function toggleTransferFields(element) {
+            const loanPeriodLabel = document.getElementById('loan-period-label');
+            const registrationPeriodLabel = document.getElementById('registration-period-label');
+            const registrationPeriodSelect = document.querySelector('select[name="registration_period"]');
+            
+            if (element.value === 'Loan Transfer') {
+              if (loanPeriodLabel) loanPeriodLabel.style.display = 'block';
+              if (registrationPeriodLabel) registrationPeriodLabel.style.display = 'none';
+              if (registrationPeriodSelect) registrationPeriodSelect.removeAttribute('required');
+            } else if (element.value === 'Permanent Transfer') {
+              if (loanPeriodLabel) loanPeriodLabel.style.display = 'none';
+              if (registrationPeriodLabel) registrationPeriodLabel.style.display = 'block';
+              if (registrationPeriodSelect) registrationPeriodSelect.setAttribute('required', 'required');
+            } else {
+              if (loanPeriodLabel) loanPeriodLabel.style.display = 'none';
+              if (registrationPeriodLabel) registrationPeriodLabel.style.display = 'none';
+              if (registrationPeriodSelect) registrationPeriodSelect.removeAttribute('required');
+            }
+          }
+
+          function toggleRequestFields(element) {
+            const loanPeriodLabel = document.getElementById('request-loan-period-label');
+            const registrationPeriodLabel = document.getElementById('request-registration-period-label');
+            const registrationPeriodSelect = document.querySelector('select[name="request_registration_period"]');
+            
+            if (element.value === 'Loan Request') {
+              if (loanPeriodLabel) loanPeriodLabel.style.display = 'block';
+              if (registrationPeriodLabel) registrationPeriodLabel.style.display = 'none';
+              if (registrationPeriodSelect) registrationPeriodSelect.removeAttribute('required');
+            } else if (element.value === 'Permanent Request') {
+              if (loanPeriodLabel) loanPeriodLabel.style.display = 'none';
+              if (registrationPeriodLabel) registrationPeriodLabel.style.display = 'block';
+              if (registrationPeriodSelect) registrationPeriodSelect.setAttribute('required', 'required');
+            } else {
+              if (loanPeriodLabel) loanPeriodLabel.style.display = 'none';
+              if (registrationPeriodLabel) registrationPeriodLabel.style.display = 'none';
+              if (registrationPeriodSelect) registrationPeriodSelect.removeAttribute('required');
+            }
+          }
+
+          function toggleLoanPeriod(element) {
+            const loanPeriodLabel = document.getElementById('loan-period-label');
+            if (element.value === 'Loan Transfer' && loanPeriodLabel) {
+              loanPeriodLabel.style.display = 'block';
+            } else if (loanPeriodLabel) {
+              loanPeriodLabel.style.display = 'none';
+            }
+          }
+
+          function handlePlayerNameInput() {
+            // Handle player_name inputs for transfer form
+            const transferPlayerNameInput = document.querySelector('form[action="/team-admin/transfers"] input[name="player_name"]');
+            const transferPlayerIdInput = document.querySelector('form[action="/team-admin/transfers"] input[name="player_id"]');
+            
+            if (transferPlayerNameInput && transferPlayerIdInput) {
+              transferPlayerNameInput.addEventListener('change', function() {
+                const match = this.value.match(/\((\d+)\)$/);
+                if (match) {
+                  transferPlayerIdInput.value = match[1];
+                } else {
+                  transferPlayerIdInput.value = '';
+                }
+              });
+            }
+            
+            // Handle player_name inputs for player request form
+            const requestPlayerNameInput = document.querySelector('form[action="/team-admin/player-requests"] input[name="player_name"]');
+            const requestPlayerIdInput = document.querySelector('form[action="/team-admin/player-requests"] input[name="player_id"]');
+            
+            if (requestPlayerNameInput && requestPlayerIdInput) {
+              requestPlayerNameInput.addEventListener('change', function() {
+                const match = this.value.match(/\((\d+)\)$/);
+                if (match) {
+                  requestPlayerIdInput.value = match[1];
+                } else {
+                  requestPlayerIdInput.value = '';
+                }
+              });
+            }
+          }
+          
+          function filterTeams(status) {
+            const rows = document.querySelectorAll('#my-teams table tbody tr[data-row]');
+            const buttons = document.querySelectorAll('#my-teams [data-filter]');
+            
+            buttons.forEach(btn => btn.classList.remove('button-primary'));
+            buttons.forEach(btn => btn.classList.add('button-muted'));
+            event.target.classList.remove('button-muted');
+            event.target.classList.add('button-primary');
+            
+            rows.forEach(row => {
+              if (status === 'all') {
+                row.style.display = '';
+              } else if (row.dataset.status === status) {
+                row.style.display = '';
+              } else {
+                row.style.display = 'none';
+              }
+            });
+          }
+          
+          function filterPlayers(status) {
+            const rows = document.querySelectorAll('#my-players table tbody tr[data-row]');
+            const buttons = document.querySelectorAll('#my-players [data-filter]');
+            
+            buttons.forEach(btn => btn.classList.remove('button-primary'));
+            buttons.forEach(btn => btn.classList.add('button-muted'));
+            event.target.classList.remove('button-muted');
+            event.target.classList.add('button-primary');
+            
+            rows.forEach(row => {
+              if (status === 'all') {
+                row.style.display = '';
+              } else if (row.dataset.status === status) {
+                row.style.display = '';
+              } else {
+                row.style.display = 'none';
+              }
+            });
+          }
+          
+          document.addEventListener('DOMContentLoaded', handlePlayerNameInput);
+        </script>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="my-teams" data-dashboard-section="my-teams" hidden>
+      <div class="panel-heading">
+        <h2>MY clubs</h2>
+      </div>
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+        <button class="button button-primary small" type="button" onclick="filterTeams('all')" data-filter="all">All</button>
+        <button class="button button-muted small" type="button" onclick="filterTeams('approved')" data-filter="approved">Approved</button>
+        <button class="button button-muted small" type="button" onclick="filterTeams('rejected')" data-filter="rejected">Rejected</button>
+        <button class="button button-muted small" type="button" onclick="filterTeams('pending')" data-filter="pending">Pending</button>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <table>
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th>Category</th>
+              <th>Address</th>
+              <th>Training</th>
+              <th>Home</th>
+              <th>Status</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for team in teams %}
+            <tr data-row data-status="{{ team.status }}">
+              <td>{{ team.team_name }}</td>
+              <td>{{ team.category.category_name }}</td>
+              <td>{{ team.team_address }}</td>
+              <td>{{ team.training_ground }}</td>
+              <td>{{ team.home_ground }}</td>
+              <td><span class="status {{ team.status }}">{{ team.status }}</span></td>
+              <td>{% if team.status == 'rejected' %}{{ team.rejection_reason or '-' }}{% else %}-{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty">No teams submitted yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="my-players" data-dashboard-section="my-players" hidden>
+      <div class="panel-heading">
+        <h2>My Players</h2>
+      </div>
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+        <button class="button button-primary small" type="button" onclick="filterPlayers('all')" data-filter="all">All</button>
+        <button class="button button-muted small" type="button" onclick="filterPlayers('approved')" data-filter="approved">Approved</button>
+        <button class="button button-muted small" type="button" onclick="filterPlayers('rejected')" data-filter="rejected">Rejected</button>
+        <button class="button button-muted small" type="button" onclick="filterPlayers('pending')" data-filter="pending">Pending</button>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <table>
+          <thead>
+            <tr><th>Player</th><th>Player ID</th><th>Team</th><th>Age Group</th><th>Status</th><th>Reason</th></tr>
+          </thead>
+          <tbody>
+            {% for player in players %}
+            <tr data-row data-status="{{ player.status }}" class="{% if player.is_on_loan %}player-on-loan{% endif %}">
+              <td>{{ player.full_name }}{% if player.is_on_loan %}<span class="loan-marker">On Loan</span>{% endif %}</td>
+              <td>{{ player.player_code or '-' }}</td>
+              <td>{{ player.team.team_name }}</td>
+              <td>{{ player.age_group or 'Not eligible' }}</td>
+              <td><span class="status {{ player.status }}">{{ player.status }}</span>{% if player.is_on_loan and player.loan_end_date %}<br><small>Returns {{ player.loan_end_date }}</small>{% endif %}</td>
+              <td>{% if player.status == 'rejected' %}{{ player.rejection_reason or '-' }}{% else %}-{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">No players submitted yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+
+      <div class="panel-heading" style="margin-top: 2rem;">
+        <h2>Renewal Registrations</h2>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <table>
+          <thead>
+            <tr><th>Player</th><th>Team</th><th>Period</th><th>Status</th><th>Reason</th><th>Submitted</th></tr>
+          </thead>
+          <tbody>
+            {% for renewal in renewal_requests %}
+            <tr data-row data-status="{{ renewal.status }}">
+              <td>{{ renewal.player.full_name }}</td>
+              <td>{{ renewal.team.team_name }}</td>
+              <td>{{ renewal.registration_period }} Year(s)</td>
+              <td><span class="status {{ renewal.status }}">{{ renewal.status }}</span></td>
+              <td>{% if renewal.status == 'rejected' %}{{ renewal.rejection_reason or '-' }}{% else %}-{% endif %}</td>
+              <td>{{ renewal.submitted_at.strftime('%Y-%m-%d') if renewal.submitted_at else '-' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">No renewal registrations yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="my-account" data-dashboard-section="my-account" hidden>
+      <div class="panel-heading">
+        <h2>My Account</h2>
+      </div>
+      <div class="account-grid">
+        <div class="account-photo">
+          {% if current_user.photo_path %}
+            <img src="{{ current_user.photo_path }}" alt="{{ current_user.full_name }}">
+          {% else %}
+            <span>No photo</span>
+          {% endif %}
+        </div>
+        <dl class="account-details">
+          <div><dt>Name</dt><dd>{{ current_user.full_name }}</dd></div>
+          <div><dt>Email</dt><dd>{{ current_user.email }}</dd></div>
+          <div><dt>Phone</dt><dd>{{ team_admin.phone }}</dd></div>
+          <div><dt>National ID</dt><dd>{{ team_admin.national_id }}</dd></div>
+          <div><dt>Team Name</dt><dd>{{ team_admin.requested_team_name }}</dd></div>
+          <div><dt>Team Admin ID</dt><dd>{{ team_admin.admin_code or 'Pending approval' }}</dd></div>
+          <div><dt>Status</dt><dd><span class="status {{ team_admin.status }}">{{ team_admin.status }}</span></dd></div>
+          <div><dt>Explanation</dt><dd>{{ team_admin.rejection_reason or '-' }}</dd></div>
+        </dl>
+      </div>
+    </section>
+  </div>
+</section>
+{% endblock %}

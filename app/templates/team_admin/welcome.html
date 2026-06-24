@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-shell">
+  <div class="page-hero" style="background: linear-gradient(135deg, #000 0%, #333 100%); color: #FFD700; padding: 3rem 2rem; text-align: center; border-radius: 8px; margin-bottom: 2rem; border: 3px solid #FFD700;">
+    <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #FFD700;">Welcome to Mafeteng Youth League</h1>
+    <p style="font-size: 1.2rem; color: #FFD700; margin-bottom: 1rem;">Team Admin Portal</p>
+    <p style="font-size: 1rem; color: #FFD700;">Hello, {{ current_user.full_name }}!</p>
+  </div>
+
+  <div style="text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+    <p style="font-size: 1.1rem; color: #333; margin-bottom: 1.5rem;">You're now logged into the Mafeteng Youth League management system. Click the button below to access your dashboard.</p>
+    <a href="/team-admin/dashboard" class="button button-primary" style="display: inline-block; padding: 1rem 2rem; background-color: #FFD700; color: #000; font-weight: bold; font-size: 1.1rem; border-radius: 4px; text-decoration: none; transition: all 0.3s ease; border: 2px solid #000;">
+      Go to Dashboard
+    </a>
+  </div>
+</section>
+
+<style>
+  .button:hover {
+    background-color: #FFC700 !important;
+    transform: scale(1.05);
+  }
+</style>
+{% endblock %}
