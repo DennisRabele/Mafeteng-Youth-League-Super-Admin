@@ -11,6 +11,66 @@
     }
   };
 
+  const navDrawer = document.querySelector("[data-nav-drawer]");
+  const navBackdrop = document.querySelector("[data-nav-backdrop]");
+  const navToggle = document.querySelector("[data-nav-toggle]");
+  const navClose = document.querySelector("[data-nav-close]");
+
+  const openNav = () => {
+    if (!navDrawer || !navBackdrop) {
+      return;
+    }
+    navDrawer.hidden = false;
+    navBackdrop.hidden = false;
+    window.requestAnimationFrame(() => {
+      navDrawer.classList.add("is-open");
+      navBackdrop.classList.add("is-visible");
+    });
+  };
+
+  const closeNav = () => {
+    if (!navDrawer || !navBackdrop) {
+      return;
+    }
+    navDrawer.classList.remove("is-open");
+    navBackdrop.classList.remove("is-visible");
+    window.setTimeout(() => {
+      navDrawer.hidden = true;
+      navBackdrop.hidden = true;
+    }, 180);
+  };
+
+  if (navToggle) {
+    navToggle.addEventListener("click", openNav);
+  }
+  if (navClose) {
+    navClose.addEventListener("click", closeNav);
+  }
+  if (navBackdrop) {
+    navBackdrop.addEventListener("click", closeNav);
+  }
+
+  document.querySelectorAll("[data-nav-section-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.navSectionTarget;
+      const dashboardRoute = button.dataset.dashboardRoute || "/";
+      const matchingSectionButton = target
+        ? document.querySelector(`[data-section-target="${target}"]`)
+        : null;
+      closeNav();
+      if (matchingSectionButton) {
+        matchingSectionButton.click();
+        return;
+      }
+      showLoading();
+      const destination = new URL(dashboardRoute, window.location.origin);
+      if (target) {
+        destination.hash = target;
+      }
+      window.location.href = `${destination.pathname}${destination.search}${destination.hash}`;
+    });
+  });
+
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest("[data-loading-trigger], a[href]");
     if (!trigger) {
@@ -100,5 +160,18 @@
     render();
   });
 
+  const activateSectionFromHash = () => {
+    const hash = window.location.hash.replace("#", "");
+    if (!hash) {
+      return;
+    }
+    const matchingSectionButton = document.querySelector(`[data-section-target="${hash}"]`);
+    if (matchingSectionButton) {
+      matchingSectionButton.click();
+    }
+  };
+
   window.addEventListener("pageshow", hideLoading);
+  window.addEventListener("hashchange", activateSectionFromHash);
+  activateSectionFromHash();
 })();

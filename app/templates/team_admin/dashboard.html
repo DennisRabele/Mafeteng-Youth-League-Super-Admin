@@ -104,10 +104,10 @@
                   <h2>Personal Information</h2>
                   <div class="form-grid two">
                     <label>Full Name
-                      <input name="full_name" placeholder="Enter full name" required pattern="[A-Za-z\s]+" title="Full name can only contain letters and spaces">
+                      <input name="full_name" placeholder="Enter full name" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
                     </label>
                     <label>Date Of Birth
-                      <input name="dob" type="date" required onchange="updatePlayerCategory(this)">
+                      <input name="dob" type="text" placeholder="YYYY-MM-DD" inputmode="numeric" autocomplete="bday" required oninput="updatePlayerCategory(this)">
                     </label>
                     <label>Gender
                       <select name="gender" required onchange="updatePlayerCategory(this)">
@@ -120,7 +120,7 @@
                       <strong>Eligible Category:</strong> <span id="category-display">-</span>
                     </div>
                     <label>Nationality
-                      <input name="nationality" placeholder="Enter nationality" required pattern="[A-Za-z\s]+" title="Nationality can only contain letters">
+                      <input name="nationality" placeholder="Enter nationality" required pattern="[A-Za-z\s'\-]+" title="Nationality can only contain letters, spaces, apostrophes, and hyphens">
                     </label>
                     <label>Phone Number
                       <input name="parent_contact" placeholder="Enter parent phone number" required pattern="[0-9+\-\s]+" title="Phone can contain numbers, +, -, or spaces" inputmode="tel">
@@ -135,7 +135,7 @@
                       <input name="school_name" placeholder="Enter school name">
                     </label>
                     <label>Parent/Guardian Name
-                      <input name="parent_name" placeholder="Enter parent or guardian name" required pattern="[A-Za-z\s]+" title="Name can only contain letters and spaces">
+                      <input name="parent_name" placeholder="Enter parent or guardian name" required pattern="[A-Za-z\s'\-]+" title="Name can only contain letters, spaces, apostrophes, and hyphens">
                     </label>
                   </div>
                 </section>
@@ -190,7 +190,7 @@
                         <td style="padding: 1rem; border: 1px solid #ddd;">Parent/Guardian Consent Form (Signed)</td>
                         <td style="padding: 1rem; border: 1px solid #ddd;"><span id="consent-status">Not Uploaded</span></td>
                         <td style="padding: 1rem; border: 1px solid #ddd;">
-                          <label class="button button-small" style="cursor: pointer;">
+                          <label class="button button-upload small" style="cursor: pointer;">
                             Upload
                             <input name="parent_consent_picture" type="file" accept=".pdf,.doc,.docx,.txt,image/*" required onchange="updateConsentStatus(this)">
                           </label>

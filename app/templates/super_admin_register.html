@@ -12,10 +12,10 @@
     {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
     <div class="form-grid two">
       <label>Full Name
-        <input name="full_name" required>
+        <input name="full_name" value="{{ form_data.full_name if form_data else '' }}" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
       </label>
       <label>Email Address
-        <input name="email" type="email" required>
+        <input name="email" type="email" value="{{ form_data.email if form_data else '' }}" required>
       </label>
       <label>Password
         <input name="password" type="password" required minlength="8" autocomplete="new-password">

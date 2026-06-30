@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse, Response
@@ -67,30 +67,10 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 LOGIN_CHALLENGE_COOKIE = "ydl_login_challenge"
 VERIFY_CHALLENGE_COOKIE = "ydl_verify_challenge"
 PASSWORD_RECOVERY_COOKIE = "ydl_password_recovery"
-SUPER_ADMIN_HOSTS = {
-    "mafetengyoutleaguesuperadminapp.vercel.app",
-    "mafetengyoutleaguesuperadmin-konadvmwk.vercel.app",
-}
-
-
-def _request_app_mode(request: Request) -> str:
-    host = (
-        request.headers.get("x-forwarded-host")
-        or request.headers.get("host")
-        or request.url.hostname
-        or ""
-    ).split(",")[0].strip().lower()
-    host = host.split(":", 1)[0]
-    compact = host.replace("-", "").replace("_", "").replace(".", "")
-    if host in SUPER_ADMIN_HOSTS or "superadmin" in compact:
-        return "super_admin"
-    if "teamadmin" in compact:
-        return "team_admin"
-    return getattr(request.app.state, "app_mode", "combined")
 
 
 def _render(request: Request, template: str, context: dict):
-    app_mode = _request_app_mode(request)
+    app_mode = getattr(request.app.state, "app_mode", "combined")
     assets = context.pop("assets", None) or _load_assets()
     context.setdefault("current_user", None)
     context.setdefault("message", None)
@@ -307,7 +287,7 @@ def _require_team_admin_account(request: Request, db: Session) -> TeamAdmin:
 @router.get("/")
 def home(request: Request):
     user = _current_user(request)
-    app_mode = _request_app_mode(request)
+    app_mode = getattr(request.app.state, "app_mode", "combined")
     if user and user.role == UserRole.SUPER_ADMIN.value:
         return _redirect("/super-admin")
     if app_mode != "super_admin" and user and user.role == UserRole.TEAM_ADMIN.value:
@@ -352,7 +332,7 @@ def login(
     if not user or not verify_password(password, user.password_hash):
         return _render(request, "login.html", {"error": "Invalid email or password."})
 
-    app_mode = _request_app_mode(request)
+    app_mode = getattr(request.app.state, "app_mode", "combined")
     if app_mode == "super_admin" and user.role != UserRole.SUPER_ADMIN.value:
         return _render(
             request,
@@ -616,6 +596,7 @@ def team_admin_registration_form(
         {
             "current_user": _current_user(request),
             "is_first": is_first == "true" if is_first else None,
+            "form_data": {},
         },
     )
 
@@ -632,25 +613,48 @@ def team_admin_registration(
     confirm_password: str = Form(...),
     photo: UploadFile | None = File(None),
     is_first_admin: str = Form(...),
+    team_code: str | None = Form(None),
     team_id: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     import re
     
     # Validate full_name - only letters and spaces
-    if not re.match(r"^[A-Za-z\s]+$", full_name.strip()):
+    if not re.match(r"^[A-Za-z\s'\-]+$", full_name.strip()):
         return _render(
             request,
             "team_admin_register.html",
-            {"error": "Full name can only contain letters and spaces.", "is_first": is_first_admin == "true"},
+            {
+                "error": "Full name can only contain letters and spaces.",
+                "is_first": is_first_admin == "true",
+                "form_data": {
+                    "full_name": full_name,
+                    "team_name": team_name,
+                    "national_id": national_id,
+                    "phone": phone,
+                    "email": email,
+                    "team_code": team_code,
+                },
+            },
         )
     
     # Validate national_id - only numbers
-    if not re.match(r"^[0-9]+$", national_id.strip()):
+    if not re.match(r"^[A-Za-z0-9+\-\/\s]+$", national_id.strip()):
         return _render(
             request,
             "team_admin_register.html",
-            {"error": "National ID can only contain numbers.", "is_first": is_first_admin == "true"},
+            {
+                "error": "National ID can only contain numbers.",
+                "is_first": is_first_admin == "true",
+                "form_data": {
+                    "full_name": full_name,
+                    "team_name": team_name,
+                    "national_id": national_id,
+                    "phone": phone,
+                    "email": email,
+                    "team_code": team_code,
+                },
+            },
         )
     
     # Validate phone - only numbers and symbols (+, -, space)
@@ -658,33 +662,77 @@ def team_admin_registration(
         return _render(
             request,
             "team_admin_register.html",
-            {"error": "Phone number can only contain numbers, +, -, or spaces.", "is_first": is_first_admin == "true"},
+            {
+                "error": "Phone number can only contain numbers, +, -, or spaces.",
+                "is_first": is_first_admin == "true",
+                "form_data": {
+                    "full_name": full_name,
+                    "team_name": team_name,
+                    "national_id": national_id,
+                    "phone": phone,
+                    "email": email,
+                    "team_code": team_code,
+                },
+            },
         )
     
     if password != confirm_password:
         return _render(
             request,
             "team_admin_register.html",
-            {"error": "Passwords do not match."},
+            {
+                "error": "Passwords do not match.",
+                "is_first": is_first_admin == "true",
+                "form_data": {
+                    "full_name": full_name,
+                    "team_name": team_name,
+                    "national_id": national_id,
+                    "phone": phone,
+                    "email": email,
+                    "team_code": team_code,
+                },
+            },
         )
 
-    # If not first admin, team_id is required
+    # If not first admin, a team code or team ID is required
     parsed_team_id = None
     if is_first_admin == "false":
-        if not team_id or not team_id.strip():
+        if not team_code and (not team_id or not team_id.strip()):
             return _render(
                 request,
                 "team_admin_register.html",
-                {"error": "Team ID is required for additional team admin registrations.", "is_first": False},
+                {
+                    "error": "Team code is required for additional team admin registrations.",
+                    "is_first": False,
+                    "form_data": {
+                        "full_name": full_name,
+                        "team_name": team_name,
+                        "national_id": national_id,
+                        "phone": phone,
+                        "email": email,
+                    },
+                },
             )
-        try:
-            parsed_team_id = int(team_id.strip())
-        except (ValueError, TypeError):
-            return _render(
-                request,
-                "team_admin_register.html",
-                {"error": "Invalid Team ID format.", "is_first": False},
-            )
+        if team_id and team_id.strip():
+            try:
+                parsed_team_id = int(team_id.strip())
+            except (ValueError, TypeError):
+                return _render(
+                    request,
+                    "team_admin_register.html",
+                    {
+                        "error": "Invalid Team ID format.",
+                        "is_first": False,
+                        "form_data": {
+                            "full_name": full_name,
+                            "team_name": team_name,
+                            "national_id": national_id,
+                            "phone": phone,
+                            "email": email,
+                            "team_code": team_code,
+                        },
+                    },
+                )
 
     try:
         photo_path = _safe_upload(photo, "admin-photos")
@@ -698,6 +746,7 @@ def team_admin_registration(
             password=password,
             photo_path=photo_path,
             team_id=parsed_team_id,
+            team_code=team_code,
             commit=False,
         )
         verification_code = issue_email_verification_code(db, team_admin.user, commit=False)
@@ -709,21 +758,54 @@ def team_admin_registration(
         return _render(
             request,
             "team_admin_register.html",
-            {"error": str(exc), "is_first": is_first_admin == "true"},
+            {
+                "error": str(exc),
+                "is_first": is_first_admin == "true",
+                "form_data": {
+                    "full_name": full_name,
+                    "team_name": team_name,
+                    "national_id": national_id,
+                    "phone": phone,
+                    "email": email,
+                    "team_code": team_code,
+                },
+            },
         )
     except EmailDeliveryError:
         db.rollback()
         return _render(
             request,
             "team_admin_register.html",
-            {"error": "Verification code was not sent. Please try again.", "is_first": is_first_admin == "true"},
+            {
+                "error": "Verification code was not sent. Please try again.",
+                "is_first": is_first_admin == "true",
+                "form_data": {
+                    "full_name": full_name,
+                    "team_name": team_name,
+                    "national_id": national_id,
+                    "phone": phone,
+                    "email": email,
+                    "team_code": team_code,
+                },
+            },
         )
     except Exception:
         db.rollback()
         return _render(
             request,
             "team_admin_register.html",
-            {"error": "Registration could not be completed right now. Please try again.", "is_first": is_first_admin == "true"},
+            {
+                "error": "Registration could not be completed right now. Please try again.",
+                "is_first": is_first_admin == "true",
+                "form_data": {
+                    "full_name": full_name,
+                    "team_name": team_name,
+                    "national_id": national_id,
+                    "phone": phone,
+                    "email": email,
+                    "team_code": team_code,
+                },
+            },
         )
 
     return _render_code_screen(
@@ -747,6 +829,7 @@ def super_admin_registration_form(request: Request, db: Session = Depends(get_db
             "current_user": _current_user(request, db),
             "super_admin_count": super_admin_count,
             "super_admin_limit": 5,
+            "form_data": {},
         },
     )
 
@@ -772,6 +855,10 @@ def super_admin_registration(
                 "error": "Registration could not be completed right now. Please try again.",
                 "super_admin_count": 0,
                 "super_admin_limit": 5,
+                "form_data": {
+                    "full_name": full_name,
+                    "email": email,
+                },
             },
         )
     if password != confirm_password:
@@ -782,6 +869,10 @@ def super_admin_registration(
                 "error": "Passwords do not match.",
                 "super_admin_count": super_admin_count,
                 "super_admin_limit": 5,
+                "form_data": {
+                    "full_name": full_name,
+                    "email": email,
+                },
             },
         )
 
@@ -808,6 +899,10 @@ def super_admin_registration(
                 "error": str(exc),
                 "super_admin_count": super_admin_count,
                 "super_admin_limit": 5,
+                "form_data": {
+                    "full_name": full_name,
+                    "email": email,
+                },
             },
         )
     except EmailDeliveryError:
@@ -819,6 +914,10 @@ def super_admin_registration(
                 "error": "Verification code was not sent. Please try again.",
                 "super_admin_count": super_admin_count,
                 "super_admin_limit": 5,
+                "form_data": {
+                    "full_name": full_name,
+                    "email": email,
+                },
             },
         )
     except Exception:
@@ -830,6 +929,10 @@ def super_admin_registration(
                 "error": "Registration could not be completed right now. Please try again.",
                 "super_admin_count": super_admin_count,
                 "super_admin_limit": 5,
+                "form_data": {
+                    "full_name": full_name,
+                    "email": email,
+                },
             },
         )
 
@@ -1419,7 +1522,7 @@ def create_player_route(
     team_id: int = Form(...),
     full_name: str = Form(...),
     gender: str = Form(...),
-    dob: date = Form(...),
+    dob: str = Form(...),
     nationality: str = Form(...),
     player_email: str | None = Form(None),
     player_address: str | None = Form(None),
@@ -1451,7 +1554,7 @@ def create_player_route(
         )
     
     # Validate full_name - only letters and spaces
-    if not re.match(r"^[A-Za-z\s]+$", full_name.strip()):
+    if not re.match(r"^[A-Za-z\s'\-]+$", full_name.strip()):
         return _render(
             request,
             "team_admin/action_result.html",
@@ -1459,7 +1562,7 @@ def create_player_route(
         )
     
     # Validate parent_name - only letters and spaces
-    if not re.match(r"^[A-Za-z\s]+$", parent_name.strip()):
+    if not re.match(r"^[A-Za-z\s'\-]+$", parent_name.strip()):
         return _render(
             request,
             "team_admin/action_result.html",
@@ -1467,7 +1570,7 @@ def create_player_route(
         )
     
     # Validate nationality - only letters and spaces
-    if not re.match(r"^[A-Za-z\s]+$", nationality.strip()):
+    if not re.match(r"^[A-Za-z\s'\-]+$", nationality.strip()):
         return _render(
             request,
             "team_admin/action_result.html",
@@ -1482,6 +1585,14 @@ def create_player_route(
             {"error": "Parent contact can only contain numbers, +, -, or spaces."},
         )
     try:
+        dob_value = datetime.strptime(dob.strip(), "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Date of birth must be entered in YYYY-MM-DD format."},
+        )
+    try:
         photo_path = _safe_upload(passport_photo, "player-photos")
         # Parent/Guardian Consent Form is now the main agreement form
         agreement_form_path = _safe_upload(parent_consent_picture, "player-agreements")
@@ -1492,7 +1603,7 @@ def create_player_route(
             return _render(
                 request,
                 "team_admin/action_result.html",
-                {"error": "Parent/Guardian Consent Form is required."},
+                {"error": "PARENT/GUARDIAN CONSENT FORM NOT UPLOADED."},
             )
         documents: list[tuple[str, str]] = []
 
@@ -1519,7 +1630,7 @@ def create_player_route(
             team_id=team_id,
             full_name=full_name,
             gender=gender,
-            dob=dob,
+            dob=dob_value,
             nationality=nationality,
             email=player_email,
             residential_address=player_address,

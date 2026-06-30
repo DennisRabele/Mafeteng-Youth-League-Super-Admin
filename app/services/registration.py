@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 import re
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -44,6 +44,77 @@ AGE_GROUP_MAX_AGE = {
     "U17": 17,
     "U20": 20,
 }
+PERSON_NAME_PATTERN = re.compile(r"^[A-Za-z]+(?:[A-Za-z\s'\-]*[A-Za-z])?$")
+TEAM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9]+(?:[A-Za-z0-9\s'\-&]*[A-Za-z0-9])?$")
+PHONE_PATTERN = re.compile(r"^[0-9+\-\s]+$")
+
+
+def _normalize_text(value: str | None) -> str:
+    return " ".join((value or "").split())
+
+
+def _validate_text(
+    value: str | None,
+    *,
+    field_name: str,
+    pattern: re.Pattern[str] | None = None,
+    pattern_error: str | None = None,
+    allow_empty: bool = False,
+) -> str:
+    normalized = _normalize_text(value)
+    if not normalized and not allow_empty:
+        raise RegistrationError(f"{field_name} is required.")
+    if normalized and pattern and not pattern.fullmatch(normalized):
+        raise RegistrationError(pattern_error or f"{field_name} contains invalid characters.")
+    return normalized
+
+
+def _validate_person_name(value: str | None, field_name: str) -> str:
+    return _validate_text(
+        value,
+        field_name=field_name,
+        pattern=PERSON_NAME_PATTERN,
+        pattern_error=f"{field_name} can only contain letters, spaces, apostrophes, and hyphens.",
+    )
+
+
+def _validate_team_name(value: str | None) -> str:
+    return _validate_text(
+        value,
+        field_name="Team name",
+        pattern=TEAM_NAME_PATTERN,
+        pattern_error="Team name can only contain letters, numbers, spaces, apostrophes, and hyphens.",
+    )
+
+
+def _validate_phone(value: str | None, field_name: str = "Phone number") -> str:
+    return _validate_text(
+        value,
+        field_name=field_name,
+        pattern=PHONE_PATTERN,
+        pattern_error=f"{field_name} can only contain numbers, +, -, or spaces.",
+    )
+
+
+def _normalize_team_code(team_code: str | None) -> str | None:
+    normalized = _normalize_text(team_code)
+    return normalized.upper() if normalized else None
+
+
+def _resolve_team_reference(
+    db: Session,
+    *,
+    team_id: int | None = None,
+    team_code: str | None = None,
+) -> Team | None:
+    if team_id is not None:
+        return db.get(Team, team_id)
+    normalized_code = _normalize_team_code(team_code)
+    if not normalized_code:
+        return None
+    return db.scalar(
+        select(Team).where(func.upper(Team.team_code) == normalized_code)
+    )
 
 
 def issue_email_verification_code(db: Session, user: User, *, commit: bool = True) -> str:
@@ -367,7 +438,8 @@ def create_super_admin_registration(
     if super_admin_count >= MAX_SUPER_ADMINS:
         raise RegistrationError("The system already has the maximum of 5 Super Admins.")
 
-    normalized_email = email.strip().lower()
+    full_name = _validate_text(full_name, field_name="Full name")
+    normalized_email = _validate_text(email, field_name="Email address").lower()
     existing_user = db.scalar(select(User).where(User.email == normalized_email))
     if existing_user:
         raise RegistrationError("This email is already registered.")
@@ -406,37 +478,39 @@ def create_team_admin_registration(
     phone: str,
     photo_path: str | None,
     team_id: int | None = None,
+    team_code: str | None = None,
     commit: bool = True,
 ) -> TeamAdmin:
-    normalized_email = email.strip().lower()
+    full_name = _validate_person_name(full_name, "Full name")
+    normalized_email = _validate_text(email, field_name="Email address").lower()
+    team_name = _validate_team_name(team_name)
+    phone = _validate_phone(phone)
+    normalized_team_code = _normalize_team_code(team_code)
+    normalized_national_id = _normalize_text(national_id)
     existing_user = db.scalar(select(User).where(User.email == normalized_email))
     existing_id = db.scalar(
-        select(TeamAdmin).where(TeamAdmin.national_id == national_id.strip())
+        select(TeamAdmin).where(TeamAdmin.national_id == normalized_national_id)
     )
     if existing_user or existing_id:
         raise RegistrationError("This email or national ID is already registered.")
     if len(password) < 8:
         raise RegistrationError("Password must be at least 8 characters long.")
-    if not team_name.strip():
-        raise RegistrationError("Team name is required.")
-
-    # If team_id is provided, check if team exists and count admins
-    if team_id:
-        team = db.get(Team, team_id)
-        if not team:
-            raise RegistrationError("Specified team does not exist.")
-        
-        # Count existing team admins for this team (both pending and approved)
-        admin_count = len(
-            db.scalars(
-                select(TeamAdmin).where(TeamAdmin.team_id == team_id)
-            ).all()
-        )
-        if admin_count >= 3:
-            raise RegistrationError("This team already has the maximum number of 3 team admins.")
+    team = _resolve_team_reference(db, team_id=team_id, team_code=normalized_team_code)
+    if normalized_team_code and not team:
+        raise RegistrationError("Specified team code does not exist.")
+    if team_id is not None and not team:
+        raise RegistrationError("Specified team does not exist.")
+    if team:
+        if team.status != ApprovalStatus.APPROVED.value:
+            raise RegistrationError("This team must be approved before additional admins can join.")
+        if team.team_name.strip().casefold() != team_name.casefold():
+            raise RegistrationError("Team code does not match the team name you entered.")
+        admin_count = len(db.scalars(select(TeamAdmin).where(TeamAdmin.team_id == team.team_id)).all())
+        if admin_count >= 5:
+            raise RegistrationError("Maximum number of team admins reached for this team.")
 
     user = User(
-        full_name=full_name.strip(),
+        full_name=full_name,
         email=normalized_email,
         password_hash=hash_password(password),
         role=UserRole.TEAM_ADMIN.value,
@@ -448,10 +522,10 @@ def create_team_admin_registration(
 
     team_admin = TeamAdmin(
         user_id=user.user_id,
-        national_id=national_id.strip(),
-        phone=phone.strip(),
-        requested_team_name=team_name.strip(),
-        team_id=team_id,
+        national_id=normalized_national_id,
+        phone=phone,
+        requested_team_name=team_name,
+        team_id=team.team_id if team else team_id,
         status=ApprovalStatus.PENDING.value,
     )
     db.add(team_admin)
@@ -543,15 +617,29 @@ def register_team(
     category = db.get(Category, category_id)
     if not category:
         raise RegistrationError("Selected category does not exist.")
+    team_name = _validate_team_name(team_name)
+    contact_information = _validate_phone(contact_information, "Contact information")
+    team_address = _validate_text(team_address, field_name="Team address")
+    training_ground = _validate_text(training_ground, field_name="Training ground")
+    home_ground = _validate_text(home_ground, field_name="Home ground")
+
+    duplicate_team = db.scalar(
+        select(Team).where(
+            Team.category_id == category_id,
+            func.lower(Team.team_name) == team_name.casefold(),
+        )
+    )
+    if duplicate_team:
+        raise RegistrationError("This team name is already registered for the selected category.")
 
     team = Team(
         team_admin_id=team_admin_id,
         category_id=category_id,
-        team_name=team_name.strip(),
-        contact_information=contact_information.strip(),
-        team_address=team_address.strip(),
-        training_ground=training_ground.strip(),
-        home_ground=home_ground.strip(),
+        team_name=team_name,
+        contact_information=contact_information,
+        team_address=team_address,
+        training_ground=training_ground,
+        home_ground=home_ground,
         logo=logo,
         status=ApprovalStatus.PENDING.value,
     )
@@ -586,7 +674,12 @@ def approve_team(
     
     season = db.scalar(select(Season).order_by(Season.start_date.desc()))
     if season:
-        exists = db.get(TeamSeason, {"team_id": team.team_id, "season_id": season.season_id})
+        exists = db.scalar(
+            select(TeamSeason).where(
+                TeamSeason.team_id == team.team_id,
+                TeamSeason.season_id == season.season_id,
+            )
+        )
         if not exists:
             db.add(TeamSeason(team_id=team.team_id, season_id=season.season_id))
 
@@ -641,6 +734,16 @@ def register_player(
     if team.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Players can only be submitted for approved teams.")
 
+    full_name = _validate_person_name(full_name, "Player full name")
+    gender = _validate_text(gender, field_name="Gender")
+    nationality = _validate_person_name(nationality, "Nationality")
+    parent_name = _validate_person_name(parent_name, "Parent/Guardian name")
+    parent_contact = _validate_phone(parent_contact, "Parent contact")
+    if agreement_form_path is not None:
+        agreement_form_path = _normalize_text(agreement_form_path) or None
+    if agreement_form_path is None:
+        raise RegistrationError("Parent/Guardian Consent Form is required.")
+
     age_group = determine_age_group(dob)
     eligible_category = determine_player_club_category(gender, dob)
     max_registration_period = suggested_registration_period(dob)
@@ -654,7 +757,7 @@ def register_player(
     team_category_name = team.category.category_name if team.category else None
     if not team_category_name:
         raise RegistrationError("Selected team category is not configured.")
-    if team_category_name != eligible_category:
+    if team_category_name.casefold() != eligible_category.casefold():
         raise RegistrationError(
             f"This player qualifies for {eligible_category}, but the selected team is registered as {team_category_name}. Registration cannot continue."
         )
@@ -675,10 +778,10 @@ def register_player(
     player = Player(
         team_id=team_id,
         parent_id=parent.parent_id if parent else None,
-        full_name=full_name.strip(),
-        gender=gender.strip(),
+        full_name=full_name,
+        gender=gender,
         dob=dob,
-        nationality=nationality.strip(),
+        nationality=nationality,
         email=email.strip().lower() if email else None,
         residential_address=residential_address.strip() if residential_address else None,
         school_name=school_name.strip() if school_name else None,
@@ -740,12 +843,13 @@ def renew_player_registration(
     registration_period: int = 1,
 ) -> PlayerRegistrationRequest:
     player = db.get(Player, player_id)
-    if not player or player.team.team_admin_id != team_admin_id:
+    if not player or not player.team or player.team.team_admin_id != team_admin_id:
         raise RegistrationError("You can only renew players from your own teams.")
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Only approved players can be renewed.")
     if player.is_on_loan:
         raise RegistrationError("This player is currently on loan and cannot be renewed.")
+    agreement_form_path = _normalize_text(agreement_form_path) or None
     if not agreement_form_path:
         raise RegistrationError("Player-club agreement form is required.")
     if registration_period not in (1, 2, 3):
@@ -798,13 +902,16 @@ def request_player_transfer(
 ) -> PlayerTransferRequest:
     player = db.get(Player, player_id)
     to_team = db.get(Team, to_team_id)
-    if not player or player.team.team_admin_id != team_admin_id:
+    if not player or not player.team or player.team.team_admin_id != team_admin_id:
         raise RegistrationError("You can only transfer players from your own teams.")
     if not to_team:
         raise RegistrationError("Selected destination team was not found.")
     if to_team.team_admin_id == team_admin_id:
         raise RegistrationError("Destination team must belong to another Team Admin.")
-    if not transfer_conditions.strip():
+    transfer_type = _validate_text(transfer_type, field_name="Transfer type")
+    player_details = _validate_text(player_details, field_name="Player details")
+    transfer_conditions = _validate_text(transfer_conditions, field_name="Transfer conditions")
+    if not transfer_conditions:
         raise RegistrationError("Transfer conditions are required.")
     if registration_period not in (1, 2, 3):
         raise RegistrationError("Registration period must be 1, 2, or 3 years.")
@@ -814,9 +921,9 @@ def request_player_transfer(
         from_team_id=player.team_id,
         to_team_id=to_team.team_id,
         requested_by_team_admin_id=team_admin_id,
-        transfer_type=transfer_type.strip(),
-        player_details=player_details.strip() or player.full_name,
-        transfer_conditions=transfer_conditions.strip(),
+        transfer_type=transfer_type,
+        player_details=player_details or player.full_name,
+        transfer_conditions=transfer_conditions,
         registration_period=registration_period,
         loan_period=loan_period if _is_loan_transfer(transfer_type) else None,
         status=ApprovalStatus.PENDING.value,
@@ -842,7 +949,7 @@ def request_player_from_team(
     player = db.get(Player, player_id)
     from_team = db.get(Team, from_team_id)
     to_team = db.get(Team, to_team_id)
-    if not player or not from_team or player.team_id != from_team_id:
+    if not player or not player.team or not from_team or player.team_id != from_team_id:
         raise RegistrationError("Invalid player or player not found in the selected team.")
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Only approved players can be requested for transfer.")
@@ -856,7 +963,9 @@ def request_player_from_team(
         raise RegistrationError("Both teams must be approved before a transfer request can be sent.")
     if registration_period not in (1, 2, 3):
         raise RegistrationError("Registration period must be 1, 2, or 3 years.")
-    if not request_details.strip():
+    request_type = _validate_text(request_type, field_name="Request type")
+    request_details = _validate_text(request_details, field_name="Transfer request details")
+    if not request_details:
         raise RegistrationError("Transfer request details are required.")
 
     transfer_type = "Loan Transfer" if request_type == "Loan Request" else "Permanent Transfer"
@@ -942,6 +1051,7 @@ def complete_transfer_registration(
         raise RegistrationError("Transfer request was not found for your team.")
     if request.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Transfer must be approved before registration.")
+    agreement_form_path = _normalize_text(agreement_form_path) or None
     if not agreement_form_path:
         raise RegistrationError("Parent/Guardian Consent Form is required for transfer registration.")
 
@@ -1207,6 +1317,7 @@ def register_transferred_player(
     to_team = db.get(Team, transfer.to_team_id)
     if not to_team or to_team.team_admin_id != team_admin_id:
         raise RegistrationError("You can only register transfers for your own team.")
+    consent_form_path = _normalize_text(consent_form_path) or None
     if not consent_form_path:
         raise RegistrationError("Parent/Guardian Consent Form is required for transfer registration.")
     if transfer.completed_at:

@@ -14,6 +14,7 @@
         <span class="loading-fallback">YDL</span>
       </div>
     </div>
+    <div class="nav-backdrop" data-nav-backdrop hidden></div>
     <header class="topbar">
       <a data-loading-trigger class="brand" href="/">
         <span class="brand-logo-frame">
@@ -22,6 +23,11 @@
         </span>
         <span class="brand-copy">{{ app_name }}</span>
       </a>
+      <button class="menu-toggle" type="button" aria-label="Open navigation menu" data-nav-toggle>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
       <nav class="topnav">
         {% if current_user and current_user.role == 'super_admin' %}
           <a data-loading-trigger href="/super-admin">Dashboard</a>
@@ -54,6 +60,43 @@
         {% endif %}
       </nav>
     </header>
+    <aside class="nav-drawer" data-nav-drawer aria-label="Mobile navigation" hidden>
+      <div class="nav-drawer-head">
+        <strong>Menu</strong>
+        <button class="drawer-close" type="button" aria-label="Close navigation menu" data-nav-close>Close</button>
+      </div>
+      <div class="nav-drawer-links">
+        {% if current_user and current_user.role == 'super_admin' %}
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="team-admins" data-dashboard-route="/super-admin">Team Admins</button>
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="teams" data-dashboard-route="/super-admin">Teams</button>
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="players" data-dashboard-route="/super-admin">Players</button>
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="renewals" data-dashboard-route="/super-admin">Renewals</button>
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="transfers" data-dashboard-route="/super-admin">Transfers</button>
+          <a data-loading-trigger class="drawer-link" href="/super-admin">Dashboard</a>
+          <form data-loading-form method="post" action="/logout">
+            <button class="drawer-link destructive" type="submit">Logout</button>
+          </form>
+        {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="team-form" data-dashboard-route="/team-admin/dashboard">Teams Registration</button>
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="player-form" data-dashboard-route="/team-admin/dashboard">Players Registration</button>
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="my-teams" data-dashboard-route="/team-admin/dashboard">My Clubs</button>
+          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="my-players" data-dashboard-route="/team-admin/dashboard">My Players</button>
+          <a data-loading-trigger class="drawer-link" href="/team-admin/account">My Account</a>
+          <a data-loading-trigger class="drawer-link" href="/team-admin/dashboard">Dashboard</a>
+          <form data-loading-form method="post" action="/logout">
+            <button class="drawer-link destructive" type="submit">Logout</button>
+          </form>
+        {% else %}
+          <a data-loading-trigger class="drawer-link" href="/">Home</a>
+          <a data-loading-trigger class="drawer-link" href="/login">Login</a>
+          {% if app_mode == 'super_admin' %}
+            <a data-loading-trigger class="drawer-link" href="/register/super-admin">Register</a>
+          {% elif app_mode != 'super_admin' %}
+            <a data-loading-trigger class="drawer-link" href="/register/team-admin">Register</a>
+          {% endif %}
+        {% endif %}
+      </div>
+    </aside>
     <main>
       {% block content %}{% endblock %}
     </main>
