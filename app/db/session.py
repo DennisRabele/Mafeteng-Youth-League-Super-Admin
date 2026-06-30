@@ -152,6 +152,20 @@ def _ensure_schema_columns() -> None:
                 if column_name not in transfer_request_columns:
                     connection.execute(text(statement))
 
+    if inspector.has_table("match_result_submissions"):
+        result_columns = {
+            column["name"] for column in inspector.get_columns("match_result_submissions")
+        }
+        missing_result_columns = {
+            "scorer_names_text": "ALTER TABLE match_result_submissions ADD COLUMN scorer_names_text TEXT",
+            "goal_types_text": "ALTER TABLE match_result_submissions ADD COLUMN goal_types_text TEXT",
+            "assist_names_text": "ALTER TABLE match_result_submissions ADD COLUMN assist_names_text TEXT",
+        }
+        with engine.begin() as connection:
+            for column_name, statement in missing_result_columns.items():
+                if column_name not in result_columns:
+                    connection.execute(text(statement))
+
 
 def _seed_app_assets(db: Session) -> None:
     assets = {

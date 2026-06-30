@@ -46,6 +46,20 @@ class AppAsset(Base):
     description: Mapped[str | None] = mapped_column(String(255))
 
 
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    notification_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"))
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    link: Mapped[str | None] = mapped_column(String(500))
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="notifications")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -72,6 +86,7 @@ class User(Base):
     super_admin_profile: Mapped[SuperAdmin | None] = relationship(
         back_populates="user", uselist=False
     )
+    notifications: Mapped[list[Notification]] = relationship(back_populates="user")
 
 
 class TeamAdmin(Base):
@@ -505,6 +520,9 @@ class MatchResultSubmission(Base):
     status: Mapped[str] = mapped_column(String(30), default=ApprovalStatus.PENDING.value)
     home_score: Mapped[int | None] = mapped_column(Integer)
     away_score: Mapped[int | None] = mapped_column(Integer)
+    scorer_names_text: Mapped[str | None] = mapped_column(Text)
+    goal_types_text: Mapped[str | None] = mapped_column(Text)
+    assist_names_text: Mapped[str | None] = mapped_column(Text)
 
     match: Mapped[Match] = relationship(back_populates="result_submissions")
     submitted_by: Mapped[TeamAdmin] = relationship(back_populates="match_result_submissions")

@@ -12,6 +12,11 @@ from app.db.session import SessionLocal, get_db
 from app.models import (
     ApprovalStatus,
     Category,
+    Fixture,
+    FixtureStatus,
+    Match,
+    MatchResultSubmission,
+    Notification,
     Player,
     PlayerRegistrationRequest,
     PlayerRequest,
@@ -20,8 +25,20 @@ from app.models import (
     Team,
     TeamAdmin,
     TransferStatus,
+    ResultVerification,
     User,
     UserRole,
+)
+from app.services.league import (
+    create_fixture,
+    get_league_tables,
+    get_notifications_for_user,
+    get_player_performances,
+    mark_notification_read,
+    postpone_fixture,
+    submit_match_result,
+    update_fixture,
+    verify_match_result,
 )
 from app.services.registration import (
     RegistrationError,
@@ -282,6 +299,71 @@ def _require_team_admin_account(request: Request, db: Session) -> TeamAdmin:
             headers={"Location": "/super-admin"},
         )
     return user.team_admin_profile
+
+
+def _parse_dashboard_datetime(value: str | None) -> datetime:
+    if not value:
+        raise RegistrationError("A valid date and time is required.")
+    cleaned = value.strip()
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            parsed = datetime.strptime(cleaned, fmt)
+            if fmt == "%Y-%m-%d":
+                return parsed.replace(hour=15, minute=0)
+            return parsed
+        except ValueError:
+            continue
+    raise RegistrationError("Date and time must be entered in YYYY-MM-DD HH:MM format.")
+
+
+def _load_fixtures(db: Session, *, team_ids: list[int] | None = None) -> list[Fixture]:
+    query = (
+        select(Fixture)
+        .options(
+            selectinload(Fixture.category),
+            selectinload(Fixture.home_team),
+            selectinload(Fixture.away_team),
+            selectinload(Fixture.match).selectinload(Match.result_submissions),
+        )
+        .order_by(Fixture.fixture_date.desc(), Fixture.fixture_id.desc())
+    )
+    if team_ids is not None:
+        query = query.where(
+            or_(
+                Fixture.home_team_id.in_(team_ids),
+                Fixture.away_team_id.in_(team_ids),
+            )
+        )
+    return db.scalars(query).all()
+
+
+def _load_result_submissions(
+    db: Session,
+    *,
+    team_ids: list[int] | None = None,
+) -> list[MatchResultSubmission]:
+    query = (
+        select(MatchResultSubmission)
+        .options(
+            selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.home_team),
+            selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.away_team),
+            selectinload(MatchResultSubmission.submitted_by).selectinload(TeamAdmin.user),
+            selectinload(MatchResultSubmission.verification).selectinload(ResultVerification.verified_by).selectinload(SuperAdmin.user),
+        )
+        .order_by(MatchResultSubmission.submitted_date.desc(), MatchResultSubmission.submission_id.desc())
+    )
+    if team_ids is not None:
+        query = (
+            query.join(Match, Match.match_id == MatchResultSubmission.match_id)
+            .join(Fixture, Fixture.fixture_id == Match.fixture_id)
+            .where(
+                or_(
+                    Fixture.home_team_id.in_(team_ids),
+                    Fixture.away_team_id.in_(team_ids),
+                )
+            )
+        )
+    return db.scalars(query).all()
 
 
 @router.get("/")
@@ -1130,6 +1212,12 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
     teams_list = db.scalars(
         select(Team).options(selectinload(Team.category)).order_by(Team.team_name)
     ).all()
+    categories = db.scalars(select(Category).order_by(Category.category_name)).all()
+    fixtures = _load_fixtures(db)
+    result_submissions = _load_result_submissions(db)
+    league_tables = get_league_tables(db)
+    player_performances = get_player_performances(db)
+    notifications = get_notifications_for_user(db, user.user_id, limit=12)
 
     pending_count = (
         sum(1 for ta in all_team_admins if ta.status == ApprovalStatus.PENDING.value)
@@ -1146,6 +1234,8 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
         "players": len(all_players),
         "renewals": len(all_renewals),
         "transfers": len(all_transfers),
+        "fixtures": len(fixtures),
+        "results": len(result_submissions),
         "pending": pending_count,
     }
 
@@ -1161,6 +1251,12 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "all_renewals": all_renewals,
             "all_transfers": all_transfers,
             "teams_list": teams_list,
+            "categories": categories,
+            "fixtures": fixtures,
+            "result_submissions": result_submissions,
+            "league_tables": league_tables,
+            "player_performances": player_performances,
+            "notifications": notifications,
         },
     )
 
@@ -1454,7 +1550,12 @@ def team_admin_dashboard(request: Request, db: Session = Depends(get_db)):
         .where(Player.status == ApprovalStatus.APPROVED.value)
         .order_by(Player.full_name)
     ).all()
-    
+    fixtures = _load_fixtures(db, team_ids=own_team_ids)
+    result_submissions = _load_result_submissions(db, team_ids=own_team_ids)
+    league_tables = get_league_tables(db, team_ids=own_team_ids)
+    player_performances = get_player_performances(db, team_ids=own_team_ids)
+    notifications = get_notifications_for_user(db, team_admin.user_id, limit=12)
+
     return _render(
         request,
         "team_admin/dashboard.html",
@@ -1475,8 +1576,152 @@ def team_admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "approved_transfers_for_registration": approved_transfers_for_registration,
             "approved_transfers_for_unregistration": approved_transfers_for_unregistration,
             "transfer_status": TransferStatus,
+            "fixtures": fixtures,
+            "result_submissions": result_submissions,
+            "league_tables": league_tables,
+            "player_performances": player_performances,
+            "notifications": notifications,
         },
     )
+
+
+@router.post("/super-admin/fixtures")
+def create_fixture_route(
+    request: Request,
+    category_id: int = Form(...),
+    home_team_id: int = Form(...),
+    away_team_id: int = Form(...),
+    fixture_date: str = Form(...),
+    venue: str = Form(...),
+    status_value: str = Form(FixtureStatus.PUBLISHED.value),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    try:
+        create_fixture(
+            db,
+            category_id=category_id,
+            home_team_id=home_team_id,
+            away_team_id=away_team_id,
+            fixture_date=_parse_dashboard_datetime(fixture_date),
+            venue=venue,
+            status=status_value,
+        )
+    except RegistrationError as exc:
+        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+    return _redirect("/super-admin#fixtures")
+
+
+@router.post("/super-admin/fixtures/{fixture_id}")
+def update_fixture_route(
+    fixture_id: int,
+    request: Request,
+    fixture_date: str = Form(...),
+    venue: str = Form(...),
+    status_value: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    try:
+        update_fixture(
+            db,
+            fixture_id=fixture_id,
+            fixture_date=_parse_dashboard_datetime(fixture_date),
+            venue=venue,
+            status=status_value,
+        )
+    except RegistrationError as exc:
+        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+    return _redirect("/super-admin#fixtures")
+
+
+@router.post("/super-admin/fixtures/{fixture_id}/postpone")
+def postpone_fixture_route(
+    fixture_id: int,
+    request: Request,
+    new_date: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    try:
+        postpone_fixture(db, fixture_id, _parse_dashboard_datetime(new_date))
+    except RegistrationError as exc:
+        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+    return _redirect("/super-admin#fixtures")
+
+
+@router.post("/team-admin/results")
+def submit_result_route(
+    request: Request,
+    fixture_id: int = Form(...),
+    home_score: int = Form(...),
+    away_score: int = Form(...),
+    scorer_names_text: str | None = Form(None),
+    goal_types_text: str | None = Form(None),
+    assist_names_text: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    try:
+        submit_match_result(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            fixture_id=fixture_id,
+            home_score=home_score,
+            away_score=away_score,
+            scorer_names_text=scorer_names_text,
+            goal_types_text=goal_types_text,
+            assist_names_text=assist_names_text,
+        )
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    return _redirect("/team-admin/dashboard#results")
+
+
+@router.post("/super-admin/results/{submission_id}/verify")
+def verify_result_route(
+    submission_id: int,
+    request: Request,
+    home_score: int = Form(...),
+    away_score: int = Form(...),
+    scorer_names_text: str | None = Form(None),
+    goal_types_text: str | None = Form(None),
+    assist_names_text: str | None = Form(None),
+    decision: str = Form(ApprovalStatus.APPROVED.value),
+    db: Session = Depends(get_db),
+):
+    user = _require_super_admin(request, db)
+    try:
+        super_admin_id = _get_super_admin_id(user)
+        verify_match_result(
+            db,
+            submission_id=submission_id,
+            super_admin_id=super_admin_id,
+            home_score=home_score,
+            away_score=away_score,
+            scorer_names_text=scorer_names_text,
+            goal_types_text=goal_types_text,
+            assist_names_text=assist_names_text,
+            decision=decision,
+        )
+    except RegistrationError as exc:
+        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+    return _redirect("/super-admin#results")
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_notification_read_route(
+    notification_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _require_user(request, db)
+    try:
+        mark_notification_read(db, notification_id, user.user_id)
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    destination = _destination_for_user(user)
+    return _redirect(f"{destination}#notifications")
 
 
 @router.post("/team-admin/teams")

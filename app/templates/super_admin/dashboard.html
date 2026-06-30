@@ -9,6 +9,11 @@
     <button class="side-button" type="button" data-section-target="players">Players</button>
     <button class="side-button" type="button" data-section-target="renewals">Renewals</button>
     <button class="side-button" type="button" data-section-target="transfers">Transfers</button>
+    <button class="side-button" type="button" data-section-target="fixtures">Fixtures</button>
+    <button class="side-button" type="button" data-section-target="results">Results</button>
+    <button class="side-button" type="button" data-section-target="league-tables">League tables</button>
+    <button class="side-button" type="button" data-section-target="performances">Performances</button>
+    <button class="side-button" type="button" data-section-target="notifications">Notifications</button>
   </aside>
 
   <div class="workspace">
@@ -30,6 +35,8 @@
       <div class="metric"><span>Team Admins</span><strong>{{ counts.team_admins }}</strong></div>
       <div class="metric"><span>Teams</span><strong>{{ counts.teams }}</strong></div>
       <div class="metric"><span>Players</span><strong>{{ counts.players }}</strong></div>
+      <div class="metric"><span>Fixtures</span><strong>{{ counts.fixtures }}</strong></div>
+      <div class="metric"><span>Results</span><strong>{{ counts.results }}</strong></div>
     </div>
 
     <div class="section-switcher">
@@ -38,6 +45,11 @@
       <button class="switch-button" type="button" data-section-target="players">Players</button>
       <button class="switch-button" type="button" data-section-target="renewals">Renewals</button>
       <button class="switch-button" type="button" data-section-target="transfers">Transfers</button>
+      <button class="switch-button" type="button" data-section-target="fixtures">Fixtures</button>
+      <button class="switch-button" type="button" data-section-target="results">Results</button>
+      <button class="switch-button" type="button" data-section-target="league-tables">League tables</button>
+      <button class="switch-button" type="button" data-section-target="performances">Performances</button>
+      <button class="switch-button" type="button" data-section-target="notifications">Notifications</button>
     </div>
 
     <section class="panel dashboard-section" id="team-admins" data-dashboard-section="team-admins">
@@ -462,6 +474,320 @@
           <span data-page-label>Page 1 of 1</span>
           <button class="button button-primary small" type="button" data-page-next>Next</button>
         </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="fixtures" data-dashboard-section="fixtures" hidden>
+      <div class="panel-heading">
+        <h2>Fixtures</h2>
+      </div>
+      <form class="form-grid two" method="post" action="/super-admin/fixtures" style="margin-bottom: 1.5rem;">
+        <label>Category
+          <select name="category_id" required>
+            {% for category in categories %}
+              <option value="{{ category.category_id }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Venue
+          <input name="venue" required>
+        </label>
+        <label>Home Team
+          <select name="home_team_id" required>
+            {% for team in teams_list %}
+              <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Away Team
+          <select name="away_team_id" required>
+            {% for team in teams_list %}
+              <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Fixture Date
+          <input name="fixture_date" type="datetime-local" required>
+        </label>
+        <label>Status
+          <select name="status_value">
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+            <option value="postponed">Postponed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <div class="form-actions wide">
+          <button class="button button-primary" type="submit">Create Fixture</button>
+        </div>
+      </form>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <div class="table-scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Fixture</th>
+              <th>Date</th>
+              <th>Venue</th>
+              <th>Status</th>
+              <th>Score</th>
+              <th>Update</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fixture in fixtures %}
+            <tr>
+              <td>{{ fixture.category.category_name }}</td>
+              <td>{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</td>
+              <td>{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td>{{ fixture.venue }}</td>
+              <td><span class="status {{ fixture.status }}">{{ fixture.status }}</span></td>
+              <td>
+                {% if fixture.match and fixture.match.home_score is not none and fixture.match.away_score is not none %}
+                  {{ fixture.match.home_score }}-{{ fixture.match.away_score }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                <form class="form-grid" method="post" action="/super-admin/fixtures/{{ fixture.fixture_id }}">
+                  <label>Date
+                    <input name="fixture_date" type="datetime-local" value="{{ fixture.fixture_date.strftime('%Y-%m-%dT%H:%M') }}" required>
+                  </label>
+                  <label>Venue
+                    <input name="venue" value="{{ fixture.venue }}" required>
+                  </label>
+                  <label>Status
+                    <select name="status_value">
+                      <option value="draft" {% if fixture.status == 'draft' %}selected{% endif %}>Draft</option>
+                      <option value="published" {% if fixture.status == 'published' %}selected{% endif %}>Published</option>
+                      <option value="postponed" {% if fixture.status == 'postponed' %}selected{% endif %}>Postponed</option>
+                      <option value="cancelled" {% if fixture.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                      <option value="completed" {% if fixture.status == 'completed' %}selected{% endif %}>Completed</option>
+                    </select>
+                  </label>
+                  <button class="button button-muted small" type="submit">Save</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty">No fixtures scheduled yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
+      <div class="panel-heading">
+        <h2>Results</h2>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <div class="table-scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>Fixture</th>
+              <th>Submitted By</th>
+              <th>Score</th>
+              <th>Status</th>
+              <th>Scorers</th>
+              <th>Assists</th>
+              <th>Verify</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for submission in result_submissions %}
+            <tr>
+              <td>{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</td>
+              <td>{{ submission.submitted_by.user.full_name }}</td>
+              <td>{{ submission.home_score }}-{{ submission.away_score }}</td>
+              <td><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
+              <td>{{ submission.scorer_names_text or '-' }}</td>
+              <td>{{ submission.assist_names_text or '-' }}</td>
+              <td>
+                <form class="form-grid" method="post" action="/super-admin/results/{{ submission.submission_id }}/verify">
+                  <label>Score
+                    <input name="home_score" type="number" value="{{ submission.home_score }}" required>
+                  </label>
+                  <label>&nbsp;
+                    <input name="away_score" type="number" value="{{ submission.away_score }}" required>
+                  </label>
+                  <label>Scorers
+                    <textarea name="scorer_names_text">{{ submission.scorer_names_text or '' }}</textarea>
+                  </label>
+                  <label>Goal Types
+                    <textarea name="goal_types_text">{{ submission.goal_types_text or '' }}</textarea>
+                  </label>
+                  <label>Assists
+                    <textarea name="assist_names_text">{{ submission.assist_names_text or '' }}</textarea>
+                  </label>
+                  <label>Decision
+                    <select name="decision">
+                      <option value="approved">Approve</option>
+                      <option value="rejected">Reject</option>
+                    </select>
+                  </label>
+                  <button class="button button-primary small" type="submit">Verify</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty">No result submissions yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="league-tables" data-dashboard-section="league-tables" hidden>
+      <div class="panel-heading">
+        <h2>League Tables</h2>
+      </div>
+      {% for category_name, rows in league_tables.items() %}
+        <div class="panel" style="margin-bottom: 1.5rem;">
+          <h3 style="margin-top: 0;">{{ category_name }}</h3>
+          <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+            <div class="table-scroll-x">
+            <table>
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>P</th>
+                  <th>W</th>
+                  <th>D</th>
+                  <th>L</th>
+                  <th>GF</th>
+                  <th>GA</th>
+                  <th>GD</th>
+                  <th>Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in rows %}
+                <tr>
+                  <td>{{ row.team.team_name }}</td>
+                  <td>{{ row.played }}</td>
+                  <td>{{ row.wins }}</td>
+                  <td>{{ row.draws }}</td>
+                  <td>{{ row.losses }}</td>
+                  <td>{{ row.goals_for }}</td>
+                  <td>{{ row.goals_against }}</td>
+                  <td>{{ row.goal_difference }}</td>
+                  <td>{{ row.points }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9" class="empty">No league table data yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <p class="empty">No league tables available yet.</p>
+      {% endfor %}
+    </section>
+
+    <section class="panel dashboard-section" id="performances" data-dashboard-section="performances" hidden>
+      <div class="panel-heading">
+        <h2>Player Performances</h2>
+      </div>
+      <div class="panel" style="margin-bottom: 1.5rem;">
+        <h3 style="margin-top: 0;">Top Scorers</h3>
+        <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+          <div class="table-scroll-x">
+          <table>
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th>Category</th>
+                <th>Goals</th>
+                <th>Goal Types</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in player_performances.scorers %}
+              <tr>
+                <td>{{ row.player.full_name }}</td>
+                <td>{{ row.team.team_name }}</td>
+                <td>{{ row.category_name }}</td>
+                <td>{{ row.goals }}</td>
+                <td>
+                  {% for goal_type, count in row.goal_types.items() %}
+                    <span class="status approved">{{ goal_type }}: {{ count }}</span>
+                  {% else %}
+                    -
+                  {% endfor %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="empty">No goals recorded yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top: 0;">Top Assisters</h3>
+        <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+          <div class="table-scroll-x">
+          <table>
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th>Category</th>
+                <th>Assists</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in player_performances.assisters %}
+              <tr>
+                <td>{{ row.player.full_name }}</td>
+                <td>{{ row.team.team_name }}</td>
+                <td>{{ row.category_name }}</td>
+                <td>{{ row.assists }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="empty">No assists recorded yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden>
+      <div class="panel-heading">
+        <h2>Notifications</h2>
+      </div>
+      <div class="notification-list">
+        {% for notification in notifications %}
+          <article class="panel" style="margin-bottom: 1rem; border-left: 4px solid {% if notification.is_read %}#ccc{% else %}#2d6cdf{% endif %};">
+            <h3 style="margin-top: 0;">{{ notification.title }}</h3>
+            <p>{{ notification.message }}</p>
+            <small>{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+            {% if notification.link %}
+              <div style="margin-top: 0.75rem;">
+                <a class="button button-muted small" href="{{ notification.link }}">Open</a>
+              </div>
+            {% endif %}
+            {% if not notification.is_read %}
+              <form method="post" action="/notifications/{{ notification.notification_id }}/read" style="margin-top: 0.75rem;">
+                <button class="button button-primary small" type="submit">Mark read</button>
+              </form>
+            {% endif %}
+          </article>
+        {% else %}
+          <p class="empty">No notifications yet.</p>
+        {% endfor %}
       </div>
     </section>
   </div>
