@@ -977,6 +977,37 @@ textarea:focus {
   width: max-content;
 }
 
+.dashboard-section .panel form.form-grid {
+  margin-bottom: 0;
+}
+
+.table-wrap .form-grid {
+  gap: 10px;
+}
+
+.table-wrap .form-grid label {
+  font-size: 11px;
+}
+
+.table-wrap .form-grid input,
+.table-wrap .form-grid select,
+.table-wrap .form-grid textarea {
+  min-height: 38px;
+}
+
+.table-wrap .form-grid .button {
+  width: 100%;
+}
+
+.notification-list {
+  display: grid;
+  gap: 12px;
+}
+
+.notification-list .panel {
+  margin-bottom: 0;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -1569,6 +1600,10 @@ td {
   .form-actions .button,
   .table-pager .button {
     width: 100%;
+  }
+
+  .table-wrap .form-grid {
+    grid-template-columns: 1fr;
   }
 
   .actions-cell form,
