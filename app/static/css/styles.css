@@ -903,7 +903,7 @@ textarea:focus {
 }
 
 .section-switcher {
-  display: flex;
+  display: none;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 18px;
@@ -1500,20 +1500,11 @@ td {
   }
 
   .sidebar {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 10px;
+    display: none;
   }
 
   .menu-label {
     display: none;
-  }
-
-  .side-button,
-  .sidebar a {
-    min-width: max-content;
-    width: auto;
   }
 
   .workspace {

@@ -35,20 +35,20 @@
             <button class="button button-outline" type="submit">Logout</button>
           </form>
         {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
-          <a data-loading-trigger href="/team-admin/dashboard">Dashboard</a>
-          <a data-loading-trigger href="/team-admin/account">My Account</a>
+          {% if current_user.team_admin_profile and current_user.team_admin_profile.status == 'approved' %}
+            <a data-loading-trigger href="/team-admin/dashboard">Dashboard</a>
+            <a data-loading-trigger href="/team-admin/account">My Account</a>
+          {% else %}
+            <a data-loading-trigger href="/team-admin/account">My Account</a>
+            <a data-loading-trigger href="/register/team-admin?re_register=1">Re-register</a>
+          {% endif %}
           <form data-loading-form method="post" action="/logout">
             <button class="button button-outline" type="submit">Logout</button>
           </form>
         {% else %}
-          {% if app_mode == 'team_admin' %}
+          {% if app_mode == 'super_admin' %}
             <a data-loading-trigger class="active" href="/">Home</a>
-            <a data-loading-trigger href="/login">Fixtures</a>
-            <a data-loading-trigger href="/login">Tables</a>
-            <a data-loading-trigger href="/login">Performances</a>
-            <a data-loading-trigger href="/login">About</a>
-            <a data-loading-trigger href="/login">Contact</a>
-          {% elif app_mode == 'super_admin' %}
+          {% elif app_mode == 'team_admin' %}
             <a data-loading-trigger class="active" href="/">Home</a>
           {% endif %}
           <a data-loading-trigger href="/login">Login</a>
@@ -82,17 +82,22 @@
             <button class="drawer-link destructive" type="submit">Logout</button>
           </form>
         {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="team-form" data-dashboard-route="/team-admin/dashboard">Teams Registration</button>
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="player-form" data-dashboard-route="/team-admin/dashboard">Players Registration</button>
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="my-teams" data-dashboard-route="/team-admin/dashboard">My Clubs</button>
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="my-players" data-dashboard-route="/team-admin/dashboard">My Players</button>
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="fixtures" data-dashboard-route="/team-admin/dashboard">Fixtures</button>
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="results" data-dashboard-route="/team-admin/dashboard">Results</button>
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="league-tables" data-dashboard-route="/team-admin/dashboard">League Tables</button>
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="performances" data-dashboard-route="/team-admin/dashboard">Performances</button>
-          <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="notifications" data-dashboard-route="/team-admin/dashboard">Notifications</button>
-          <a data-loading-trigger class="drawer-link" href="/team-admin/account">My Account</a>
-          <a data-loading-trigger class="drawer-link" href="/team-admin/dashboard">Dashboard</a>
+          {% if current_user.team_admin_profile and current_user.team_admin_profile.status == 'approved' %}
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="team-form" data-dashboard-route="/team-admin/dashboard">Teams Registration</button>
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="player-form" data-dashboard-route="/team-admin/dashboard">Players Registration</button>
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="my-teams" data-dashboard-route="/team-admin/dashboard">My Clubs</button>
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="my-players" data-dashboard-route="/team-admin/dashboard">My Players</button>
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="fixtures" data-dashboard-route="/team-admin/dashboard">Fixtures</button>
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="results" data-dashboard-route="/team-admin/dashboard">Results</button>
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="league-tables" data-dashboard-route="/team-admin/dashboard">League Tables</button>
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="performances" data-dashboard-route="/team-admin/dashboard">Performances</button>
+            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="notifications" data-dashboard-route="/team-admin/dashboard">Notifications</button>
+            <a data-loading-trigger class="drawer-link" href="/team-admin/account">My Account</a>
+            <a data-loading-trigger class="drawer-link" href="/team-admin/dashboard">Dashboard</a>
+          {% else %}
+            <a data-loading-trigger class="drawer-link" href="/team-admin/account">My Account</a>
+            <a data-loading-trigger class="drawer-link" href="/register/team-admin?re_register=1">Re-register</a>
+          {% endif %}
           <form data-loading-form method="post" action="/logout">
             <button class="drawer-link destructive" type="submit">Logout</button>
           </form>

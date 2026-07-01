@@ -32,6 +32,14 @@
       <div class="form-actions">
         <a class="button button-primary" href="/team-admin/dashboard">Open Dashboard</a>
       </div>
+    {% elif team_admin.status == 'rejected' %}
+      <div class="form-actions">
+        <a class="button button-primary" href="/register/team-admin?re_register=1">Re-register</a>
+      </div>
+    {% else %}
+      <div class="form-actions">
+        <a class="button button-muted" href="/register/team-admin?re_register=1">Update registration</a>
+      </div>
     {% endif %}
   </section>
 </section>

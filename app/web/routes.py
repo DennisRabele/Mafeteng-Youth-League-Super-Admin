@@ -140,7 +140,9 @@ def _destination_for_user(user: User) -> str:
     if user.role == UserRole.SUPER_ADMIN.value:
         return "/super-admin"
     if user.role == UserRole.TEAM_ADMIN.value:
-        return "/team-admin/welcome"
+        if user.team_admin_profile and user.team_admin_profile.status == ApprovalStatus.APPROVED.value:
+            return "/team-admin/welcome"
+        return "/team-admin/account"
     return "/"
 
 
@@ -677,15 +679,33 @@ def reset_password_route(
 @router.get("/register/team-admin")
 def team_admin_registration_form(
     request: Request,
+    re_register: str | None = None,
     is_first: str | None = None,
+    db: Session = Depends(get_db),
 ):
+    current_user = _current_user(request, db)
+    form_data: dict[str, object] = {}
+    resolved_is_first = is_first == "true" if is_first else None
+    if re_register and current_user and current_user.team_admin_profile:
+        team_admin = current_user.team_admin_profile
+        assigned_team = team_admin.assigned_team
+        form_data = {
+            "full_name": current_user.full_name,
+            "team_name": team_admin.requested_team_name,
+            "national_id": team_admin.national_id,
+            "phone": team_admin.phone,
+            "email": current_user.email,
+            "team_code": assigned_team.team_code if assigned_team else "",
+        }
+        if resolved_is_first is None:
+            resolved_is_first = team_admin.team_id is None
     return _render(
         request,
         "team_admin_register.html",
         {
-            "current_user": _current_user(request),
-            "is_first": is_first == "true" if is_first else None,
-            "form_data": {},
+            "current_user": current_user,
+            "is_first": resolved_is_first,
+            "form_data": form_data,
         },
     )
 
@@ -1422,7 +1442,7 @@ def reject_transfer_route(
 
 @router.get("/team-admin/welcome")
 def team_admin_welcome(request: Request, db: Session = Depends(get_db)):
-    team_admin = _require_team_admin_account(request, db)
+    team_admin = _require_team_admin(request, db)
     return _render(
         request,
         "team_admin/welcome.html",
@@ -1448,7 +1468,7 @@ def team_admin_account(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/team-admin/dashboard")
 def team_admin_dashboard(request: Request, db: Session = Depends(get_db)):
-    team_admin = _get_team_admin_profile(request, db)
+    team_admin = _require_team_admin(request, db)
     restore_expired_loans(db)
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     teams = db.scalars(
