@@ -316,6 +316,13 @@ def _parse_dashboard_datetime(value: str | None) -> datetime:
     raise RegistrationError("Date and time must be entered in YYYY-MM-DD HH:MM format.")
 
 
+def _safe_dashboard_value(factory, default):
+    try:
+        return factory()
+    except Exception:
+        return default
+
+
 def _load_fixtures(db: Session, *, team_ids: list[int] | None = None) -> list[Fixture]:
     query = (
         select(Fixture)
@@ -1213,11 +1220,18 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
         select(Team).options(selectinload(Team.category)).order_by(Team.team_name)
     ).all()
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
-    fixtures = _load_fixtures(db)
-    result_submissions = _load_result_submissions(db)
-    league_tables = get_league_tables(db)
-    player_performances = get_player_performances(db)
-    notifications = get_notifications_for_user(db, user.user_id, limit=12)
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    result_submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
+    league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
+    player_performances = _safe_dashboard_value(
+        lambda: get_player_performances(db),
+        {"scorers": [], "assisters": []},
+    )
+    notifications = _safe_dashboard_value(
+        lambda: get_notifications_for_user(db, user.user_id, limit=12),
+        [],
+    )
+    unread_notifications = sum(1 for notification in notifications if not notification.is_read)
 
     pending_count = (
         sum(1 for ta in all_team_admins if ta.status == ApprovalStatus.PENDING.value)
@@ -1236,6 +1250,7 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
         "transfers": len(all_transfers),
         "fixtures": len(fixtures),
         "results": len(result_submissions),
+        "notifications": unread_notifications,
         "pending": pending_count,
     }
 
@@ -1257,6 +1272,7 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "league_tables": league_tables,
             "player_performances": player_performances,
             "notifications": notifications,
+            "unread_notifications": unread_notifications,
         },
     )
 
@@ -1550,11 +1566,24 @@ def team_admin_dashboard(request: Request, db: Session = Depends(get_db)):
         .where(Player.status == ApprovalStatus.APPROVED.value)
         .order_by(Player.full_name)
     ).all()
-    fixtures = _load_fixtures(db, team_ids=own_team_ids)
-    result_submissions = _load_result_submissions(db, team_ids=own_team_ids)
-    league_tables = get_league_tables(db, team_ids=own_team_ids)
-    player_performances = get_player_performances(db, team_ids=own_team_ids)
-    notifications = get_notifications_for_user(db, team_admin.user_id, limit=12)
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=own_team_ids), [])
+    result_submissions = _safe_dashboard_value(
+        lambda: _load_result_submissions(db, team_ids=own_team_ids),
+        [],
+    )
+    league_tables = _safe_dashboard_value(
+        lambda: get_league_tables(db, team_ids=own_team_ids),
+        {},
+    )
+    player_performances = _safe_dashboard_value(
+        lambda: get_player_performances(db, team_ids=own_team_ids),
+        {"scorers": [], "assisters": []},
+    )
+    notifications = _safe_dashboard_value(
+        lambda: get_notifications_for_user(db, team_admin.user_id, limit=12),
+        [],
+    )
+    unread_notifications = sum(1 for notification in notifications if not notification.is_read)
 
     return _render(
         request,
@@ -1581,6 +1610,7 @@ def team_admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "league_tables": league_tables,
             "player_performances": player_performances,
             "notifications": notifications,
+            "unread_notifications": unread_notifications,
         },
     )
 

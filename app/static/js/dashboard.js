@@ -111,6 +111,26 @@
     });
   });
 
+  const filterDashboardRows = (sectionId, status, event) => {
+    if (event) {
+      event.preventDefault();
+    }
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    const rows = section.querySelectorAll("tbody tr[data-row]");
+    const chips = section.querySelectorAll("[data-filter-chip]");
+    rows.forEach((row) => {
+      row.hidden = status !== "all" && row.dataset.status !== status;
+    });
+    chips.forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.filterValue === status);
+    });
+  };
+
+  window.filterDashboardRows = filterDashboardRows;
+
   document.querySelectorAll("[data-paginated-table]").forEach((tableRoot) => {
     const rows = Array.from(tableRoot.querySelectorAll("tbody tr[data-row]"));
     const pageSize = Number(tableRoot.dataset.pageSize || 5);

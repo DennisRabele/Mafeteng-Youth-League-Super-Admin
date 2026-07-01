@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import re
 from typing import Iterable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, inspect, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
@@ -47,6 +47,13 @@ def _split_items(value: str | None) -> list[str]:
 def _normalize_goal_type(value: str | None) -> str:
     raw = " ".join((value or "").split()).lower()
     return GOAL_TYPE_ALIASES.get(raw, raw.title() if raw else "Open Play")
+
+
+def _has_table(db: Session, table_name: str) -> bool:
+    try:
+        return inspect(db.get_bind()).has_table(table_name)
+    except Exception:
+        return False
 
 
 def _team_admin_user_ids(db: Session, team_ids: Iterable[int] | None = None) -> list[int]:
@@ -117,6 +124,8 @@ def notify_team_admin(db: Session, team_id: int, title: str, message: str, link:
 
 
 def get_notifications_for_user(db: Session, user_id: int, *, limit: int = 20) -> list[Notification]:
+    if not _has_table(db, "notifications"):
+        return []
     return db.scalars(
         select(Notification)
         .where(Notification.user_id == user_id)
@@ -126,6 +135,8 @@ def get_notifications_for_user(db: Session, user_id: int, *, limit: int = 20) ->
 
 
 def mark_notification_read(db: Session, notification_id: int, user_id: int) -> Notification:
+    if not _has_table(db, "notifications"):
+        raise RegistrationError("Notifications are not available yet.")
     notification = db.scalar(
         select(Notification).where(
             Notification.notification_id == notification_id,

@@ -63,9 +63,10 @@ def _using_supabase_storage() -> bool:
 
 
 def _should_init_db() -> bool:
-    if _is_vercel_deployment():
-        return os.getenv("RUN_DB_INIT", "").strip().lower() in {"1", "true", "yes", "on"}
-    return os.getenv("RUN_DB_INIT", "true").strip().lower() in {"1", "true", "yes", "on"}
+    raw_value = os.getenv("RUN_DB_INIT")
+    if raw_value is None:
+        return True
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _is_vercel_deployment() -> bool:

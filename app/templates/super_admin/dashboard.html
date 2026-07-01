@@ -13,7 +13,7 @@
     <button class="side-button" type="button" data-section-target="results">Results</button>
     <button class="side-button" type="button" data-section-target="league-tables">League tables</button>
     <button class="side-button" type="button" data-section-target="performances">Performances</button>
-    <button class="side-button" type="button" data-section-target="notifications">Notifications</button>
+    <button class="side-button" type="button" data-section-target="notifications">Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</button>
   </aside>
 
   <div class="workspace">
@@ -37,6 +37,7 @@
       <div class="metric"><span>Players</span><strong>{{ counts.players }}</strong></div>
       <div class="metric"><span>Fixtures</span><strong>{{ counts.fixtures }}</strong></div>
       <div class="metric"><span>Results</span><strong>{{ counts.results }}</strong></div>
+      <div class="metric"><span>Unread Notifications</span><strong>{{ unread_notifications }}</strong></div>
     </div>
 
     <div class="section-switcher">
@@ -481,6 +482,12 @@
       <div class="panel-heading">
         <h2>Fixtures</h2>
       </div>
+      <div class="dashboard-chip-row">
+        <button class="dashboard-chip active" type="button" data-filter-chip data-filter-value="all" onclick="filterDashboardRows('fixtures', 'all', event)">All</button>
+        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="published" onclick="filterDashboardRows('fixtures', 'published', event)">Published</button>
+        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="postponed" onclick="filterDashboardRows('fixtures', 'postponed', event)">Postponed</button>
+        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="completed" onclick="filterDashboardRows('fixtures', 'completed', event)">Completed</button>
+      </div>
       <form class="form-grid two" method="post" action="/super-admin/fixtures" style="margin-bottom: 1.5rem;">
         <label>Category
           <select name="category_id" required>
@@ -523,7 +530,7 @@
       </form>
       <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
         <div class="table-scroll-x">
-        <table>
+        <table class="responsive-card-table">
           <thead>
             <tr>
               <th>Category</th>
@@ -537,20 +544,20 @@
           </thead>
           <tbody>
             {% for fixture in fixtures %}
-            <tr>
-              <td>{{ fixture.category.category_name }}</td>
-              <td>{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</td>
-              <td>{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}</td>
-              <td>{{ fixture.venue }}</td>
-              <td><span class="status {{ fixture.status }}">{{ fixture.status }}</span></td>
-              <td>
+            <tr data-row data-status="{{ fixture.status }}">
+              <td data-label="Category">{{ fixture.category.category_name }}</td>
+              <td data-label="Fixture">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</td>
+              <td data-label="Date">{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td data-label="Venue">{{ fixture.venue }}</td>
+              <td data-label="Status"><span class="status {{ fixture.status }}">{{ fixture.status }}</span></td>
+              <td data-label="Score">
                 {% if fixture.match and fixture.match.home_score is not none and fixture.match.away_score is not none %}
                   {{ fixture.match.home_score }}-{{ fixture.match.away_score }}
                 {% else %}
                   -
                 {% endif %}
               </td>
-              <td>
+              <td data-label="Update">
                 <form class="form-grid" method="post" action="/super-admin/fixtures/{{ fixture.fixture_id }}">
                   <label>Date
                     <input name="fixture_date" type="datetime-local" value="{{ fixture.fixture_date.strftime('%Y-%m-%dT%H:%M') }}" required>
@@ -584,9 +591,15 @@
       <div class="panel-heading">
         <h2>Results</h2>
       </div>
+      <div class="dashboard-chip-row">
+        <button class="dashboard-chip active" type="button" data-filter-chip data-filter-value="all" onclick="filterDashboardRows('results', 'all', event)">All</button>
+        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="pending" onclick="filterDashboardRows('results', 'pending', event)">Pending</button>
+        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="approved" onclick="filterDashboardRows('results', 'approved', event)">Approved</button>
+        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="rejected" onclick="filterDashboardRows('results', 'rejected', event)">Rejected</button>
+      </div>
       <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
         <div class="table-scroll-x">
-        <table>
+        <table class="responsive-card-table">
           <thead>
             <tr>
               <th>Fixture</th>
@@ -600,14 +613,14 @@
           </thead>
           <tbody>
             {% for submission in result_submissions %}
-            <tr>
-              <td>{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</td>
-              <td>{{ submission.submitted_by.user.full_name }}</td>
-              <td>{{ submission.home_score }}-{{ submission.away_score }}</td>
-              <td><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
-              <td>{{ submission.scorer_names_text or '-' }}</td>
-              <td>{{ submission.assist_names_text or '-' }}</td>
-              <td>
+            <tr data-row data-status="{{ submission.status }}">
+              <td data-label="Fixture">{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</td>
+              <td data-label="Submitted By">{{ submission.submitted_by.user.full_name }}</td>
+              <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>
+              <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
+              <td data-label="Scorers">{{ submission.scorer_names_text or '-' }}</td>
+              <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
+              <td data-label="Verify">
                 <form class="form-grid" method="post" action="/super-admin/results/{{ submission.submission_id }}/verify">
                   <label>Score
                     <input name="home_score" type="number" value="{{ submission.home_score }}" required>
@@ -766,7 +779,7 @@
 
     <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden>
       <div class="panel-heading">
-        <h2>Notifications</h2>
+        <h2>Notifications{% if unread_notifications %} <span class="status approved">{{ unread_notifications }} new</span>{% endif %}</h2>
       </div>
       <div class="notification-list">
         {% for notification in notifications %}

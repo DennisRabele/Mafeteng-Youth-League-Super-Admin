@@ -207,18 +207,18 @@ main {
 
 .menu-toggle {
   align-items: center;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
   color: var(--white);
   cursor: pointer;
   display: none;
   flex-direction: column;
-  gap: 4px;
-  height: 42px;
+  gap: 5px;
+  height: 46px;
   justify-content: center;
   margin-left: auto;
-  width: 46px;
+  width: 52px;
 }
 
 .menu-toggle span {
@@ -226,7 +226,7 @@ main {
   border-radius: 999px;
   display: block;
   height: 2px;
-  width: 18px;
+  width: 22px;
 }
 
 .nav-backdrop {
@@ -1008,6 +1008,38 @@ textarea:focus {
   margin-bottom: 0;
 }
 
+.dashboard-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+
+.dashboard-chip {
+  align-items: center;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 14px;
+  text-transform: uppercase;
+}
+
+.dashboard-chip.active {
+  background: var(--black);
+  border-color: var(--black);
+  color: var(--white);
+}
+
+.responsive-card-table {
+  width: 100%;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -1608,6 +1640,62 @@ td {
 
   .actions-cell form,
   .actions-cell .button {
+    width: 100%;
+  }
+
+  .responsive-card-table table,
+  .responsive-card-table thead,
+  .responsive-card-table tbody,
+  .responsive-card-table tr,
+  .responsive-card-table td,
+  .responsive-card-table th {
+    display: block;
+    width: 100%;
+  }
+
+  .responsive-card-table thead {
+    display: none;
+  }
+
+  .responsive-card-table tr[data-row],
+  .responsive-card-table tr {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .responsive-card-table td {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 10px 12px;
+  }
+
+  .responsive-card-table td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    flex: 0 0 44%;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .responsive-card-table td:last-child {
+    border-bottom: none;
+  }
+
+  .responsive-card-table .actions-cell {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .responsive-card-table .actions-cell form,
+  .responsive-card-table .actions-cell .button {
     width: 100%;
   }
 }
