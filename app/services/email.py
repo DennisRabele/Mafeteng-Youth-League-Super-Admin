@@ -53,3 +53,18 @@ def send_login_code(*, to_email: str, code: str) -> None:
             "This code expires soon. If you did not try to log in, ignore this email."
         ),
     )
+
+
+def send_notification_email(*, to_email: str, title: str, message: str, link: str | None = None) -> None:
+    body = (
+        "Mafeteng Youth League notification\n\n"
+        f"{title}\n\n"
+        f"{message}\n"
+    )
+    if link:
+        body += f"\nOpen: {link}\n"
+    send_email(
+        to_email=to_email,
+        subject=f"Mafeteng Youth League: {title}",
+        body=body,
+    )

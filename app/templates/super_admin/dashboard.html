@@ -483,6 +483,16 @@
         <h2>Fixtures</h2>
       </div>
       <div class="dashboard-chip-row">
+        <label class="filter-select">Category
+          <select onchange="filterDashboardCategory('fixtures', this.value, event)">
+            <option value="all">All Categories</option>
+            {% for category in categories %}
+              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="dashboard-chip-row">
         <button class="dashboard-chip active" type="button" data-filter-chip data-filter-value="all" onclick="filterDashboardRows('fixtures', 'all', event)">All</button>
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="published" onclick="filterDashboardRows('fixtures', 'published', event)">Published</button>
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="postponed" onclick="filterDashboardRows('fixtures', 'postponed', event)">Postponed</button>
@@ -544,7 +554,7 @@
           </thead>
           <tbody>
             {% for fixture in fixtures %}
-            <tr data-row data-status="{{ fixture.status }}">
+            <tr data-row data-status="{{ fixture.status }}" data-category="{{ fixture.category.category_name }}">
               <td data-label="Category">{{ fixture.category.category_name }}</td>
               <td data-label="Fixture">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</td>
               <td data-label="Date">{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}</td>
@@ -592,6 +602,16 @@
         <h2>Results</h2>
       </div>
       <div class="dashboard-chip-row">
+        <label class="filter-select">Category
+          <select onchange="filterDashboardCategory('results', this.value, event)">
+            <option value="all">All Categories</option>
+            {% for category in categories %}
+              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="dashboard-chip-row">
         <button class="dashboard-chip active" type="button" data-filter-chip data-filter-value="all" onclick="filterDashboardRows('results', 'all', event)">All</button>
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="pending" onclick="filterDashboardRows('results', 'pending', event)">Pending</button>
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="approved" onclick="filterDashboardRows('results', 'approved', event)">Approved</button>
@@ -613,7 +633,7 @@
           </thead>
           <tbody>
             {% for submission in result_submissions %}
-            <tr data-row data-status="{{ submission.status }}">
+            <tr data-row data-status="{{ submission.status }}" data-category="{{ submission.match.fixture.category.category_name }}">
               <td data-label="Fixture">{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</td>
               <td data-label="Submitted By">{{ submission.submitted_by.user.full_name }}</td>
               <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>
@@ -660,8 +680,18 @@
       <div class="panel-heading">
         <h2>League Tables</h2>
       </div>
+      <div class="dashboard-chip-row">
+        <label class="filter-select">Category
+          <select onchange="filterDashboardPanels('league-tables', this.value, event)">
+            <option value="all">All Categories</option>
+            {% for category in categories %}
+              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
       {% for category_name, rows in league_tables.items() %}
-        <div class="panel" style="margin-bottom: 1.5rem;">
+        <div class="panel" style="margin-bottom: 1.5rem;" data-category-panel="{{ category_name }}">
           <h3 style="margin-top: 0;">{{ category_name }}</h3>
           <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
             <div class="table-scroll-x">
@@ -709,7 +739,24 @@
       <div class="panel-heading">
         <h2>Player Performances</h2>
       </div>
-      <div class="panel" style="margin-bottom: 1.5rem;">
+      <div class="dashboard-chip-row">
+        <label class="filter-select">Category
+          <select onchange="filterDashboardCategory('performances', this.value, event)">
+            <option value="all">All Categories</option>
+            {% for category in categories %}
+              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="filter-select">Metric
+          <select onchange="filterDashboardMetric('performances', this.value, event)">
+            <option value="all">All Metrics</option>
+            <option value="goals">Goals</option>
+            <option value="assists">Assists</option>
+          </select>
+        </label>
+      </div>
+      <div class="panel" style="margin-bottom: 1.5rem;" data-performance-view="goals">
         <h3 style="margin-top: 0;">Top Scorers</h3>
         <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
           <div class="table-scroll-x">
@@ -725,7 +772,7 @@
             </thead>
             <tbody>
               {% for row in player_performances.scorers %}
-              <tr>
+              <tr data-row data-category="{{ row.category_name }}" data-metric="goals">
                 <td>{{ row.player.full_name }}</td>
                 <td>{{ row.team.team_name }}</td>
                 <td>{{ row.category_name }}</td>
@@ -746,7 +793,7 @@
           </div>
         </div>
       </div>
-      <div class="panel">
+      <div class="panel" data-performance-view="assists">
         <h3 style="margin-top: 0;">Top Assisters</h3>
         <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
           <div class="table-scroll-x">
@@ -761,7 +808,7 @@
             </thead>
             <tbody>
               {% for row in player_performances.assisters %}
-              <tr>
+              <tr data-row data-category="{{ row.category_name }}" data-metric="assists">
                 <td>{{ row.player.full_name }}</td>
                 <td>{{ row.team.team_name }}</td>
                 <td>{{ row.category_name }}</td>

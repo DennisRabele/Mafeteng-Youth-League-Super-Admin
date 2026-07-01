@@ -24,6 +24,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.email import send_notification_email
 from app.services.registration import RegistrationError
 
 
@@ -82,6 +83,17 @@ def create_notification(
     if commit:
         db.commit()
         db.refresh(notification)
+        user = db.get(User, user_id)
+        if user and user.email:
+            try:
+                send_notification_email(
+                    to_email=user.email,
+                    title=notification.title,
+                    message=notification.message,
+                    link=notification.link,
+                )
+            except Exception:
+                pass
     else:
         db.flush()
     return notification
@@ -95,9 +107,24 @@ def broadcast_notifications(
     message: str,
     link: str | None = None,
 ) -> None:
+    notifications: list[Notification] = []
     for user_id in user_ids:
-        create_notification(db, user_id=user_id, title=title, message=message, link=link, commit=False)
+        notifications.append(
+            create_notification(db, user_id=user_id, title=title, message=message, link=link, commit=False)
+        )
     db.commit()
+    for notification in notifications:
+        user = db.get(User, notification.user_id)
+        if user and user.email:
+            try:
+                send_notification_email(
+                    to_email=user.email,
+                    title=notification.title,
+                    message=notification.message,
+                    link=notification.link,
+                )
+            except Exception:
+                pass
 
 
 def notify_super_admins(db: Session, title: str, message: str, link: str | None = None) -> None:

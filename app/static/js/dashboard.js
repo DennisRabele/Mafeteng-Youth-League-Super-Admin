@@ -106,10 +106,43 @@
         document.querySelectorAll("[data-section-target]").forEach((item) => {
           item.classList.toggle("active", item.dataset.sectionTarget === target);
         });
+        if (window.syncDashboardContext) {
+          window.syncDashboardContext(target);
+        }
         hideLoading();
       }, 350);
     });
   });
+
+  const syncDashboardContext = (target) => {
+    const teamAdminContext = document.querySelector("[data-team-admin-workspace]");
+    if (teamAdminContext) {
+      const registrationSections = new Set(["team-form", "player-form"]);
+      teamAdminContext.hidden = !registrationSections.has(target);
+    }
+  };
+
+  const applyStatusAndCategoryFilters = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    const statusFilter = section.dataset.statusFilter || "all";
+    const categoryFilter = section.dataset.categoryFilter || "all";
+    const metricFilter = section.dataset.metricFilter || "all";
+    section.querySelectorAll("tbody tr[data-row]").forEach((row) => {
+      const rowStatus = row.dataset.status || "all";
+      const rowCategory = row.dataset.category || "all";
+      const rowMetric = row.dataset.metric || "all";
+      const matchesStatus = statusFilter === "all" || rowStatus === statusFilter;
+      const matchesCategory = categoryFilter === "all" || rowCategory === categoryFilter;
+      const matchesMetric = metricFilter === "all" || rowMetric === metricFilter;
+      row.hidden = !(matchesStatus && matchesCategory && matchesMetric);
+    });
+    section.querySelectorAll("[data-filter-chip]").forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.filterValue === statusFilter);
+    });
+  };
 
   const filterDashboardRows = (sectionId, status, event) => {
     if (event) {
@@ -119,17 +152,59 @@
     if (!section) {
       return;
     }
-    const rows = section.querySelectorAll("tbody tr[data-row]");
-    const chips = section.querySelectorAll("[data-filter-chip]");
-    rows.forEach((row) => {
-      row.hidden = status !== "all" && row.dataset.status !== status;
+    section.dataset.statusFilter = status;
+    applyStatusAndCategoryFilters(sectionId);
+  };
+
+  const filterDashboardCategory = (sectionId, category, event) => {
+    if (event) {
+      event.preventDefault();
+    }
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    section.dataset.categoryFilter = category;
+    applyStatusAndCategoryFilters(sectionId);
+  };
+
+  const filterDashboardMetric = (sectionId, metric, event) => {
+    if (event) {
+      event.preventDefault();
+    }
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    section.dataset.metricFilter = metric;
+    const performanceViews = section.querySelectorAll("[data-performance-view]");
+    performanceViews.forEach((view) => {
+      const viewMetric = view.dataset.performanceView;
+      view.hidden = metric !== "all" && viewMetric !== metric;
     });
-    chips.forEach((chip) => {
-      chip.classList.toggle("active", chip.dataset.filterValue === status);
+    applyStatusAndCategoryFilters(sectionId);
+  };
+
+  const filterDashboardPanels = (sectionId, category, event) => {
+    if (event) {
+      event.preventDefault();
+    }
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    section.dataset.categoryFilter = category;
+    const panels = section.querySelectorAll("[data-category-panel]");
+    panels.forEach((panel) => {
+      panel.hidden = category !== "all" && panel.dataset.categoryPanel !== category;
     });
   };
 
   window.filterDashboardRows = filterDashboardRows;
+  window.filterDashboardCategory = filterDashboardCategory;
+  window.filterDashboardMetric = filterDashboardMetric;
+  window.filterDashboardPanels = filterDashboardPanels;
+  window.syncDashboardContext = syncDashboardContext;
 
   document.querySelectorAll("[data-paginated-table]").forEach((tableRoot) => {
     const rows = Array.from(tableRoot.querySelectorAll("tbody tr[data-row]"));
@@ -194,4 +269,8 @@
   window.addEventListener("pageshow", hideLoading);
   window.addEventListener("hashchange", activateSectionFromHash);
   activateSectionFromHash();
+  const activeSectionButton = document.querySelector("[data-section-target].active");
+  if (activeSectionButton && window.syncDashboardContext) {
+    window.syncDashboardContext(activeSectionButton.dataset.sectionTarget);
+  }
 })();

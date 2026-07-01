@@ -578,6 +578,18 @@ def approve_team_admin(
     team_admin.approved_by_super_admin_id = approved_by_super_admin_id
     db.commit()
     db.refresh(team_admin)
+    try:
+        from app.services.league import create_notification
+
+        create_notification(
+            db,
+            user_id=team_admin.user_id,
+            title="Team Admin approved",
+            message="Your Team Admin registration has been approved. You can now continue to the Team Admin app.",
+            link="/team-admin/welcome",
+        )
+    except Exception:
+        pass
     return team_admin
 
 
@@ -599,6 +611,18 @@ def reject_team_admin(db: Session, team_admin_id: int, rejection_reason: str) ->
     team_admin.rejection_reason = rejection_reason.strip()
     db.commit()
     db.refresh(team_admin)
+    try:
+        from app.services.league import create_notification
+
+        create_notification(
+            db,
+            user_id=team_admin.user_id,
+            title="Team Admin rejected",
+            message=f"Your Team Admin registration was rejected: {team_admin.rejection_reason}",
+            link="/login",
+        )
+    except Exception:
+        pass
     return team_admin
 
 
@@ -685,6 +709,18 @@ def approve_team(
 
     db.commit()
     db.refresh(team)
+    try:
+        from app.services.league import notify_team_admin
+
+        notify_team_admin(
+            db,
+            team.team_id,
+            "Team approved",
+            f"Your team {team.team_name} has been approved and can now participate in league activities.",
+            "/team-admin/dashboard",
+        )
+    except Exception:
+        pass
     return team
 
 
@@ -706,6 +742,18 @@ def reject_team(db: Session, team_id: int, rejection_reason: str) -> Team:
     team.rejection_reason = rejection_reason.strip()
     db.commit()
     db.refresh(team)
+    try:
+        from app.services.league import notify_team_admin
+
+        notify_team_admin(
+            db,
+            team.team_id,
+            "Team rejected",
+            f"Your team {team.team_name} was rejected: {team.rejection_reason}",
+            "/team-admin/dashboard",
+        )
+    except Exception:
+        pass
     return team
 
 
@@ -1104,6 +1152,18 @@ def approve_player(
 
     db.commit()
     db.refresh(player)
+    try:
+        from app.services.league import notify_team_admin
+
+        notify_team_admin(
+            db,
+            player.team_id,
+            "Player approved",
+            f"{player.full_name} has been approved and is now an official league player.",
+            "/team-admin/dashboard#my-players",
+        )
+    except Exception:
+        pass
     return player
 
 
@@ -1125,6 +1185,18 @@ def reject_player(db: Session, player_id: int, rejection_reason: str) -> Player:
     player.rejection_reason = rejection_reason.strip()
     db.commit()
     db.refresh(player)
+    try:
+        from app.services.league import notify_team_admin
+
+        notify_team_admin(
+            db,
+            player.team_id,
+            "Player rejected",
+            f"{player.full_name} was rejected: {player.rejection_reason}",
+            "/team-admin/dashboard#my-players",
+        )
+    except Exception:
+        pass
     return player
 
 
@@ -1152,6 +1224,18 @@ def approve_renewal(db: Session, registration_id: int, approved_by_super_admin_i
     request.player.rejection_reason = None
     db.commit()
     db.refresh(request)
+    try:
+        from app.services.league import notify_team_admin
+
+        notify_team_admin(
+            db,
+            request.team_id,
+            "Renewal approved",
+            f"The renewal for {request.player.full_name} has been approved.",
+            "/team-admin/dashboard#my-players",
+        )
+    except Exception:
+        pass
     return request
 
 
@@ -1176,6 +1260,18 @@ def reject_renewal(db: Session, registration_id: int, rejection_reason: str) -> 
     request.rejection_reason = rejection_reason.strip()
     db.commit()
     db.refresh(request)
+    try:
+        from app.services.league import notify_team_admin
+
+        notify_team_admin(
+            db,
+            request.team_id,
+            "Renewal rejected",
+            f"The renewal for {request.player.full_name} was rejected: {request.rejection_reason}",
+            "/team-admin/dashboard#my-players",
+        )
+    except Exception:
+        pass
     return request
 
 
@@ -1224,6 +1320,21 @@ def approve_transfer_registration(
 
     db.commit()
     db.refresh(request)
+    try:
+        from app.services.league import notify_team_admins_for_teams
+
+        team_ids = [request.team_id]
+        if request.player and request.player.team_id:
+            team_ids.append(request.player.team_id)
+        notify_team_admins_for_teams(
+            db,
+            team_ids,
+            "Transfer approved",
+            f"The transfer registration for {request.player.full_name} has been approved.",
+            "/team-admin/dashboard#transfers",
+        )
+    except Exception:
+        pass
     return request
 
 
@@ -1252,6 +1363,21 @@ def reject_transfer_registration(
 
     db.commit()
     db.refresh(request)
+    try:
+        from app.services.league import notify_team_admins_for_teams
+
+        team_ids = [request.team_id]
+        if request.player and request.player.team_id:
+            team_ids.append(request.player.team_id)
+        notify_team_admins_for_teams(
+            db,
+            team_ids,
+            "Transfer rejected",
+            f"The transfer registration for {request.player.full_name} was rejected: {request.rejection_reason}",
+            "/team-admin/dashboard#transfers",
+        )
+    except Exception:
+        pass
     return request
 
 
@@ -1273,6 +1399,18 @@ def approve_transfer(db: Session, transfer_id: int, approved_by_super_admin_id: 
     transfer.rejection_reason = None
     db.commit()
     db.refresh(transfer)
+    try:
+        from app.services.league import notify_team_admins_for_teams
+
+        notify_team_admins_for_teams(
+            db,
+            [transfer.from_team_id, transfer.to_team_id],
+            "Transfer request approved",
+            f"The transfer request for {transfer.player.full_name} has been approved.",
+            "/team-admin/dashboard#transfers",
+        )
+    except Exception:
+        pass
     return transfer
 
 
@@ -1295,6 +1433,18 @@ def reject_transfer(db: Session, transfer_id: int, rejection_reason: str) -> Pla
     transfer.rejection_reason = rejection_reason.strip()
     db.commit()
     db.refresh(transfer)
+    try:
+        from app.services.league import notify_team_admins_for_teams
+
+        notify_team_admins_for_teams(
+            db,
+            [transfer.from_team_id, transfer.to_team_id],
+            "Transfer request rejected",
+            f"The transfer request for {transfer.player.full_name} was rejected: {transfer.rejection_reason}",
+            "/team-admin/dashboard#transfers",
+        )
+    except Exception:
+        pass
     return transfer
 
 

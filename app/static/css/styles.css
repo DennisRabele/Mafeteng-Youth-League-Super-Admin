@@ -218,23 +218,16 @@ main {
   height: 46px;
   justify-content: center;
   margin-left: auto;
-  overflow: hidden;
-  position: relative;
+  padding: 0;
   width: 52px;
 }
 
 .menu-toggle span {
-  display: none;
-}
-
-.menu-toggle::before {
   background: currentColor;
   border-radius: 999px;
-  box-shadow: 0 -7px 0 currentColor, 0 7px 0 currentColor;
-  content: "";
   display: block;
-  height: 2px;
-  width: 22px;
+  height: 3px;
+  width: 20px;
 }
 
 .nav-backdrop {
@@ -251,10 +244,10 @@ main {
 }
 
 .nav-drawer {
-  background: var(--black);
-  border-left: 1px solid #242424;
-  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.34);
-  color: var(--white);
+  background: linear-gradient(180deg, #ffd84d 0%, #f2b700 100%);
+  border-left: 1px solid rgba(0, 0, 0, 0.18);
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.28);
+  color: var(--black);
   height: 100vh;
   max-width: 88vw;
   overflow-y: auto;
@@ -280,10 +273,10 @@ main {
 }
 
 .drawer-close {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(0, 0, 0, 0.15);
   border-radius: 999px;
-  color: var(--white);
+  color: var(--black);
   cursor: pointer;
   min-height: 36px;
   padding: 0 14px;
@@ -296,10 +289,10 @@ main {
 
 .drawer-link {
   align-items: center;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 12px;
-  color: var(--white);
+  color: var(--black);
   cursor: pointer;
   display: flex;
   font-size: 13px;
@@ -313,12 +306,12 @@ main {
 }
 
 .drawer-link:hover {
-  background: rgba(255, 196, 0, 0.14);
-  border-color: rgba(255, 196, 0, 0.28);
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(0, 0, 0, 0.18);
 }
 
 .drawer-link.destructive {
-  color: #ffb3b3;
+  color: #7b1f1f;
 }
 
 .button {
@@ -1023,6 +1016,19 @@ textarea:focus {
   margin: 0 0 14px;
 }
 
+.filter-select {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.filter-select select {
+  min-height: 34px;
+}
+
 .dashboard-chip {
   align-items: center;
   background: var(--soft);
@@ -1046,6 +1052,14 @@ textarea:focus {
 
 .responsive-card-table {
   width: 100%;
+}
+
+.page-context {
+  color: var(--yellow);
+  font-size: 11px;
+  font-weight: 900;
+  margin: -10px 0 18px;
+  text-transform: uppercase;
 }
 
 table {
@@ -1449,7 +1463,7 @@ td {
   }
 
   .topnav {
-    display: none;
+    display: none !important;
   }
 
   .page-shell,
@@ -1533,6 +1547,10 @@ td {
 
   .nav-drawer {
     width: min(320px, 92vw);
+  }
+
+  .admin-hero::after {
+    display: none;
   }
 }
 
@@ -1640,6 +1658,15 @@ td {
   .form-actions .button,
   .table-pager .button {
     width: 100%;
+  }
+
+  .filter-select {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .filter-select select {
+    flex: 1;
   }
 
   .table-wrap .form-grid {
