@@ -1520,6 +1520,7 @@ td {
   }
 
   .metric-grid {
+    display: none;
     grid-template-columns: repeat(2, minmax(130px, 1fr));
   }
 
