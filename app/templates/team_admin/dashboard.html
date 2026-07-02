@@ -1496,13 +1496,16 @@
       <div class="notification-list">
         {% for notification in notifications %}
           <article class="panel" style="margin-bottom: 1rem; border-left: 4px solid {% if notification.is_read %}#ccc{% else %}#2d6cdf{% endif %};">
-            <h3 style="margin-top: 0;">{{ notification.title }}</h3>
-            <p>{{ notification.message }}</p>
-            <small>{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
             {% if notification.link %}
-              <div style="margin-top: 0.75rem;">
-                <a class="button button-muted small" href="{{ notification.link }}">Open</a>
-              </div>
+              <a class="notification-card-link" href="{{ notification.link }}">
+                <h3 style="margin-top: 0;">{{ notification.title }}</h3>
+                <p>{{ notification.message }}</p>
+                <small>{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+              </a>
+            {% else %}
+              <h3 style="margin-top: 0;">{{ notification.title }}</h3>
+              <p>{{ notification.message }}</p>
+              <small>{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
             {% endif %}
             {% if not notification.is_read %}
               <form method="post" action="/notifications/{{ notification.notification_id }}/read" style="margin-top: 0.75rem;">

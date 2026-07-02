@@ -1009,6 +1009,17 @@ textarea:focus {
   margin-bottom: 0;
 }
 
+.notification-card-link {
+  color: inherit;
+  display: block;
+  text-decoration: none;
+}
+
+.notification-card-link:hover h3,
+.notification-card-link:hover p {
+  text-decoration: underline;
+}
+
 .dashboard-chip-row {
   display: flex;
   gap: 8px;

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse, Response
@@ -75,7 +76,12 @@ from app.services.registration import (
     verify_login_code,
     verify_password_recovery_code,
 )
-from app.services.email import EmailDeliveryError, send_login_code, send_verification_code
+from app.services.email import (
+    EmailDeliveryError,
+    send_login_code,
+    send_notification_email,
+    send_verification_code,
+)
 from app.services.storage import save_upload
 
 
@@ -84,6 +90,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 LOGIN_CHALLENGE_COOKIE = "ydl_login_challenge"
 VERIFY_CHALLENGE_COOKIE = "ydl_verify_challenge"
 PASSWORD_RECOVERY_COOKIE = "ydl_password_recovery"
+logger = logging.getLogger(__name__)
 
 
 def _render(request: Request, template: str, context: dict):
@@ -323,6 +330,36 @@ def _safe_dashboard_value(factory, default):
         return factory()
     except Exception:
         return default
+
+
+def _announce_submission(
+    db: Session,
+    *,
+    recipient_email: str | None,
+    title: str,
+    message: str,
+    link: str,
+    super_admin_title: str,
+    super_admin_message: str,
+    super_admin_link: str,
+) -> None:
+    try:
+        from app.services.league import notify_super_admins
+
+        notify_super_admins(db, super_admin_title, super_admin_message, super_admin_link)
+    except Exception:
+        pass
+
+    if recipient_email:
+        try:
+            send_notification_email(
+                to_email=recipient_email,
+                title=title,
+                message=message,
+                link=link,
+            )
+        except Exception:
+            pass
 
 
 def _load_fixtures(db: Session, *, team_ids: list[int] | None = None) -> list[Fixture]:
@@ -862,6 +899,16 @@ def team_admin_registration(
         send_verification_code(to_email=team_admin.user.email, code=verification_code)
         db.commit()
         db.refresh(team_admin)
+        _announce_submission(
+            db,
+            recipient_email=team_admin.user.email,
+            title="Team admin registration submitted",
+            message=f"Your Team Admin registration for {team_name} has been submitted and is awaiting approval.",
+            link="/team-admin/account",
+            super_admin_title="Team admin registration submitted",
+            super_admin_message=f"{full_name} submitted a Team Admin registration for {team_name}.",
+            super_admin_link="/super-admin#team-admins",
+        )
     except RegistrationError as exc:
         db.rollback()
         return _render(
@@ -1660,6 +1707,7 @@ def create_fixture_route(
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
     except Exception:
+        logger.exception("Fixture creation failed")
         return _render(
             request,
             "super_admin/action_result.html",
@@ -1689,6 +1737,7 @@ def update_fixture_route(
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
     except Exception:
+        logger.exception("Fixture update failed")
         return _render(
             request,
             "super_admin/action_result.html",
@@ -1811,6 +1860,16 @@ def create_team_route(
             training_ground=training_ground,
             home_ground=home_ground,
             logo=logo_path,
+        )
+        _announce_submission(
+            db,
+            recipient_email=team_admin.user.email,
+            title="Team registration submitted",
+            message=f"Your team {team_name} has been submitted and is awaiting approval.",
+            link="/team-admin/account",
+            super_admin_title="Team registration submitted",
+            super_admin_message=f"{team_name} was submitted for approval.",
+            super_admin_link="/super-admin#teams",
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
@@ -1950,6 +2009,16 @@ def create_player_route(
             photo_path=photo_path,
             documents=documents,
         )
+        _announce_submission(
+            db,
+            recipient_email=team_admin.user.email,
+            title="Player registration submitted",
+            message=f"Player registration for {full_name} has been submitted and is awaiting approval.",
+            link="/team-admin/account",
+            super_admin_title="Player registration submitted",
+            super_admin_message=f"{full_name} was submitted for approval under {team.team_name}.",
+            super_admin_link="/super-admin#players",
+        )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
     except Exception:
@@ -1999,6 +2068,16 @@ def renew_player_route(
             player_id=player_id,
             agreement_form_path=agreement_form_path or "",
             registration_period=period,
+        )
+        _announce_submission(
+            db,
+            recipient_email=team_admin.user.email,
+            title="Renewal submitted",
+            message=f"Renewal for {renewal_request.player.full_name} has been submitted and is awaiting approval.",
+            link="/team-admin/dashboard#my-players",
+            super_admin_title="Renewal submitted",
+            super_admin_message=f"Renewal for {renewal_request.player.full_name} was submitted for approval.",
+            super_admin_link="/super-admin#renewals",
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
@@ -2152,6 +2231,16 @@ def request_player_route(
             registration_period=request_registration_period,
             request_loan_period=request_loan_period,
         )
+        _announce_submission(
+            db,
+            recipient_email=team_admin.user.email,
+            title="Transfer request submitted",
+            message="Your transfer request has been submitted and is awaiting response.",
+            link="/team-admin/dashboard#transfers",
+            super_admin_title="Transfer request submitted",
+            super_admin_message=f"A transfer request was submitted by {team_admin.user.full_name}.",
+            super_admin_link="/super-admin#transfers",
+        )
     except RegistrationError as exc:
         return _render(
             request,
@@ -2218,6 +2307,16 @@ def register_transferred_player_route(
             transfer_id=transfer_id,
             team_admin_id=team_admin.team_admin_id,
             consent_form_path=consent_form_path,
+        )
+        _announce_submission(
+            db,
+            recipient_email=team_admin.user.email,
+            title="Transferred player registered",
+            message="The transferred player has been registered with your team and is awaiting approval.",
+            link="/team-admin/dashboard#my-players",
+            super_admin_title="Transferred player registered",
+            super_admin_message="A transferred player registration was submitted for approval.",
+            super_admin_link="/super-admin#transfers",
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})

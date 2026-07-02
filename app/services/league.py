@@ -17,6 +17,7 @@ from app.models import (
     MatchEvent,
     MatchResultSubmission,
     Notification,
+    Season,
     Player,
     ResultVerification,
     Team,
@@ -212,8 +213,12 @@ def create_fixture(
         raise RegistrationError("Selected teams must belong to the chosen category.")
     if fixture_date < datetime.utcnow() + timedelta(days=7):
         raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
+    season = db.scalar(select(Season).order_by(Season.start_date.desc()))
+    if not season:
+        raise RegistrationError("No active season is available for fixture creation.")
 
     fixture = Fixture(
+        season_id=season.season_id,
         category_id=category_id,
         home_team_id=home_team_id,
         away_team_id=away_team_id,
@@ -230,7 +235,7 @@ def create_fixture(
         db,
         "New fixture created",
         f"{home_team.team_name} vs {away_team.team_name} has been scheduled for {fixture_date:%Y-%m-%d %H:%M} at {venue}.",
-        "/super-admin",
+        "/super-admin#fixtures",
     )
     notify_team_admins_for_teams(
         db,
@@ -270,6 +275,9 @@ def update_fixture(
         raise RegistrationError("Selected fixture data is invalid.")
     if home_team.category_id != fixture_category_id or away_team.category_id != fixture_category_id:
         raise RegistrationError("Selected teams must belong to the chosen category.")
+    season = db.scalar(select(Season).order_by(Season.start_date.desc()))
+    if season and not fixture.season_id:
+        fixture.season_id = season.season_id
 
     fixture.category_id = fixture_category_id
     fixture.home_team_id = home_team_id
@@ -284,6 +292,19 @@ def update_fixture(
         db.add(Match(fixture_id=fixture.fixture_id, match_date=fixture_date, status="scheduled"))
     db.commit()
     db.refresh(fixture)
+    notify_super_admins(
+        db,
+        "Fixture updated",
+        f"{home_team.team_name} vs {away_team.team_name} has been updated for {fixture_date:%Y-%m-%d %H:%M} at {venue}.",
+        "/super-admin#fixtures",
+    )
+    notify_team_admins_for_teams(
+        db,
+        [home_team_id, away_team_id],
+        "Fixture updated",
+        f"{home_team.team_name} vs {away_team.team_name} has been updated for {fixture_date:%Y-%m-%d %H:%M} at {venue}.",
+        "/team-admin/dashboard#fixtures",
+    )
     return fixture
 
 
@@ -299,6 +320,12 @@ def postpone_fixture(db: Session, fixture_id: int, new_date: datetime) -> Fixtur
         fixture.match.match_date = new_date
     db.commit()
     db.refresh(fixture)
+    notify_super_admins(
+        db,
+        "Fixture postponed",
+        f"{fixture.home_team.team_name} vs {fixture.away_team.team_name} has been postponed to {new_date:%Y-%m-%d %H:%M}.",
+        "/super-admin#fixtures",
+    )
     notify_team_admins_for_teams(
         db,
         [fixture.home_team_id, fixture.away_team_id],
@@ -465,8 +492,26 @@ def verify_match_result(
             db,
             [match.fixture.home_team_id, match.fixture.away_team_id],
             "Result updated",
-            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} is now {home_score}-{away_score}.",
+            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} is now {home_score}-{away_score}. Open Results to review the verified score, League tables to see updated standings, and Performances to view player stats.",
             "/team-admin/dashboard#results",
+        )
+        notify_super_admins(
+            db,
+            "Results updated",
+            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} has been approved.",
+            "/super-admin#results",
+        )
+        notify_super_admins(
+            db,
+            "League tables updated",
+            f"League tables were recalculated after {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name}.",
+            "/super-admin#league-tables",
+        )
+        notify_super_admins(
+            db,
+            "Performances updated",
+            f"Player performances were updated after {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name}.",
+            "/super-admin#performances",
         )
 
     db.commit()
