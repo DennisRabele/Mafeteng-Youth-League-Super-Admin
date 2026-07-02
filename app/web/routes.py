@@ -1659,6 +1659,12 @@ def create_fixture_route(
         )
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        return _render(
+            request,
+            "super_admin/action_result.html",
+            {"error": "Fixture could not be created right now. Please try again."},
+        )
     return _redirect("/super-admin#fixtures")
 
 
@@ -1682,6 +1688,12 @@ def update_fixture_route(
         )
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        return _render(
+            request,
+            "super_admin/action_result.html",
+            {"error": "Fixture could not be updated right now. Please try again."},
+        )
     return _redirect("/super-admin#fixtures")
 
 

@@ -73,6 +73,13 @@ def create_notification(
     link: str | None = None,
     commit: bool = True,
 ) -> Notification:
+    if not _has_table(db, "notifications"):
+        return Notification(
+            user_id=user_id,
+            title=title.strip(),
+            message=message.strip(),
+            link=link.strip() if link else None,
+        )
     notification = Notification(
         user_id=user_id,
         title=title.strip(),
@@ -107,6 +114,8 @@ def broadcast_notifications(
     message: str,
     link: str | None = None,
 ) -> None:
+    if not _has_table(db, "notifications"):
+        return
     notifications: list[Notification] = []
     for user_id in user_ids:
         notifications.append(
