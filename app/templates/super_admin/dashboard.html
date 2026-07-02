@@ -29,17 +29,6 @@
       </div>
     </div>
 
-    <div class="metric-grid">
-      <div class="metric"><span>Pending</span><strong>{{ counts.pending }}</strong></div>
-      <div class="metric"><span>Super Admins</span><strong>{{ counts.super_admins }}/5</strong></div>
-      <div class="metric"><span>Team Admins</span><strong>{{ counts.team_admins }}</strong></div>
-      <div class="metric"><span>Teams</span><strong>{{ counts.teams }}</strong></div>
-      <div class="metric"><span>Players</span><strong>{{ counts.players }}</strong></div>
-      <div class="metric"><span>Fixtures</span><strong>{{ counts.fixtures }}</strong></div>
-      <div class="metric"><span>Results</span><strong>{{ counts.results }}</strong></div>
-      <div class="metric"><span>Unread Notifications</span><strong>{{ unread_notifications }}</strong></div>
-    </div>
-
     <div class="section-switcher">
       <button class="switch-button active" type="button" data-section-target="team-admins">Team Admins</button>
       <button class="switch-button" type="button" data-section-target="teams">Teams</button>
@@ -50,7 +39,18 @@
       <button class="switch-button" type="button" data-section-target="results">Results</button>
       <button class="switch-button" type="button" data-section-target="league-tables">League tables</button>
       <button class="switch-button" type="button" data-section-target="performances">Performances</button>
-      <button class="switch-button" type="button" data-section-target="notifications">Notifications</button>
+      <button class="switch-button" type="button" data-section-target="notifications">Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</button>
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric"><span>Pending</span><strong>{{ counts.pending }}</strong></div>
+      <div class="metric"><span>Super Admins</span><strong>{{ counts.super_admins }}/5</strong></div>
+      <div class="metric"><span>Team Admins</span><strong>{{ counts.team_admins }}</strong></div>
+      <div class="metric"><span>Teams</span><strong>{{ counts.teams }}</strong></div>
+      <div class="metric"><span>Players</span><strong>{{ counts.players }}</strong></div>
+      <div class="metric"><span>Fixtures</span><strong>{{ counts.fixtures }}</strong></div>
+      <div class="metric"><span>Results</span><strong>{{ counts.results }}</strong></div>
+      <div class="metric"><span>Unread Notifications</span><strong>{{ unread_notifications }}</strong></div>
     </div>
 
     <section class="panel dashboard-section" id="team-admins" data-dashboard-section="team-admins">

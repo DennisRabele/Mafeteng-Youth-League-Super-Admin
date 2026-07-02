@@ -1530,6 +1530,31 @@ td {
     align-items: flex-start;
   }
 
+  .section-switcher {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    padding: 10px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .section-switcher::-webkit-scrollbar {
+    display: none;
+  }
+
+  .switch-button {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    white-space: nowrap;
+  }
+
   .metric-grid {
     display: none;
     grid-template-columns: repeat(2, minmax(130px, 1fr));
