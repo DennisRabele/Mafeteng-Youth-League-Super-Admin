@@ -1210,18 +1210,19 @@
       </div>
     </section>
 
-    <section class="panel dashboard-section" id="fixtures" data-dashboard-section="fixtures" hidden>
+    <section class="panel dashboard-section fixtures-panel" id="fixtures" data-dashboard-section="fixtures" hidden>
       <div class="panel-heading">
         <div>
-          <h2>Fixtures & Results</h2>
-          <p class="section-copy">Fixture updates, venue changes and postponements posted by Super Admins appear here automatically.</p>
+          <h2>Fixtures</h2>
+          <p class="section-copy">Published fixtures from Super Admins appear here automatically.</p>
         </div>
         <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
       </div>
+
       <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/team-admin/dashboard#fixtures">
-        <label class="filter-select">Category
+        <label class="filter-select">All Competitions
           <select name="fixture_category" id="fixture-category-filter" onchange="this.form.submit()">
-            <option value="all" {% if fixture_filters.category == 'all' %}selected{% endif %}>All Categories</option>
+            <option value="all" {% if fixture_filters.category == 'all' %}selected{% endif %}>All Competitions</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}" {% if fixture_filters.category == category.category_name %}selected{% endif %}>{{ category.category_name }}</option>
             {% endfor %}
@@ -1236,41 +1237,14 @@
         <button class="button button-primary" type="submit" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Filter</button>
         <button class="button button-muted" type="submit" formaction="/team-admin/dashboard/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download CSV</button>
       </form>
+
       <div class="dashboard-chip-row fixture-tabs">
         <button class="dashboard-chip {% if fixture_filters.bucket == 'all' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="all">All</button>
         <button class="dashboard-chip {% if fixture_filters.bucket == 'upcoming' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="upcoming">Upcoming Fixtures</button>
         <button class="dashboard-chip {% if fixture_filters.bucket == 'live' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="live">Live Now</button>
         <button class="dashboard-chip {% if fixture_filters.bucket == 'completed' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="completed">Completed</button>
       </div>
-      <form class="form-grid two" method="post" action="/team-admin/results" style="margin-bottom: 1.5rem;">
-        <label>Fixture
-          <select name="fixture_id" required>
-            {% for fixture in fixtures %}
-              <option value="{{ fixture.fixture_id }}">
-                {{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }} - {{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}
-              </option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Home Score
-          <input name="home_score" type="number" min="0" required>
-        </label>
-        <label>Away Score
-          <input name="away_score" type="number" min="0" required>
-        </label>
-        <label>Scorers
-          <textarea name="scorer_names_text" placeholder="One name per line or comma separated"></textarea>
-        </label>
-        <label>Goal Types
-          <textarea name="goal_types_text" placeholder="Match each scorer order with a goal type"></textarea>
-        </label>
-        <label>Assists
-          <textarea name="assist_names_text" placeholder="One name per line or comma separated"></textarea>
-        </label>
-        <div class="form-actions wide">
-          <button class="button button-primary" type="submit">Submit Result</button>
-        </div>
-      </form>
+
       <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in filtered_fixtures %}
         <article class="fixture-card" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
