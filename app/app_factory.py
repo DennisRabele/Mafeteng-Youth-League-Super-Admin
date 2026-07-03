@@ -7,12 +7,13 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import BASE_DIR, settings
-from app.db.session import init_db
+from app.db.session import _ensure_schema_columns, init_db
 from app.web.routes import router as web_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _ensure_schema_columns()
     if _should_init_db():
         init_db()
     yield
