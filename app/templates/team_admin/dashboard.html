@@ -1212,25 +1212,36 @@
 
     <section class="panel dashboard-section" id="fixtures" data-dashboard-section="fixtures" hidden>
       <div class="panel-heading">
-        <h2>Fixtures & Results</h2>
+        <div>
+          <h2>Fixtures & Results</h2>
+          <p class="section-copy">Fixture updates, venue changes and postponements posted by Super Admins appear here automatically.</p>
+        </div>
+        <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
       </div>
-      <div class="dashboard-chip-row">
+      <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/team-admin/dashboard#fixtures">
         <label class="filter-select">Category
-          <select onchange="filterDashboardCategory('fixtures', this.value, event)">
-            <option value="all">All Categories</option>
+          <select name="fixture_category" id="fixture-category-filter" onchange="this.form.submit()">
+            <option value="all" {% if fixture_filters.category == 'all' %}selected{% endif %}>All Categories</option>
             {% for category in categories %}
-              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+              <option value="{{ category.category_name }}" {% if fixture_filters.category == category.category_name %}selected{% endif %}>{{ category.category_name }}</option>
             {% endfor %}
           </select>
         </label>
+        <label class="filter-select">From
+          <input name="fixture_date_from" id="fixture-date-from" type="date" value="{{ fixture_filters.date_from }}" onchange="this.form.submit()">
+        </label>
+        <label class="filter-select">To
+          <input name="fixture_date_to" id="fixture-date-to" type="date" value="{{ fixture_filters.date_to }}" onchange="this.form.submit()">
+        </label>
+        <button class="button button-primary" type="submit" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Filter</button>
+        <button class="button button-muted" type="submit" formaction="/team-admin/dashboard/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download CSV</button>
+      </form>
+      <div class="dashboard-chip-row fixture-tabs">
+        <button class="dashboard-chip {% if fixture_filters.bucket == 'all' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="all">All</button>
+        <button class="dashboard-chip {% if fixture_filters.bucket == 'upcoming' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="upcoming">Upcoming Fixtures</button>
+        <button class="dashboard-chip {% if fixture_filters.bucket == 'live' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="live">Live Now</button>
+        <button class="dashboard-chip {% if fixture_filters.bucket == 'completed' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="completed">Completed</button>
       </div>
-      <div class="dashboard-chip-row">
-        <button class="dashboard-chip active" type="button" data-filter-chip data-filter-value="all" onclick="filterDashboardRows('fixtures', 'all', event)">All</button>
-        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="published" onclick="filterDashboardRows('fixtures', 'published', event)">Published</button>
-        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="postponed" onclick="filterDashboardRows('fixtures', 'postponed', event)">Postponed</button>
-        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="completed" onclick="filterDashboardRows('fixtures', 'completed', event)">Completed</button>
-      </div>
-      <p class="section-copy" style="margin-bottom: 1rem;">Fixture updates, venue changes and postponements posted by Super Admins appear here automatically.</p>
       <form class="form-grid two" method="post" action="/team-admin/results" style="margin-bottom: 1.5rem;">
         <label>Fixture
           <select name="fixture_id" required>
@@ -1260,63 +1271,64 @@
           <button class="button button-primary" type="submit">Submit Result</button>
         </div>
       </form>
-      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
-        <div class="table-scroll-x">
-        <table class="responsive-card-table">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Fixture</th>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Venue</th>
-              <th>Status</th>
-              <th>Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for fixture in fixtures %}
-            <tr data-row data-status="{{ fixture.status }}" data-category="{{ fixture.category.category_name }}">
-              <td data-label="Category">{{ fixture.category.category_name }}</td>
-              <td data-label="Fixture">
-                <div class="fixture-inline">
-                  <span class="fixture-team">
-                    {% if fixture.home_team.logo %}
-                      <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
-                    {% else %}
-                      <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
-                    {% endif %}
-                    <span>{{ fixture.home_team.team_name }}</span>
-                  </span>
-                  <span class="fixture-vs">VS</span>
-                  <span class="fixture-team">
-                    {% if fixture.away_team.logo %}
-                      <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
-                    {% else %}
-                      <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
-                    {% endif %}
-                    <span>{{ fixture.away_team.team_name }}</span>
-                  </span>
-                </div>
-              </td>
-              <td data-label="Date">{{ fixture.fixture_date.strftime('%Y-%m-%d') }}</td>
-              <td data-label="Time">{{ fixture.fixture_date.strftime('%I:%M %p') }}</td>
-              <td data-label="Venue">{{ fixture.venue }}</td>
-              <td data-label="Status"><span class="status {{ fixture.status }}">{{ fixture.status }}</span></td>
-              <td data-label="Score">
-                {% if fixture.match and fixture.match.home_score is not none and fixture.match.away_score is not none %}
-                  {{ fixture.match.home_score }}-{{ fixture.match.away_score }}
+      <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
+        {% for fixture in filtered_fixtures %}
+        <article class="fixture-card" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+          <div class="fixture-card__date">
+            <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
+            <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
+            <span class="fixture-card__year">{{ fixture.dashboard_date_year }}</span>
+          </div>
+          <div class="fixture-card__time">
+            <strong>{{ fixture.dashboard_time }}</strong>
+            <span>{{ fixture.dashboard_day_name }}</span>
+          </div>
+          <div class="fixture-card__fixture">
+            <div class="fixture-matchup">
+              <div class="fixture-team">
+                {% if fixture.home_team.logo %}
+                  <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
                 {% else %}
-                  -
+                  <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
                 {% endif %}
-              </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="7" class="empty">No fixtures available yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        </div>
+                <span>{{ fixture.home_team.team_name }}</span>
+              </div>
+              <span class="fixture-vs">VS</span>
+              <div class="fixture-team">
+                {% if fixture.away_team.logo %}
+                  <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                {% else %}
+                  <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
+                {% endif %}
+                <span>{{ fixture.away_team.team_name }}</span>
+              </div>
+            </div>
+            <div class="fixture-meta">
+              <span class="fixture-badge">{{ fixture.category.category_name }}</span>
+              <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
+            </div>
+          </div>
+          <div class="fixture-card__venue">
+            <strong>{{ fixture.venue }}</strong>
+            <span>Venue</span>
+          </div>
+          <div class="fixture-card__status">
+            <span class="status {{ fixture.status }}">{{ fixture.status }}</span>
+          </div>
+          <div class="fixture-card__score">
+            <strong>
+              {% if fixture.match and fixture.match.home_score is not none and fixture.match.away_score is not none %}
+                {{ fixture.match.home_score }}-{{ fixture.match.away_score }}
+              {% else %}
+                -
+              {% endif %}
+            </strong>
+            <span>Score</span>
+          </div>
+        </article>
+        {% else %}
+        <div class="empty fixture-empty">No fixtures available yet.</div>
+        {% endfor %}
       </div>
     </section>
 

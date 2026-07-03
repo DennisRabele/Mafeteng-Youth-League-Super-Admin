@@ -1,4 +1,6 @@
 from datetime import date, datetime
+import csv
+import io
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
@@ -1609,7 +1611,14 @@ def team_admin_account(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/team-admin/dashboard")
-def team_admin_dashboard(request: Request, db: Session = Depends(get_db)):
+def team_admin_dashboard(
+    request: Request,
+    fixture_category: str = "all",
+    fixture_bucket: str = "all",
+    fixture_date_from: str | None = None,
+    fixture_date_to: str | None = None,
+    db: Session = Depends(get_db),
+):
     team_admin = _require_team_admin(request, db)
     restore_expired_loans(db)
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
@@ -1729,6 +1738,13 @@ def team_admin_dashboard(request: Request, db: Session = Depends(get_db)):
         .order_by(Player.full_name)
     ).all()
     fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=own_team_ids), [])
+    filtered_fixtures = _filter_fixtures_for_dashboard(
+        fixtures,
+        category_name=fixture_category,
+        bucket=fixture_bucket,
+        date_from=fixture_date_from,
+        date_to=fixture_date_to,
+    )
     result_submissions = _safe_dashboard_value(
         lambda: _load_result_submissions(db, team_ids=own_team_ids),
         [],
@@ -1768,12 +1784,70 @@ def team_admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "approved_transfers_for_unregistration": approved_transfers_for_unregistration,
             "transfer_status": TransferStatus,
             "fixtures": fixtures,
+            "filtered_fixtures": filtered_fixtures,
+            "fixture_filters": {
+                "category": fixture_category,
+                "bucket": fixture_bucket,
+                "date_from": fixture_date_from or "",
+                "date_to": fixture_date_to or "",
+            },
             "result_submissions": result_submissions,
             "league_tables": league_tables,
             "player_performances": player_performances,
             "notifications": notifications,
             "unread_notifications": unread_notifications,
         },
+    )
+
+
+@router.get("/team-admin/dashboard/fixtures/export")
+def export_team_admin_fixtures(
+    request: Request,
+    fixture_category: str = "all",
+    fixture_bucket: str = "all",
+    fixture_date_from: str | None = None,
+    fixture_date_to: str | None = None,
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    team_ids = [
+        team.team_id
+        for team in db.scalars(
+            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
+        ).all()
+    ]
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=team_ids), [])
+    fixtures = _filter_fixtures_for_dashboard(
+        fixtures,
+        category_name=fixture_category,
+        bucket=fixture_bucket,
+        date_from=fixture_date_from,
+        date_to=fixture_date_to,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Category", "Home Team", "Away Team", "Date", "Time", "Venue", "Status", "Score"])
+    for fixture in fixtures:
+        score = "-"
+        if fixture.match and fixture.match.home_score is not None and fixture.match.away_score is not None:
+            score = f"{fixture.match.home_score}-{fixture.match.away_score}"
+        writer.writerow([
+            fixture.category.category_name if fixture.category else "",
+            fixture.home_team.team_name if fixture.home_team else "",
+            fixture.away_team.team_name if fixture.away_team else "",
+            fixture.fixture_date.strftime("%Y-%m-%d"),
+            fixture.fixture_date.strftime("%I:%M %p").lstrip("0"),
+            fixture.venue,
+            fixture.status,
+            score,
+        ])
+
+    filename = f"fixtures_{fixture_category}_{fixture_bucket}.csv".replace(" ", "_")
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

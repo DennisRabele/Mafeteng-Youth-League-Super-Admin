@@ -1272,6 +1272,16 @@ textarea:focus {
   font-size: 14px;
 }
 
+.fixture-card__score {
+  display: grid;
+  gap: 4px;
+}
+
+.fixture-card__score strong {
+  font-size: 18px;
+  font-weight: 900;
+}
+
 .fixture-card__status {
   align-items: flex-start;
   display: flex;
