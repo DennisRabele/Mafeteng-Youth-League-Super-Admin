@@ -478,122 +478,162 @@
       </div>
     </section>
 
-    <section class="panel dashboard-section" id="fixtures" data-dashboard-section="fixtures" hidden>
+    <section class="panel dashboard-section fixtures-panel" id="fixtures" data-dashboard-section="fixtures" hidden>
       <div class="panel-heading">
-        <h2>Fixtures</h2>
+        <div>
+          <h2>Fixtures</h2>
+          <p class="section-copy">Create, publish and reschedule fixtures for approved clubs only.</p>
+        </div>
+        <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
       </div>
-      <div class="dashboard-chip-row">
-        <label class="filter-select">Category
-          <select onchange="filterDashboardCategory('fixtures', this.value, event)">
-            <option value="all">All Categories</option>
+
+      <details class="fixture-builder">
+        <summary>Create Fixture</summary>
+        <form class="form-grid two fixture-builder-form" method="post" action="/super-admin/fixtures">
+          <label>Category
+            <select name="category_id" id="fixture-category-select" required onchange="syncFixtureTeamFilters()">
+              {% for category in categories %}
+                <option value="{{ category.category_id }}">{{ category.category_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Venue
+            <input name="venue" required>
+          </label>
+          <label>Home Team
+            <select name="home_team_id" id="fixture-home-team-select" required>
+              {% for team in approved_fixture_teams %}
+                <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Away Team
+            <select name="away_team_id" id="fixture-away-team-select" required>
+              {% for team in approved_fixture_teams %}
+                <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Fixture Date & Time
+            <input name="fixture_date" type="datetime-local" required>
+          </label>
+          <label>Status
+            <select name="status_value">
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+              <option value="postponed">Postponed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <div class="form-actions wide">
+            <button class="button button-primary" type="submit">Create Fixture</button>
+          </div>
+        </form>
+      </details>
+
+      <div class="fixture-toolbar">
+        <label class="filter-select">All Competitions
+          <select id="fixture-category-filter" onchange="filterSuperAdminFixtures()">
+            <option value="all">All Competitions</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
             {% endfor %}
           </select>
         </label>
+        <label class="filter-select">From
+          <input id="fixture-date-from" type="date" onchange="filterSuperAdminFixtures()">
+        </label>
+        <label class="filter-select">To
+          <input id="fixture-date-to" type="date" onchange="filterSuperAdminFixtures()">
+        </label>
+        <button class="button button-primary" type="button" onclick="filterSuperAdminFixtures()">Filter</button>
       </div>
-      <div class="dashboard-chip-row">
-        <button class="dashboard-chip active" type="button" data-filter-chip data-filter-value="all" onclick="filterDashboardRows('fixtures', 'all', event)">All</button>
-        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="published" onclick="filterDashboardRows('fixtures', 'published', event)">Published</button>
-        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="postponed" onclick="filterDashboardRows('fixtures', 'postponed', event)">Postponed</button>
-        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="completed" onclick="filterDashboardRows('fixtures', 'completed', event)">Completed</button>
+
+      <div class="dashboard-chip-row fixture-tabs">
+        <button class="dashboard-chip active" type="button" data-fixture-tab data-fixture-bucket="all" onclick="filterSuperAdminFixtureBuckets('all', event)">All</button>
+        <button class="dashboard-chip" type="button" data-fixture-tab data-fixture-bucket="upcoming" onclick="filterSuperAdminFixtureBuckets('upcoming', event)">Upcoming Fixtures</button>
+        <button class="dashboard-chip" type="button" data-fixture-tab data-fixture-bucket="live" onclick="filterSuperAdminFixtureBuckets('live', event)">Live Now</button>
+        <button class="dashboard-chip" type="button" data-fixture-tab data-fixture-bucket="completed" onclick="filterSuperAdminFixtureBuckets('completed', event)">Completed</button>
       </div>
-      <form class="form-grid two" method="post" action="/super-admin/fixtures" style="margin-bottom: 1.5rem;">
-        <label>Category
-          <select name="category_id" required>
-            {% for category in categories %}
-              <option value="{{ category.category_id }}">{{ category.category_name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Venue
-          <input name="venue" required>
-        </label>
-        <label>Home Team
-          <select name="home_team_id" required>
-            {% for team in teams_list %}
-              <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Away Team
-          <select name="away_team_id" required>
-            {% for team in teams_list %}
-              <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Fixture Date
-          <input name="fixture_date" type="datetime-local" required>
-        </label>
-        <label>Status
-          <select name="status_value">
-            <option value="published">Published</option>
-            <option value="draft">Draft</option>
-            <option value="postponed">Postponed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </label>
-        <div class="form-actions wide">
-          <button class="button button-primary" type="submit">Create Fixture</button>
-        </div>
-      </form>
-      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
-        <div class="table-scroll-x">
-        <table class="responsive-card-table">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Fixture</th>
-              <th>Date</th>
-              <th>Venue</th>
-              <th>Status</th>
-              <th>Score</th>
-              <th>Update</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for fixture in fixtures %}
-            <tr data-row data-status="{{ fixture.status }}" data-category="{{ fixture.category.category_name }}">
-              <td data-label="Category">{{ fixture.category.category_name }}</td>
-              <td data-label="Fixture">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</td>
-              <td data-label="Date">{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}</td>
-              <td data-label="Venue">{{ fixture.venue }}</td>
-              <td data-label="Status"><span class="status {{ fixture.status }}">{{ fixture.status }}</span></td>
-              <td data-label="Score">
-                {% if fixture.match and fixture.match.home_score is not none and fixture.match.away_score is not none %}
-                  {{ fixture.match.home_score }}-{{ fixture.match.away_score }}
+
+      <div class="fixture-board" id="fixtures-board">
+        {% for fixture in fixtures %}
+        <article class="fixture-card" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+          <div class="fixture-card__date">
+            <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
+            <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
+            <span class="fixture-card__year">{{ fixture.dashboard_date_year }}</span>
+          </div>
+          <div class="fixture-card__time">
+            <strong>{{ fixture.dashboard_time }}</strong>
+            <span>{{ fixture.dashboard_day_name }}</span>
+          </div>
+          <div class="fixture-card__fixture">
+            <div class="fixture-matchup">
+              <div class="fixture-team">
+                {% if fixture.home_team.logo %}
+                  <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
                 {% else %}
-                  -
+                  <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
                 {% endif %}
-              </td>
-              <td data-label="Update">
-                <form class="form-grid" method="post" action="/super-admin/fixtures/{{ fixture.fixture_id }}">
-                  <label>Date
-                    <input name="fixture_date" type="datetime-local" value="{{ fixture.fixture_date.strftime('%Y-%m-%dT%H:%M') }}" required>
-                  </label>
-                  <label>Venue
-                    <input name="venue" value="{{ fixture.venue }}" required>
-                  </label>
-                  <label>Status
-                    <select name="status_value">
-                      <option value="draft" {% if fixture.status == 'draft' %}selected{% endif %}>Draft</option>
-                      <option value="published" {% if fixture.status == 'published' %}selected{% endif %}>Published</option>
-                      <option value="postponed" {% if fixture.status == 'postponed' %}selected{% endif %}>Postponed</option>
-                      <option value="cancelled" {% if fixture.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
-                      <option value="completed" {% if fixture.status == 'completed' %}selected{% endif %}>Completed</option>
-                    </select>
-                  </label>
-                  <button class="button button-muted small" type="submit">Save</button>
-                </form>
-              </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="7" class="empty">No fixtures scheduled yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        </div>
+                <span>{{ fixture.home_team.team_name }}</span>
+              </div>
+              <span class="fixture-vs">VS</span>
+              <div class="fixture-team">
+                {% if fixture.away_team.logo %}
+                  <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                {% else %}
+                  <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
+                {% endif %}
+                <span>{{ fixture.away_team.team_name }}</span>
+              </div>
+            </div>
+            <div class="fixture-meta">
+              <span class="fixture-badge">{{ fixture.category.category_name }}</span>
+              <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
+            </div>
+          </div>
+          <div class="fixture-card__venue">
+            <strong>{{ fixture.venue }}</strong>
+            <span>Venue</span>
+          </div>
+          <div class="fixture-card__status">
+            <span class="status {{ fixture.status }}">{{ fixture.status }}</span>
+            <small>Set by {% if fixture.dashboard_created_by != '-' %}{{ fixture.dashboard_created_by }}{% else %}System{% endif %}</small>
+          </div>
+          <div class="fixture-card__actions">
+            <details>
+              <summary>Edit</summary>
+              <form class="fixture-edit-form" method="post" action="/super-admin/fixtures/{{ fixture.fixture_id }}">
+                <label>Date & Time
+                  <input name="fixture_date" type="datetime-local" value="{{ fixture.fixture_date.strftime('%Y-%m-%dT%H:%M') }}" required>
+                </label>
+                <label>Venue
+                  <input name="venue" value="{{ fixture.venue }}" required>
+                </label>
+                <label>Status
+                  <select name="status_value">
+                    <option value="draft" {% if fixture.status == 'draft' %}selected{% endif %}>Draft</option>
+                    <option value="published" {% if fixture.status == 'published' %}selected{% endif %}>Published</option>
+                    <option value="postponed" {% if fixture.status == 'postponed' %}selected{% endif %}>Postponed</option>
+                    <option value="cancelled" {% if fixture.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                    <option value="completed" {% if fixture.status == 'completed' %}selected{% endif %}>Completed</option>
+                  </select>
+                </label>
+                <button class="button button-muted small" type="submit">Save Changes</button>
+              </form>
+              <form class="fixture-postpone-form" method="post" action="/super-admin/fixtures/{{ fixture.fixture_id }}/postpone">
+                <label>Postpone To
+                  <input name="new_date" type="datetime-local" value="{{ fixture.fixture_date.strftime('%Y-%m-%dT%H:%M') }}" required>
+                </label>
+                <button class="button button-primary small" type="submit">Postpone</button>
+              </form>
+            </details>
+          </div>
+        </article>
+        {% else %}
+        <div class="empty fixture-empty">No fixtures scheduled yet.</div>
+        {% endfor %}
       </div>
     </section>
 
@@ -876,6 +916,76 @@
       }
     });
   }
+
+  function syncFixtureTeamFilters() {
+    const categorySelect = document.getElementById('fixture-category-select');
+    const categoryId = categorySelect ? categorySelect.value : 'all';
+    const homeSelect = document.getElementById('fixture-home-team-select');
+    const awaySelect = document.getElementById('fixture-away-team-select');
+
+    [homeSelect, awaySelect].forEach((select) => {
+      if (!select) {
+        return;
+      }
+      const options = Array.from(select.querySelectorAll('option[data-category-id]'));
+      let firstVisibleOption = null;
+      options.forEach((option) => {
+        const matchesCategory = categoryId === 'all' || option.dataset.categoryId === categoryId;
+        option.hidden = !matchesCategory;
+        option.disabled = !matchesCategory;
+        if (matchesCategory && !firstVisibleOption) {
+          firstVisibleOption = option;
+        }
+      });
+      const selectedOption = select.selectedOptions[0];
+      if (selectedOption && selectedOption.hidden && firstVisibleOption) {
+        select.value = firstVisibleOption.value;
+      }
+      if (!select.value && firstVisibleOption) {
+        select.value = firstVisibleOption.value;
+      }
+    });
+  }
+
+  function filterSuperAdminFixtureBuckets(bucket, event) {
+    if (event) {
+      event.preventDefault();
+    }
+    const board = document.getElementById('fixtures-board');
+    if (!board) {
+      return;
+    }
+    board.dataset.fixtureBucket = bucket;
+    filterSuperAdminFixtures();
+    document.querySelectorAll('[data-fixture-tab]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.fixtureBucket === bucket);
+    });
+  }
+
+  function filterSuperAdminFixtures() {
+    const board = document.getElementById('fixtures-board');
+    if (!board) {
+      return;
+    }
+    const bucket = board.dataset.fixtureBucket || 'all';
+    const categoryFilter = document.getElementById('fixture-category-filter');
+    const fromFilter = document.getElementById('fixture-date-from');
+    const toFilter = document.getElementById('fixture-date-to');
+    const categoryValue = categoryFilter ? categoryFilter.value : 'all';
+    const fromValue = fromFilter ? fromFilter.value : '';
+    const toValue = toFilter ? toFilter.value : '';
+
+    board.querySelectorAll('[data-fixture-card]').forEach((card) => {
+      const cardBucket = card.dataset.bucket || 'upcoming';
+      const cardCategory = card.dataset.category || '';
+      const cardDate = card.dataset.date || '';
+      const matchesBucket = bucket === 'all' || cardBucket === bucket;
+      const matchesCategory = categoryValue === 'all' || cardCategory === categoryValue;
+      const matchesFrom = !fromValue || cardDate >= fromValue;
+      const matchesTo = !toValue || cardDate <= toValue;
+      card.hidden = !(matchesBucket && matchesCategory && matchesFrom && matchesTo);
+    });
+  }
   
   function filterPlayersByTeam() {
     const teamId = document.getElementById('team-filter').value;
@@ -897,6 +1007,9 @@
   function filterPlayersByCategory() {
     filterPlayersByTeam();
   }
+
+  syncFixtureTeamFilters();
+  filterSuperAdminFixtures();
 </script>
 
 {% endblock %}

@@ -369,6 +369,7 @@ def _load_fixtures(db: Session, *, team_ids: list[int] | None = None) -> list[Fi
             selectinload(Fixture.category),
             selectinload(Fixture.home_team),
             selectinload(Fixture.away_team),
+            selectinload(Fixture.created_by_super_admin).selectinload(SuperAdmin.user),
             selectinload(Fixture.match).selectinload(Match.result_submissions),
         )
         .order_by(Fixture.fixture_date.desc(), Fixture.fixture_id.desc())
@@ -380,7 +381,36 @@ def _load_fixtures(db: Session, *, team_ids: list[int] | None = None) -> list[Fi
                 Fixture.away_team_id.in_(team_ids),
             )
         )
-    return db.scalars(query).all()
+    fixtures = db.scalars(query).all()
+    _decorate_fixtures_for_dashboard(fixtures)
+    return fixtures
+
+
+def _decorate_fixtures_for_dashboard(fixtures: list[Fixture]) -> None:
+    now = datetime.utcnow()
+    for fixture in fixtures:
+        if fixture.status == FixtureStatus.COMPLETED.value:
+            bucket = "completed"
+        elif fixture.status == FixtureStatus.POSTPONED.value:
+            bucket = "upcoming"
+        elif fixture.status == FixtureStatus.PUBLISHED.value and abs((fixture.fixture_date - now).total_seconds()) <= 5400:
+            bucket = "live"
+        elif fixture.fixture_date > now:
+            bucket = "upcoming"
+        else:
+            bucket = "completed"
+
+        fixture.dashboard_bucket = bucket
+        fixture.dashboard_date_day = fixture.fixture_date.strftime("%d")
+        fixture.dashboard_date_month = fixture.fixture_date.strftime("%b").upper()
+        fixture.dashboard_date_year = fixture.fixture_date.strftime("%Y")
+        fixture.dashboard_time = fixture.fixture_date.strftime("%I:%M %p").lstrip("0")
+        fixture.dashboard_day_name = fixture.fixture_date.strftime("%a")
+        fixture.dashboard_created_by = (
+            fixture.created_by_super_admin.user.full_name
+            if fixture.created_by_super_admin and fixture.created_by_super_admin.user
+            else "-"
+        )
 
 
 def _load_result_submissions(
@@ -1286,6 +1316,12 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
     teams_list = db.scalars(
         select(Team).options(selectinload(Team.category)).order_by(Team.team_name)
     ).all()
+    approved_fixture_teams = db.scalars(
+        select(Team)
+        .options(selectinload(Team.category))
+        .where(Team.status == ApprovalStatus.APPROVED.value)
+        .order_by(Team.category_id, Team.team_name)
+    ).all()
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
     result_submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
@@ -1333,6 +1369,7 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "all_renewals": all_renewals,
             "all_transfers": all_transfers,
             "teams_list": teams_list,
+            "approved_fixture_teams": approved_fixture_teams,
             "categories": categories,
             "fixtures": fixtures,
             "result_submissions": result_submissions,
@@ -1693,7 +1730,7 @@ def create_fixture_route(
     status_value: str = Form(FixtureStatus.PUBLISHED.value),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
         create_fixture(
             db,
@@ -1703,6 +1740,7 @@ def create_fixture_route(
             fixture_date=_parse_dashboard_datetime(fixture_date),
             venue=venue,
             status=status_value,
+            created_by_super_admin_id=_get_super_admin_id(user),
         )
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})

@@ -1230,6 +1230,7 @@
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="postponed" onclick="filterDashboardRows('fixtures', 'postponed', event)">Postponed</button>
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="completed" onclick="filterDashboardRows('fixtures', 'completed', event)">Completed</button>
       </div>
+      <p class="section-copy" style="margin-bottom: 1rem;">Fixture updates, venue changes and postponements posted by Super Admins appear here automatically.</p>
       <form class="form-grid two" method="post" action="/team-admin/results" style="margin-bottom: 1.5rem;">
         <label>Fixture
           <select name="fixture_id" required>
@@ -1267,6 +1268,7 @@
               <th>Category</th>
               <th>Fixture</th>
               <th>Date</th>
+              <th>Time</th>
               <th>Venue</th>
               <th>Status</th>
               <th>Score</th>
@@ -1276,8 +1278,29 @@
             {% for fixture in fixtures %}
             <tr data-row data-status="{{ fixture.status }}" data-category="{{ fixture.category.category_name }}">
               <td data-label="Category">{{ fixture.category.category_name }}</td>
-              <td data-label="Fixture">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</td>
-              <td data-label="Date">{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td data-label="Fixture">
+                <div class="fixture-inline">
+                  <span class="fixture-team">
+                    {% if fixture.home_team.logo %}
+                      <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
+                    {% else %}
+                      <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
+                    {% endif %}
+                    <span>{{ fixture.home_team.team_name }}</span>
+                  </span>
+                  <span class="fixture-vs">VS</span>
+                  <span class="fixture-team">
+                    {% if fixture.away_team.logo %}
+                      <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                    {% else %}
+                      <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
+                    {% endif %}
+                    <span>{{ fixture.away_team.team_name }}</span>
+                  </span>
+                </div>
+              </td>
+              <td data-label="Date">{{ fixture.fixture_date.strftime('%Y-%m-%d') }}</td>
+              <td data-label="Time">{{ fixture.fixture_date.strftime('%I:%M %p') }}</td>
               <td data-label="Venue">{{ fixture.venue }}</td>
               <td data-label="Status"><span class="status {{ fixture.status }}">{{ fixture.status }}</span></td>
               <td data-label="Score">
@@ -1289,7 +1312,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="empty">No fixtures available yet.</td></tr>
+            <tr><td colspan="7" class="empty">No fixtures available yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

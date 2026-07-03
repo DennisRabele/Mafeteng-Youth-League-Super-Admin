@@ -113,6 +113,16 @@ def _ensure_schema_columns() -> None:
             if column_name not in player_columns:
                 connection.execute(text(statement))
 
+    if inspector.has_table("fixtures"):
+        fixture_columns = {column["name"] for column in inspector.get_columns("fixtures")}
+        missing_fixture_columns = {
+            "created_by_super_admin_id": "ALTER TABLE fixtures ADD COLUMN created_by_super_admin_id INTEGER REFERENCES super_admins(admin_id)",
+        }
+        with engine.begin() as connection:
+            for column_name, statement in missing_fixture_columns.items():
+                if column_name not in fixture_columns:
+                    connection.execute(text(statement))
+
     if inspector.has_table("player_registration_requests"):
         registration_request_columns = {
             column["name"] for column in inspector.get_columns("player_registration_requests")

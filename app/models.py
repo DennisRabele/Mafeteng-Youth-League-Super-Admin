@@ -451,6 +451,10 @@ class Fixture(Base):
     fixture_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     venue: Mapped[str] = mapped_column(String(150), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default=FixtureStatus.DRAFT.value)
+    created_by_super_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("super_admins.admin_id"),
+        nullable=True,
+    )
 
     season: Mapped[Season] = relationship(back_populates="fixtures")
     category: Mapped[Category] = relationship(back_populates="fixtures")
@@ -459,6 +463,9 @@ class Fixture(Base):
     )
     away_team: Mapped[Team] = relationship(
         back_populates="away_fixtures", foreign_keys=[away_team_id]
+    )
+    created_by_super_admin: Mapped[SuperAdmin | None] = relationship(
+        foreign_keys=[created_by_super_admin_id]
     )
     match: Mapped[Match | None] = relationship(back_populates="fixture", uselist=False)
 

@@ -197,6 +197,7 @@ def create_fixture(
     fixture_date: datetime,
     venue: str,
     status: str = FixtureStatus.PUBLISHED.value,
+    created_by_super_admin_id: int | None = None,
 ) -> Fixture:
     category = db.get(Category, category_id)
     home_team = db.get(Team, home_team_id)
@@ -225,6 +226,7 @@ def create_fixture(
         fixture_date=fixture_date,
         venue=venue.strip(),
         status=status,
+        created_by_super_admin_id=created_by_super_admin_id,
     )
     db.add(fixture)
     db.flush()

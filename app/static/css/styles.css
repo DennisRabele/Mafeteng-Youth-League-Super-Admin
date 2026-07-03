@@ -1061,6 +1061,274 @@ textarea:focus {
   color: var(--white);
 }
 
+.section-copy {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.fixture-builder {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbf8 100%);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.fixture-builder > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  list-style: none;
+  padding: 14px 16px;
+  text-transform: uppercase;
+}
+
+.fixture-builder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fixture-builder[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.fixture-builder-form {
+  padding: 16px;
+}
+
+.fixture-toolbar {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.fixture-toolbar .filter-select {
+  flex: 1 1 180px;
+  min-width: 180px;
+}
+
+.fixture-toolbar .filter-select input,
+.fixture-toolbar .filter-select select {
+  width: 100%;
+}
+
+.fixture-tabs {
+  margin-bottom: 14px;
+}
+
+.fixture-board {
+  display: grid;
+  gap: 12px;
+}
+
+.fixture-card {
+  align-items: center;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 108px 84px minmax(0, 1.8fr) minmax(120px, 1fr) 140px 180px;
+  padding: 14px;
+}
+
+.fixture-card__date {
+  align-items: center;
+  background: var(--black);
+  border-radius: 16px;
+  color: var(--white);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  min-height: 104px;
+  text-align: center;
+}
+
+.fixture-card__day {
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 0.9;
+}
+
+.fixture-card__month {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.fixture-card__year,
+.fixture-card__time span,
+.fixture-subtle,
+.fixture-card__venue span,
+.fixture-card__status small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fixture-card__time {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fixture-card__time strong {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.fixture-card__fixture {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fixture-matchup {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fixture-inline {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fixture-team {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fixture-team span:last-child {
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fixture-vs {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.fixture-logo {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  height: 32px;
+  object-fit: contain;
+  padding: 3px;
+  width: 32px;
+}
+
+.fixture-logo.fallback {
+  align-items: center;
+  background: var(--soft);
+  color: var(--ink);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.fixture-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fixture-badge {
+  background: rgba(255, 196, 0, 0.18);
+  border: 1px solid rgba(255, 196, 0, 0.4);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 4px 10px;
+  text-transform: uppercase;
+}
+
+.fixture-card__venue {
+  display: grid;
+  gap: 4px;
+}
+
+.fixture-card__venue strong {
+  font-size: 14px;
+}
+
+.fixture-card__status {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fixture-card__status .status {
+  align-self: flex-start;
+}
+
+.fixture-card__actions details {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.fixture-card__actions summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.fixture-card__actions summary::-webkit-details-marker {
+  display: none;
+}
+
+.fixture-edit-form,
+.fixture-postpone-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.fixture-edit-form label,
+.fixture-postpone-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.fixture-edit-form input,
+.fixture-edit-form select,
+.fixture-postpone-form input {
+  min-height: 38px;
+}
+
+.fixture-empty {
+  padding: 20px;
+  text-align: center;
+}
+
 .responsive-card-table {
   width: 100%;
 }
@@ -1580,6 +1848,23 @@ td {
   .admin-hero::after {
     display: none;
   }
+
+  .fixture-card {
+    grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .fixture-card__fixture {
+    grid-column: span 2;
+  }
+
+  .fixture-card__venue,
+  .fixture-card__status {
+    grid-column: span 1;
+  }
+
+  .fixture-card__actions {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 620px) {
@@ -1701,6 +1986,33 @@ td {
     grid-template-columns: 1fr;
   }
 
+  .fixture-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fixture-toolbar .button,
+  .fixture-toolbar .filter-select {
+    width: 100%;
+  }
+
+  .fixture-card {
+    grid-template-columns: 1fr;
+  }
+
+  .fixture-card__date,
+  .fixture-card__time,
+  .fixture-card__fixture,
+  .fixture-card__venue,
+  .fixture-card__status,
+  .fixture-card__actions {
+    grid-column: 1 / -1;
+  }
+
+  .fixture-card__date {
+    min-height: 88px;
+  }
+
   .actions-cell form,
   .actions-cell .button {
     width: 100%;
@@ -1775,6 +2087,20 @@ td {
   .page-shell,
   .auth-shell {
     padding: 28px 12px;
+  }
+
+  .fixture-card__fixture {
+    gap: 10px;
+  }
+
+  .fixture-inline,
+  .fixture-matchup {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .fixture-vs {
+    margin-left: 36px;
   }
 
   .ydl-hero {
