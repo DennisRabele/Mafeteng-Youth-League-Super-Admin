@@ -413,6 +413,44 @@ def _decorate_fixtures_for_dashboard(fixtures: list[Fixture]) -> None:
         )
 
 
+def _filter_fixtures_for_dashboard(
+    fixtures: list[Fixture],
+    *,
+    category_name: str = "all",
+    bucket: str = "all",
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[Fixture]:
+    filtered = fixtures
+    if category_name and category_name != "all":
+        filtered = [
+            fixture
+            for fixture in filtered
+            if fixture.category and fixture.category.category_name == category_name
+        ]
+    if bucket and bucket != "all":
+        filtered = [
+            fixture
+            for fixture in filtered
+            if getattr(fixture, "dashboard_bucket", "upcoming") == bucket
+        ]
+    if date_from:
+        try:
+            from_date = date.fromisoformat(date_from)
+        except ValueError:
+            from_date = None
+        if from_date:
+            filtered = [fixture for fixture in filtered if fixture.fixture_date.date() >= from_date]
+    if date_to:
+        try:
+            to_date = date.fromisoformat(date_to)
+        except ValueError:
+            to_date = None
+        if to_date:
+            filtered = [fixture for fixture in filtered if fixture.fixture_date.date() <= to_date]
+    return filtered
+
+
 def _load_result_submissions(
     db: Session,
     *,
@@ -1214,7 +1252,14 @@ def resend_verification_email_route(
 
 
 @router.get("/super-admin")
-def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
+def super_admin_dashboard(
+    request: Request,
+    fixture_category: str = "all",
+    fixture_bucket: str = "all",
+    fixture_date_from: str | None = None,
+    fixture_date_to: str | None = None,
+    db: Session = Depends(get_db),
+):
     user = _require_super_admin(request, db)
 
     all_team_admins = db.scalars(
@@ -1324,6 +1369,13 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
     ).all()
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    fixtures = _filter_fixtures_for_dashboard(
+        fixtures,
+        category_name=fixture_category,
+        bucket=fixture_bucket,
+        date_from=fixture_date_from,
+        date_to=fixture_date_to,
+    )
     result_submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_performances = _safe_dashboard_value(
@@ -1370,6 +1422,12 @@ def super_admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "all_transfers": all_transfers,
             "teams_list": teams_list,
             "approved_fixture_teams": approved_fixture_teams,
+            "fixture_filters": {
+                "category": fixture_category,
+                "bucket": fixture_bucket,
+                "date_from": fixture_date_from or "",
+                "date_to": fixture_date_to or "",
+            },
             "categories": categories,
             "fixtures": fixtures,
             "result_submissions": result_submissions,

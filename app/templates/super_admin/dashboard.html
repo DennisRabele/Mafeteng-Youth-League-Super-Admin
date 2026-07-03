@@ -531,32 +531,32 @@
         </form>
       </details>
 
-      <div class="fixture-toolbar">
+      <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/super-admin#fixtures">
         <label class="filter-select">All Competitions
-          <select id="fixture-category-filter" onchange="filterSuperAdminFixtures()">
-            <option value="all">All Competitions</option>
+          <select name="fixture_category" id="fixture-category-filter" onchange="this.form.submit()">
+            <option value="all" {% if fixture_filters.category == 'all' %}selected{% endif %}>All Competitions</option>
             {% for category in categories %}
-              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+              <option value="{{ category.category_name }}" {% if fixture_filters.category == category.category_name %}selected{% endif %}>{{ category.category_name }}</option>
             {% endfor %}
           </select>
         </label>
         <label class="filter-select">From
-          <input id="fixture-date-from" type="date" onchange="filterSuperAdminFixtures()">
+          <input name="fixture_date_from" id="fixture-date-from" type="date" value="{{ fixture_filters.date_from }}" onchange="this.form.submit()">
         </label>
         <label class="filter-select">To
-          <input id="fixture-date-to" type="date" onchange="filterSuperAdminFixtures()">
+          <input name="fixture_date_to" id="fixture-date-to" type="date" value="{{ fixture_filters.date_to }}" onchange="this.form.submit()">
         </label>
-        <button class="button button-primary" type="button" onclick="filterSuperAdminFixtures()">Filter</button>
-      </div>
+        <button class="button button-primary" type="submit" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Filter</button>
+      </form>
 
       <div class="dashboard-chip-row fixture-tabs">
-        <button class="dashboard-chip active" type="button" data-fixture-tab data-fixture-bucket="all" onclick="filterSuperAdminFixtureBuckets('all', event)">All</button>
-        <button class="dashboard-chip" type="button" data-fixture-tab data-fixture-bucket="upcoming" onclick="filterSuperAdminFixtureBuckets('upcoming', event)">Upcoming Fixtures</button>
-        <button class="dashboard-chip" type="button" data-fixture-tab data-fixture-bucket="live" onclick="filterSuperAdminFixtureBuckets('live', event)">Live Now</button>
-        <button class="dashboard-chip" type="button" data-fixture-tab data-fixture-bucket="completed" onclick="filterSuperAdminFixtureBuckets('completed', event)">Completed</button>
+        <button class="dashboard-chip {% if fixture_filters.bucket == 'all' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="all">All</button>
+        <button class="dashboard-chip {% if fixture_filters.bucket == 'upcoming' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="upcoming">Upcoming Fixtures</button>
+        <button class="dashboard-chip {% if fixture_filters.bucket == 'live' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="live">Live Now</button>
+        <button class="dashboard-chip {% if fixture_filters.bucket == 'completed' %}active{% endif %}" type="submit" form="fixture-filter-form" name="fixture_bucket" value="completed">Completed</button>
       </div>
 
-      <div class="fixture-board" id="fixtures-board">
+      <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in fixtures %}
         <article class="fixture-card" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
