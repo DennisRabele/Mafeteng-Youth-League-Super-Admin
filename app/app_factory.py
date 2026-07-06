@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 import os
 from pathlib import Path
 
@@ -7,7 +8,9 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import BASE_DIR, settings
+from app.db.session import SessionLocal
 from app.db.session import _ensure_schema_columns, init_db
+from app.services.registration import process_player_registration_lifecycle
 from app.web.routes import router as web_router
 
 
@@ -16,7 +19,27 @@ async def lifespan(app: FastAPI):
     _ensure_schema_columns()
     if _should_init_db():
         init_db()
+
+    async def _registration_housekeeping_loop() -> None:
+        while True:
+            try:
+                with SessionLocal() as db:
+                    process_player_registration_lifecycle(db)
+            except Exception:
+                pass
+            await asyncio.sleep(24 * 60 * 60)
+
+    app.state.registration_housekeeping_task = asyncio.create_task(_registration_housekeeping_loop())
     yield
+    task = getattr(app.state, "registration_housekeeping_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
 
 
 def create_app(app_mode: str = "combined") -> FastAPI:

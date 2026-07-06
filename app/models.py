@@ -238,6 +238,8 @@ class Player(Base):
     status: Mapped[str] = mapped_column(String(30), default=ApprovalStatus.PENDING.value)
     approved_by_super_admin_id: Mapped[int | None] = mapped_column(ForeignKey("super_admins.admin_id"), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    registration_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    registration_reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime)
     is_on_loan: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     original_team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.team_id"))
     loan_end_date: Mapped[date | None] = mapped_column(Date)

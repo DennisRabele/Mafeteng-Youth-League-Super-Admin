@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 import re
 
 from sqlalchemy import delete, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.security import (
@@ -42,6 +42,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.email import send_notification_email
 
 
 class RegistrationError(ValueError):
@@ -403,6 +404,116 @@ def _player_registration_expiry_date(db: Session, player: Player) -> date | None
     return _add_years(start_date, registration_period)
 
 
+def _player_registration_expiry_datetime(db: Session, player: Player) -> datetime | None:
+    expiry_date = _player_registration_expiry_date(db, player)
+    if not expiry_date:
+        return None
+    return datetime.combine(expiry_date, datetime.min.time())
+
+
+def _sync_player_registration_expiry(db: Session, player: Player) -> None:
+    expiry_datetime = _player_registration_expiry_datetime(db, player)
+    player.registration_expires_at = expiry_datetime
+    player.registration_reminder_sent_at = None
+
+
+def _delete_expired_player_registrations(db: Session) -> int:
+    expired_players = db.scalars(
+        select(Player)
+        .where(
+            Player.status == ApprovalStatus.APPROVED.value,
+            Player.registration_expires_at.is_not(None),
+            Player.registration_expires_at <= datetime.utcnow(),
+        )
+    ).all()
+    deleted = 0
+    for player in expired_players:
+        _delete_player_graph(db, player.player_id)
+        deleted += 1
+    if deleted:
+        db.commit()
+    return deleted
+
+
+def _send_registration_expiry_reminders(db: Session) -> int:
+    reminder_window = datetime.utcnow() + timedelta(days=30)
+    players = db.scalars(
+        select(Player)
+        .options(selectinload(Player.team))
+        .where(
+            Player.status == ApprovalStatus.APPROVED.value,
+            Player.registration_expires_at.is_not(None),
+            Player.registration_expires_at > datetime.utcnow(),
+            Player.registration_expires_at <= reminder_window,
+        )
+    ).all()
+    grouped: dict[int, list[Player]] = defaultdict(list)
+    for player in players:
+        if player.team and player.team.team_admin_id:
+            grouped[player.team.team_admin_id].append(player)
+
+    sent = 0
+    for team_admin_id, team_players in grouped.items():
+        team_admin = db.scalar(
+            select(TeamAdmin)
+            .options(selectinload(TeamAdmin.user))
+            .where(TeamAdmin.team_admin_id == team_admin_id)
+        )
+        if not team_admin or not team_admin.user or not team_admin.user.email:
+            continue
+        unsent_players = [player for player in team_players if player.registration_reminder_sent_at is None]
+        if not unsent_players:
+            continue
+        lines = [
+            f"{player.full_name} ({player.player_code or f'PLAYER-{player.player_id}'})"
+            for player in sorted(unsent_players, key=lambda item: item.full_name.lower())
+        ]
+        try:
+            send_notification_email(
+                to_email=team_admin.user.email,
+                title="Player registration expiry reminder",
+                message=(
+                    "The following player registrations will expire within the next 30 days:\n"
+                    + "\n".join(lines)
+                    + "\n\nPlease renew them before the expiration date."
+                ),
+                link="/team-admin/dashboard#my-players",
+            )
+        except Exception:
+            continue
+        for player in unsent_players:
+            player.registration_reminder_sent_at = datetime.utcnow()
+        sent += 1
+    if sent:
+        db.commit()
+    return sent
+
+
+def _backfill_player_registration_expiry_fields(db: Session) -> int:
+    players = db.scalars(
+        select(Player)
+        .options(selectinload(Player.team))
+        .where(
+            Player.status == ApprovalStatus.APPROVED.value,
+            Player.registration_expires_at.is_(None),
+        )
+    ).all()
+    updated = 0
+    for player in players:
+        _sync_player_registration_expiry(db, player)
+        updated += 1
+    if updated:
+        db.commit()
+    return updated
+
+
+def process_player_registration_lifecycle(db: Session) -> dict[str, int]:
+    _backfill_player_registration_expiry_fields(db)
+    reminders_sent = _send_registration_expiry_reminders(db)
+    expired_deleted = _delete_expired_player_registrations(db)
+    return {"reminders_sent": reminders_sent, "expired_deleted": expired_deleted}
+
+
 def _release_player_for_transfer(transfer: PlayerTransferRequest) -> None:
     """Hide or blur the source-team player once the owning team approves."""
     player = transfer.player
@@ -697,8 +808,6 @@ def reject_team_admin(db: Session, team_admin_id: int, rejection_reason: str) ->
 
     rejection_reason = rejection_reason.strip()
     try:
-        from app.services.email import send_notification_email
-
         if team_admin.user.email:
             send_notification_email(
                 to_email=team_admin.user.email,
@@ -1230,6 +1339,7 @@ def approve_player(
             f"{_player_category_code(player)}"
         )
     player.rejection_reason = None
+    _sync_player_registration_expiry(db, player)
     if not player.qr_player_card:
         db.add(
             QRPlayerCard(
@@ -1311,6 +1421,7 @@ def approve_renewal(db: Session, registration_id: int, approved_by_super_admin_i
     request.player.approved_by_super_admin_id = approved_by_super_admin_id
     request.player.approved_at = datetime.utcnow()
     request.player.rejection_reason = None
+    _sync_player_registration_expiry(db, request.player)
     db.commit()
     db.refresh(request)
     try:

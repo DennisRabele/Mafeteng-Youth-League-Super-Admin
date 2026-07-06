@@ -1155,20 +1155,22 @@
       <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
         <table>
           <thead>
-            <tr><th>Player</th><th>Player ID</th><th>Team</th><th>Age Group</th><th>Status</th><th>Reason</th></tr>
+            <tr><th>Player</th><th>Player ID</th><th>Registration Period</th><th>Expires On</th><th>Team</th><th>Age Group</th><th>Status</th><th>Reason</th></tr>
           </thead>
           <tbody>
             {% for player in players %}
             <tr data-row data-status="{{ player.status }}" class="{% if player.is_on_loan %}player-on-loan{% endif %}">
               <td>{{ player.full_name }}{% if player.is_on_loan %}<span class="loan-marker">On Loan</span>{% endif %}</td>
               <td>{{ player.player_code or '-' }}</td>
+              <td>{{ player.registration_period }} Year(s)</td>
+              <td>{{ player.registration_expiration_date.strftime('%Y-%m-%d') if player.registration_expiration_date else '-' }}</td>
               <td>{{ player.team.team_name }}</td>
               <td>{{ player.age_group or 'Not eligible' }}</td>
               <td><span class="status {{ player.status }}">{{ player.status }}</span>{% if player.is_on_loan and player.loan_end_date %}<br><small>Returns {{ player.loan_end_date }}</small>{% endif %}</td>
               <td>{% if player.status == 'rejected' %}{{ player.rejection_reason or '-' }}{% else %}-{% endif %}</td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="empty">No players submitted yet.</td></tr>
+            <tr><td colspan="8" class="empty">No players submitted yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -1309,10 +1311,13 @@
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
       <div class="panel-heading">
         <h2>Result Submissions</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-muted small" type="button" onclick="window.location='/team-admin/dashboard/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download CSV</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardCategory('results', this.value, event)">
+          <select id="results-category-filter" onchange="filterDashboardCategory('results', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -1361,10 +1366,13 @@
     <section class="panel dashboard-section" id="league-tables" data-dashboard-section="league-tables" hidden>
       <div class="panel-heading">
         <h2>League Tables</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-muted small" type="button" onclick="window.location='/team-admin/dashboard/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download CSV</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardPanels('league-tables', this.value, event)">
+          <select id="league-table-category" onchange="filterDashboardPanels('league-tables', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -1420,10 +1428,13 @@
     <section class="panel dashboard-section" id="performances" data-dashboard-section="performances" hidden>
       <div class="panel-heading">
         <h2>Player Performances</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-muted small" type="button" onclick="window.location='/team-admin/dashboard/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download CSV</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardCategory('performances', this.value, event)">
+          <select id="performance-category-filter" onchange="filterDashboardCategory('performances', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -1431,7 +1442,7 @@
           </select>
         </label>
         <label class="filter-select">Metric
-          <select onchange="filterDashboardMetric('performances', this.value, event)">
+          <select id="performance-metric-filter" onchange="filterDashboardMetric('performances', this.value, event)">
             <option value="all">All Metrics</option>
             <option value="goals">Goals</option>
             <option value="assists">Assists</option>

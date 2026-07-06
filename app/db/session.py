@@ -104,6 +104,8 @@ def _ensure_schema_columns() -> None:
         "rejection_reason": "ALTER TABLE players ADD COLUMN rejection_reason TEXT",
         "approved_by_super_admin_id": "ALTER TABLE players ADD COLUMN approved_by_super_admin_id INTEGER REFERENCES super_admins(admin_id)",
         "approved_at": "ALTER TABLE players ADD COLUMN approved_at TIMESTAMP",
+        "registration_expires_at": "ALTER TABLE players ADD COLUMN registration_expires_at TIMESTAMP",
+        "registration_reminder_sent_at": "ALTER TABLE players ADD COLUMN registration_reminder_sent_at TIMESTAMP",
         "is_on_loan": "ALTER TABLE players ADD COLUMN is_on_loan BOOLEAN DEFAULT FALSE NOT NULL",
         "original_team_id": "ALTER TABLE players ADD COLUMN original_team_id INTEGER REFERENCES teams(team_id)",
         "loan_end_date": "ALTER TABLE players ADD COLUMN loan_end_date DATE",

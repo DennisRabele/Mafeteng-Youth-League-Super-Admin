@@ -239,6 +239,8 @@
             <tr>
               <th>Player</th>
               <th>Player ID</th>
+              <th>Registration Period</th>
+              <th>Expires On</th>
               <th>Photo</th>
               <th>Team</th>
               <th>Gender</th>
@@ -256,6 +258,8 @@
             <tr data-row data-status="{{ player.status }}" data-team="{{ player.team.team_id }}" data-category="{{ player.age_group }}">
               <td>{{ player.full_name }}</td>
               <td>{{ player.player_code or 'Pending' }}</td>
+              <td>{{ player.registration_period }} Year(s)</td>
+              <td>{{ player.registration_expiration_date.strftime('%Y-%m-%d') if player.registration_expiration_date else '-' }}</td>
               <td>
                 {% if player.photo_path %}
                   <img class="thumb" src="{{ player.photo_path }}" alt="{{ player.full_name }}">
@@ -299,7 +303,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="12" class="empty">No player registrations.</td></tr>
+            <tr><td colspan="14" class="empty">No player registrations.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -484,7 +488,10 @@
           <h2>Fixtures</h2>
           <p class="section-copy">Create, publish and reschedule fixtures for approved clubs only.</p>
         </div>
-        <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
+        <div class="panel-heading-actions">
+          <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
+          <button class="button button-muted small" type="button" onclick="window.location='/super-admin/fixtures/export?fixture_category=' + encodeURIComponent(document.getElementById('fixture-category-filter').value || 'all') + '&fixture_bucket=' + encodeURIComponent(document.getElementById('fixtures-board').dataset.fixtureBucket || 'all') + '&fixture_date_from=' + encodeURIComponent(document.getElementById('fixture-date-from').value || '') + '&fixture_date_to=' + encodeURIComponent(document.getElementById('fixture-date-to').value || '')">Download CSV</button>
+        </div>
       </div>
 
       <details class="fixture-builder">
@@ -640,10 +647,13 @@
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
       <div class="panel-heading">
         <h2>Results</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-muted small" type="button" onclick="window.location='/super-admin/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download CSV</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardCategory('results', this.value, event)">
+          <select id="results-category-filter" onchange="filterDashboardCategory('results', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -792,10 +802,13 @@
     <section class="panel dashboard-section" id="performances" data-dashboard-section="performances" hidden>
       <div class="panel-heading">
         <h2>Player Performances</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-muted small" type="button" onclick="window.location='/super-admin/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download CSV</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardCategory('performances', this.value, event)">
+          <select id="performance-category-filter" onchange="filterDashboardCategory('performances', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -803,7 +816,7 @@
           </select>
         </label>
         <label class="filter-select">Metric
-          <select onchange="filterDashboardMetric('performances', this.value, event)">
+          <select id="performance-metric-filter" onchange="filterDashboardMetric('performances', this.value, event)">
             <option value="all">All Metrics</option>
             <option value="all-players" selected>Player Overview</option>
             <option value="goals">Goals</option>

@@ -73,9 +73,11 @@ from app.services.registration import (
     request_player_transfer,
     respond_to_transfer,
     restore_expired_loans,
+    process_player_registration_lifecycle,
     reset_password,
     unregister_transferred_player,
     age_on,
+    _player_registration_expiry_date,
     verify_email_code,
     verify_login_code,
     verify_password_recovery_code,
@@ -455,6 +457,24 @@ def _filter_fixtures_for_dashboard(
     return filtered
 
 
+def _decorate_player_registration_fields(db: Session, players: list[Player]) -> None:
+    for player in players:
+        player.calculated_age = age_on(player.dob)
+        if player.status == ApprovalStatus.APPROVED.value:
+            expiry_date = _player_registration_expiry_date(db, player)
+            player.registration_expiration_date = expiry_date
+            player.registration_period = player.registration_period or 0
+            if expiry_date:
+                player.registration_expires_at = datetime.combine(expiry_date, datetime.min.time())
+                player.registration_days_remaining = max(0, (expiry_date - date.today()).days)
+            else:
+                player.registration_expires_at = None
+                player.registration_days_remaining = None
+        else:
+            player.registration_expiration_date = None
+            player.registration_days_remaining = None
+
+
 def _load_result_submissions(
     db: Session,
     *,
@@ -482,6 +502,34 @@ def _load_result_submissions(
             )
         )
     return db.scalars(query).all()
+
+
+def _csv_response(filename: str, rows: list[list[object]]) -> Response:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    for row in rows:
+        writer.writerow(row)
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _filter_result_submissions_by_category(
+    submissions: list[MatchResultSubmission],
+    category_name: str = "all",
+) -> list[MatchResultSubmission]:
+    if category_name == "all":
+        return submissions
+    return [
+        submission
+        for submission in submissions
+        if submission.match
+        and submission.match.fixture
+        and submission.match.fixture.category
+        and submission.match.fixture.category.category_name == category_name
+    ]
 
 
 @router.get("/")
@@ -1265,6 +1313,7 @@ def super_admin_dashboard(
     db: Session = Depends(get_db),
 ):
     user = _require_super_admin(request, db)
+    process_player_registration_lifecycle(db)
 
     all_team_admins = db.scalars(
         select(TeamAdmin)
@@ -1303,6 +1352,8 @@ def super_admin_dashboard(
         .where(Player.status != "transferred")
         .order_by(Player.player_id.desc())
     ).all()
+    _decorate_player_registration_fields(db, all_players)
+    approved_players = [player for player in all_players if player.status == ApprovalStatus.APPROVED.value]
     
     # Load approver user info for players
     for p in all_players:
@@ -1422,6 +1473,7 @@ def super_admin_dashboard(
             "all_team_admins": all_team_admins,
             "all_teams": all_teams,
             "all_players": all_players,
+            "approved_players": approved_players,
             "all_renewals": all_renewals,
             "all_transfers": all_transfers,
             "teams_list": teams_list,
@@ -1697,6 +1749,7 @@ def team_admin_dashboard(
 ):
     team_admin = _require_team_admin(request, db)
     restore_expired_loans(db)
+    process_player_registration_lifecycle(db)
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     teams = db.scalars(
         select(Team)
@@ -1716,6 +1769,7 @@ def team_admin_dashboard(
         .where(Player.status != "transferred")
         .order_by(Player.player_id.desc())
     ).all()
+    _decorate_player_registration_fields(db, players)
     approved_players = [
         player for player in players if player.status == ApprovalStatus.APPROVED.value
     ]
@@ -1927,6 +1981,132 @@ def export_team_admin_fixtures(
     )
 
 
+@router.get("/team-admin/dashboard/league-tables/export")
+def export_team_admin_league_tables(
+    request: Request,
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    team_ids = [
+        team.team_id
+        for team in db.scalars(
+            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
+        ).all()
+    ]
+    league_tables = _safe_dashboard_value(lambda: get_league_tables(db, team_ids=team_ids), {})
+    categories = [category] if category != "all" else list(league_tables.keys())
+    rows: list[list[object]] = [["Category", "Position", "Team", "Played", "Won", "Drawn", "Lost", "GF", "GA", "GD", "Points"]]
+    for category_name in categories:
+        for row in league_tables.get(category_name, []):
+            rows.append([
+                category_name,
+                row.get("position", ""),
+                row["team"].team_name if row.get("team") else "",
+                row.get("played", 0),
+                row.get("wins", 0),
+                row.get("draws", 0),
+                row.get("losses", 0),
+                row.get("goals_for", 0),
+                row.get("goals_against", 0),
+                row.get("goal_difference", 0),
+                row.get("points", 0),
+            ])
+    filename = f"league_tables_{category}.csv".replace(" ", "_")
+    return _csv_response(filename, rows)
+
+
+@router.get("/team-admin/dashboard/performances/export")
+def export_team_admin_performances(
+    request: Request,
+    metric: str = "all",
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    team_ids = [
+        team.team_id
+        for team in db.scalars(
+            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
+        ).all()
+    ]
+    performances = _safe_dashboard_value(lambda: get_player_performances(db, team_ids=team_ids), {"players": [], "scorers": [], "assisters": []})
+    metric_key = {"all": "players", "goals": "scorers", "assists": "assisters"}.get(metric, "players")
+    rows = performances.get(metric_key, [])
+    rows = [row for row in rows if category == "all" or row["category_name"] == category]
+    csv_rows: list[list[object]] = [[]]
+    if metric_key == "players":
+        csv_rows = [["Player", "System IDs", "Team", "Category", "Goals", "Assists", "Goal Types", "Clubs Played For"]]
+        for row in rows:
+            csv_rows.append([
+                row["player"].full_name,
+                " | ".join(row.get("system_ids", [])),
+                row["team"].team_name if row.get("team") else "",
+                row["category_name"],
+                row["goals"],
+                row["assists"],
+                "; ".join(f"{goal_type}: {count}" for goal_type, count in row["goal_types"].items()),
+                " | ".join(row.get("clubs_played_for", [])),
+            ])
+    elif metric_key == "scorers":
+        csv_rows = [["Player", "System IDs", "Team", "Category", "Goals", "Goal Types", "Clubs Played For"]]
+        for row in rows:
+            csv_rows.append([
+                row["player"].full_name,
+                " | ".join(row.get("system_ids", [])),
+                row["team"].team_name if row.get("team") else "",
+                row["category_name"],
+                row["goals"],
+                "; ".join(f"{goal_type}: {count}" for goal_type, count in row["goal_types"].items()),
+                " | ".join(row.get("clubs_played_for", [])),
+            ])
+    else:
+        csv_rows = [["Player", "System IDs", "Team", "Category", "Assists", "Clubs Played For"]]
+        for row in rows:
+            csv_rows.append([
+                row["player"].full_name,
+                " | ".join(row.get("system_ids", [])),
+                row["team"].team_name if row.get("team") else "",
+                row["category_name"],
+                row["assists"],
+                " | ".join(row.get("clubs_played_for", [])),
+            ])
+    filename = f"performances_{metric}_{category}.csv".replace(" ", "_")
+    return _csv_response(filename, csv_rows)
+
+
+@router.get("/team-admin/dashboard/results/export")
+def export_team_admin_results(
+    request: Request,
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    team_ids = [
+        team.team_id
+        for team in db.scalars(
+            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
+        ).all()
+    ]
+    submissions = _safe_dashboard_value(lambda: _load_result_submissions(db, team_ids=team_ids), [])
+    submissions = _filter_result_submissions_by_category(submissions, category)
+    csv_rows: list[list[object]] = [["Category", "Fixture", "Submitted", "Score", "Status", "Scorers", "Assists"]]
+    for submission in submissions:
+        fixture = submission.match.fixture if submission.match else None
+        category_name = fixture.category.category_name if fixture and fixture.category else ""
+        csv_rows.append([
+            category_name,
+            f"{fixture.home_team.team_name} vs {fixture.away_team.team_name}" if fixture and fixture.home_team and fixture.away_team else "",
+            submission.submitted_date.strftime("%Y-%m-%d %H:%M"),
+            f"{submission.home_score}-{submission.away_score}",
+            submission.status,
+            submission.scorer_names_text or "",
+            submission.assist_names_text or "",
+        ])
+    filename = f"results_{category}.csv".replace(" ", "_")
+    return _csv_response(filename, csv_rows)
+
+
 @router.get("/super-admin/league-tables/export")
 def export_super_admin_league_tables(
     request: Request,
@@ -2041,6 +2221,122 @@ def postpone_fixture_route(
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
     return _redirect("/super-admin#fixtures")
+
+
+@router.get("/super-admin/fixtures/export")
+def export_super_admin_fixtures(
+    request: Request,
+    fixture_category: str = "all",
+    fixture_bucket: str = "all",
+    fixture_date_from: str | None = None,
+    fixture_date_to: str | None = None,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    fixtures = _filter_fixtures_for_dashboard(
+        fixtures,
+        category_name=fixture_category,
+        bucket=fixture_bucket,
+        date_from=fixture_date_from,
+        date_to=fixture_date_to,
+    )
+    rows: list[list[object]] = [["Category", "Home Team", "Away Team", "Date", "Time", "Venue", "Status", "Score"]]
+    for fixture in fixtures:
+        score = "-"
+        if fixture.match and fixture.match.home_score is not None and fixture.match.away_score is not None:
+            score = f"{fixture.match.home_score}-{fixture.match.away_score}"
+        rows.append([
+            fixture.category.category_name if fixture.category else "",
+            fixture.home_team.team_name if fixture.home_team else "",
+            fixture.away_team.team_name if fixture.away_team else "",
+            fixture.fixture_date.strftime("%Y-%m-%d"),
+            fixture.fixture_date.strftime("%I:%M %p").lstrip("0"),
+            fixture.venue,
+            fixture.status,
+            score,
+        ])
+    filename = f"fixtures_{fixture_category}_{fixture_bucket}.csv".replace(" ", "_")
+    return _csv_response(filename, rows)
+
+
+@router.get("/super-admin/results/export")
+def export_super_admin_results(
+    request: Request,
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
+    submissions = _filter_result_submissions_by_category(submissions, category)
+    rows: list[list[object]] = [["Category", "Fixture", "Submitted", "Score", "Status", "Scorers", "Assists"]]
+    for submission in submissions:
+        fixture = submission.match.fixture if submission.match else None
+        category_name = fixture.category.category_name if fixture and fixture.category else ""
+        rows.append([
+            category_name,
+            f"{fixture.home_team.team_name} vs {fixture.away_team.team_name}" if fixture and fixture.home_team and fixture.away_team else "",
+            submission.submitted_date.strftime("%Y-%m-%d %H:%M"),
+            f"{submission.home_score}-{submission.away_score}",
+            submission.status,
+            submission.scorer_names_text or "",
+            submission.assist_names_text or "",
+        ])
+    filename = f"results_{category}.csv".replace(" ", "_")
+    return _csv_response(filename, rows)
+
+
+@router.get("/super-admin/performances/export")
+def export_super_admin_performances(
+    request: Request,
+    metric: str = "all",
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    performances = _safe_dashboard_value(lambda: get_player_performances(db), {"players": [], "scorers": [], "assisters": []})
+    metric_key = {"all": "players", "goals": "scorers", "assists": "assisters"}.get(metric, "players")
+    rows = performances.get(metric_key, [])
+    rows = [row for row in rows if category == "all" or row["category_name"] == category]
+    csv_rows: list[list[object]]
+    if metric_key == "players":
+        csv_rows = [["Player", "System IDs", "Team", "Category", "Goals", "Assists", "Goal Types", "Clubs Played For"]]
+        for row in rows:
+            csv_rows.append([
+                row["player"].full_name,
+                " | ".join(row.get("system_ids", [])),
+                row["team"].team_name if row.get("team") else "",
+                row["category_name"],
+                row["goals"],
+                row["assists"],
+                "; ".join(f"{goal_type}: {count}" for goal_type, count in row["goal_types"].items()),
+                " | ".join(row.get("clubs_played_for", [])),
+            ])
+    elif metric_key == "scorers":
+        csv_rows = [["Player", "System IDs", "Team", "Category", "Goals", "Goal Types", "Clubs Played For"]]
+        for row in rows:
+            csv_rows.append([
+                row["player"].full_name,
+                " | ".join(row.get("system_ids", [])),
+                row["team"].team_name if row.get("team") else "",
+                row["category_name"],
+                row["goals"],
+                "; ".join(f"{goal_type}: {count}" for goal_type, count in row["goal_types"].items()),
+                " | ".join(row.get("clubs_played_for", [])),
+            ])
+    else:
+        csv_rows = [["Player", "System IDs", "Team", "Category", "Assists", "Clubs Played For"]]
+        for row in rows:
+            csv_rows.append([
+                row["player"].full_name,
+                " | ".join(row.get("system_ids", [])),
+                row["team"].team_name if row.get("team") else "",
+                row["category_name"],
+                row["assists"],
+                " | ".join(row.get("clubs_played_for", [])),
+            ])
+    filename = f"performances_{metric}_{category}.csv".replace(" ", "_")
+    return _csv_response(filename, csv_rows)
 
 
 @router.post("/team-admin/results")
