@@ -945,6 +945,13 @@ textarea:focus {
   padding-bottom: 12px;
 }
 
+.panel-heading-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .panel-heading h2,
 .form-section h2,
 .upload-panel h2 {
@@ -1338,6 +1345,67 @@ textarea:focus {
 .fixture-empty {
   padding: 20px;
   text-align: center;
+}
+
+.table-team-cell {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.table-team-logo {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  height: 30px;
+  object-fit: contain;
+  padding: 2px;
+  width: 30px;
+}
+
+.table-team-logo.fallback {
+  align-items: center;
+  background: var(--soft);
+  color: var(--ink);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.performance-breakdown {
+  display: grid;
+  gap: 8px;
+}
+
+.performance-breakdown__item {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+}
+
+.performance-breakdown__item strong {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.performance-breakdown__item small,
+.performance-breakdown__item span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chip-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .responsive-card-table {
@@ -1828,6 +1896,11 @@ td {
 
   .panel-heading {
     align-items: flex-start;
+  }
+
+  .panel-heading-actions {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .section-switcher {

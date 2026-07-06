@@ -1384,7 +1384,7 @@ def super_admin_dashboard(
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_performances = _safe_dashboard_value(
         lambda: get_player_performances(db),
-        {"scorers": [], "assisters": []},
+        {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
         lambda: get_notifications_for_user(db, user.user_id, limit=12),
@@ -1831,7 +1831,7 @@ def team_admin_dashboard(
     )
     player_performances = _safe_dashboard_value(
         lambda: get_player_performances(db, team_ids=own_team_ids),
-        {"scorers": [], "assisters": []},
+        {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
         lambda: get_notifications_for_user(db, team_admin.user_id, limit=12),
@@ -1920,6 +1920,42 @@ def export_team_admin_fixtures(
         ])
 
     filename = f"fixtures_{fixture_category}_{fixture_bucket}.csv".replace(" ", "_")
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/super-admin/league-tables/export")
+def export_super_admin_league_tables(
+    request: Request,
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Category", "Position", "Team", "Played", "Won", "Drawn", "Lost", "GF", "GA", "GD", "Points"])
+    categories_to_write = [category] if category != "all" else list(league_tables.keys())
+    for category_name in categories_to_write:
+        for row in league_tables.get(category_name, []):
+            writer.writerow([
+                category_name,
+                row.get("position", ""),
+                row["team"].team_name if row.get("team") else "",
+                row.get("played", 0),
+                row.get("wins", 0),
+                row.get("draws", 0),
+                row.get("losses", 0),
+                row.get("goals_for", 0),
+                row.get("goals_against", 0),
+                row.get("goal_difference", 0),
+                row.get("points", 0),
+            ])
+
+    filename = f"league_tables_{category}.csv".replace(" ", "_")
     return Response(
         content=output.getvalue(),
         media_type="text/csv",

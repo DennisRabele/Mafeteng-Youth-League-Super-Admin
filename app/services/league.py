@@ -19,6 +19,7 @@ from app.models import (
     Notification,
     Season,
     Player,
+    PlayerTransferRequest,
     ResultVerification,
     Team,
     TeamAdmin,
@@ -49,6 +50,20 @@ def _split_items(value: str | None) -> list[str]:
 def _normalize_goal_type(value: str | None) -> str:
     raw = " ".join((value or "").split()).lower()
     return GOAL_TYPE_ALIASES.get(raw, raw.title() if raw else "Open Play")
+
+
+def _player_identity_key(player: Player) -> str:
+    parent_name = player.parent.name.strip().casefold() if player.parent and player.parent.name else ""
+    parent_contact = player.parent.contact.strip().casefold() if player.parent and player.parent.contact else ""
+    components = [
+        player.full_name.strip().casefold(),
+        player.dob.isoformat() if player.dob else "",
+        (player.gender or "").strip().casefold(),
+        (player.nationality or "").strip().casefold(),
+        parent_name,
+        parent_contact,
+    ]
+    return "|".join(components)
 
 
 def _has_table(db: Session, table_name: str) -> bool:
@@ -527,6 +542,11 @@ def verify_match_result(
 
     if decision == ApprovalStatus.APPROVED.value:
         _rebuild_match_events(db, match, submission)
+    else:
+        db.execute(delete(MatchEvent).where(MatchEvent.match_id == match.match_id))
+        db.flush()
+
+    if decision == ApprovalStatus.APPROVED.value:
         notify_team_admins_for_teams(
             db,
             [match.fixture.home_team_id, match.fixture.away_team_id],
@@ -628,7 +648,7 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
 
     ordered: dict[str, list[dict[str, object]]] = {}
     for category_name, rows in standings.items():
-        ordered[category_name] = sorted(
+        category_rows = sorted(
             rows.values(),
             key=lambda row: (
                 -int(row["points"]),
@@ -637,6 +657,10 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
                 str(row["team"].team_name).lower(),
             ),
         )
+        for index, row in enumerate(category_rows, start=1):
+            row["position"] = index
+            row["team_logo"] = row["team"].logo
+        ordered[category_name] = category_rows
     return ordered
 
 
@@ -652,6 +676,8 @@ def get_player_performances(
         .join(Fixture, Fixture.fixture_id == Match.fixture_id)
         .options(
             selectinload(MatchEvent.player).selectinload(Player.team).selectinload(Team.category),
+            selectinload(MatchEvent.player).selectinload(Player.original_team).selectinload(Team.category),
+            selectinload(MatchEvent.player).selectinload(Player.parent),
             selectinload(MatchEvent.match).selectinload(Match.fixture).selectinload(Fixture.home_team),
             selectinload(MatchEvent.match).selectinload(Match.fixture).selectinload(Fixture.away_team),
         )
@@ -660,40 +686,120 @@ def get_player_performances(
         query = query.join(Player, Player.player_id == MatchEvent.player_id).where(Player.team_id.in_(list(team_id_set or [])))
     events = db.scalars(query).all()
 
-    scorers: dict[int, dict[str, object]] = {}
-    assisters: dict[int, dict[str, object]] = {}
+    player_groups: dict[str, dict[str, object]] = {}
     for event in events:
         if not event.player or not event.player.team:
             continue
         if team_id_set is not None and event.player.team_id not in team_id_set:
             continue
-        target = None
-        if event.event_type.startswith("goal:"):
-            target = scorers
-        elif event.event_type == "assist":
-            target = assisters
-        if target is None:
-            continue
-        entry = target.setdefault(
-            event.player_id,
+        identity_key = _player_identity_key(event.player)
+        group = player_groups.setdefault(
+            identity_key,
             {
-                "player": event.player,
-                "team": event.player.team,
-                "category_name": event.player.team.category.category_name if event.player.team.category else "",
+                "players": {},
+                "primary_player": event.player,
                 "goals": 0,
                 "assists": 0,
                 "goal_types": defaultdict(int),
+                "category_totals": defaultdict(lambda: {"goals": 0, "assists": 0, "goal_types": defaultdict(int)}),
             },
         )
+        group["players"][event.player.player_id] = event.player
+        if event.player.player_id > group["primary_player"].player_id:
+            group["primary_player"] = event.player
+
+        if not event.event_type.startswith("goal:") and event.event_type != "assist":
+            continue
+        category_name = event.player.team.category.category_name if event.player.team.category else ""
+        category_entry = group["category_totals"][category_name]
         if event.event_type.startswith("goal:"):
-            entry["goals"] += 1
+            group["goals"] += 1
             goal_type = event.event_type.split(":", 1)[1]
-            entry["goal_types"][goal_type] += 1
+            group["goal_types"][goal_type] += 1
+            category_entry["goals"] += 1
+            category_entry["goal_types"][goal_type] += 1
         elif event.event_type == "assist":
-            entry["assists"] += 1
+            group["assists"] += 1
+            category_entry["assists"] += 1
+
+    player_ids = [player.player_id for group in player_groups.values() for player in group["players"].values()]
+    transfer_history: dict[int, list[PlayerTransferRequest]] = defaultdict(list)
+    if player_ids:
+        transfer_rows = db.scalars(
+            select(PlayerTransferRequest)
+            .options(
+                selectinload(PlayerTransferRequest.from_team),
+                selectinload(PlayerTransferRequest.to_team),
+            )
+            .where(PlayerTransferRequest.player_id.in_(player_ids))
+        ).all()
+        for transfer in transfer_rows:
+            transfer_history[transfer.player_id].append(transfer)
 
     def _format_goal_types(row: dict[str, object]) -> dict[str, int]:
         return dict(sorted(row["goal_types"].items(), key=lambda item: (-item[1], item[0])))
+
+    def _format_category_totals(row: dict[str, object]) -> dict[str, dict[str, object]]:
+        formatted: dict[str, dict[str, object]] = {}
+        for category_name, totals in sorted(row["category_totals"].items(), key=lambda item: item[0].lower()):
+            formatted[category_name] = {
+                "goals": totals["goals"],
+                "assists": totals["assists"],
+                "goal_types": dict(sorted(totals["goal_types"].items(), key=lambda item: (-item[1], item[0]))),
+            }
+        return formatted
+
+    def _collect_clubs(row: dict[str, object]) -> list[str]:
+        clubs: list[str] = []
+        seen: set[str] = set()
+
+        for player in sorted(row["players"].values(), key=lambda item: item.player_id):
+            sources = [
+                player.team.team_name if player.team else None,
+                player.original_team.team_name if player.original_team else None,
+            ]
+            for transfer in transfer_history.get(player.player_id, []):
+                sources.extend([
+                    transfer.from_team.team_name if transfer.from_team else None,
+                    transfer.to_team.team_name if transfer.to_team else None,
+                ])
+            for club_name in sources:
+                normalized = (club_name or "").strip()
+                if normalized and normalized not in seen:
+                    seen.add(normalized)
+                    clubs.append(normalized)
+        return clubs
+
+    def _system_ids(row: dict[str, object]) -> list[str]:
+        identifiers: list[str] = []
+        seen: set[str] = set()
+        for player in sorted(row["players"].values(), key=lambda item: item.player_id):
+            identifier = player.player_code or f"PLAYER-{player.player_id}"
+            if identifier not in seen:
+                seen.add(identifier)
+                identifiers.append(identifier)
+        return identifiers
+
+    performance_rows = []
+    for group in player_groups.values():
+        primary_player = group["primary_player"]
+        team = primary_player.team
+        category_name = team.category.category_name if team and team.category else ""
+        performance_rows.append(
+            {
+                "player": primary_player,
+                "team": team,
+                "category_name": category_name,
+                "system_ids": _system_ids(group),
+                "clubs_played_for": _collect_clubs(group),
+                "goals": group["goals"],
+                "assists": group["assists"],
+                "goal_types": _format_goal_types(group),
+                "category_totals": _format_category_totals(group),
+                "primary_system_id": primary_player.player_code or f"PLAYER-{primary_player.player_id}",
+                "photo_path": primary_player.photo_path,
+            }
+        )
 
     scorer_rows = sorted(
         (
@@ -701,12 +807,19 @@ def get_player_performances(
                 "player": row["player"],
                 "team": row["team"],
                 "category_name": row["category_name"],
+                "system_id": row["primary_system_id"],
+                "system_ids": row["system_ids"],
+                "photo_path": row["photo_path"],
+                "clubs_played_for": row["clubs_played_for"],
                 "goals": row["goals"],
-                "goal_types": _format_goal_types(row),
+                "assists": row["assists"],
+                "goal_types": row["goal_types"],
+                "category_totals": row["category_totals"],
             }
-            for row in scorers.values()
+            for row in performance_rows
+            if row["goals"] > 0
         ),
-        key=lambda row: (-row["goals"], row["player"].full_name.lower()),
+        key=lambda row: (-row["goals"], -row["assists"], row["player"].full_name.lower()),
     )
     assister_rows = sorted(
         (
@@ -714,10 +827,22 @@ def get_player_performances(
                 "player": row["player"],
                 "team": row["team"],
                 "category_name": row["category_name"],
+                "system_id": row["primary_system_id"],
+                "system_ids": row["system_ids"],
+                "photo_path": row["photo_path"],
+                "clubs_played_for": row["clubs_played_for"],
+                "goals": row["goals"],
                 "assists": row["assists"],
+                "goal_types": row["goal_types"],
+                "category_totals": row["category_totals"],
             }
-            for row in assisters.values()
+            for row in performance_rows
+            if row["assists"] > 0
         ),
-        key=lambda row: (-row["assists"], row["player"].full_name.lower()),
+        key=lambda row: (-row["assists"], -row["goals"], row["player"].full_name.lower()),
     )
-    return {"scorers": scorer_rows, "assisters": assister_rows}
+    detailed_rows = sorted(
+        performance_rows,
+        key=lambda row: (-row["goals"], -row["assists"], row["player"].full_name.lower()),
+    )
+    return {"players": detailed_rows, "scorers": scorer_rows, "assisters": assister_rows}

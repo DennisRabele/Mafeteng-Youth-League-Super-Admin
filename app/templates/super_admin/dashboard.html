@@ -719,10 +719,13 @@
     <section class="panel dashboard-section" id="league-tables" data-dashboard-section="league-tables" hidden>
       <div class="panel-heading">
         <h2>League Tables</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-muted small" type="button" onclick="window.location='/super-admin/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download CSV</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardPanels('league-tables', this.value, event)">
+          <select id="league-table-category" onchange="filterDashboardPanels('league-tables', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -738,6 +741,7 @@
             <table>
               <thead>
                 <tr>
+                  <th>#</th>
                   <th>Team</th>
                   <th>P</th>
                   <th>W</th>
@@ -752,7 +756,17 @@
               <tbody>
                 {% for row in rows %}
                 <tr>
-                  <td>{{ row.team.team_name }}</td>
+                  <td>{{ row.position }}</td>
+                  <td>
+                    <div class="table-team-cell">
+                      {% if row.team_logo %}
+                        <img class="table-team-logo" src="{{ row.team_logo }}" alt="{{ row.team.team_name }}">
+                      {% else %}
+                        <span class="table-team-logo fallback">{{ row.team.team_name[:1] }}</span>
+                      {% endif %}
+                      <span>{{ row.team.team_name }}</span>
+                    </div>
+                  </td>
                   <td>{{ row.played }}</td>
                   <td>{{ row.wins }}</td>
                   <td>{{ row.draws }}</td>
@@ -763,7 +777,7 @@
                   <td>{{ row.points }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="9" class="empty">No league table data yet.</td></tr>
+                <tr><td colspan="10" class="empty">No league table data yet.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -791,10 +805,103 @@
         <label class="filter-select">Metric
           <select onchange="filterDashboardMetric('performances', this.value, event)">
             <option value="all">All Metrics</option>
+            <option value="all-players" selected>Player Overview</option>
             <option value="goals">Goals</option>
             <option value="assists">Assists</option>
           </select>
         </label>
+      </div>
+      <div class="panel" style="margin-bottom: 1.5rem;" data-performance-view="all-players">
+        <h3 style="margin-top: 0;">Player Overview</h3>
+        <div class="table-wrap fit-table" data-paginated-table data-page-size="6">
+          <div class="table-scroll-x">
+          <table>
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>System IDs</th>
+                <th>Photo</th>
+                <th>Team</th>
+                <th>Category</th>
+                <th>Goals</th>
+                <th>Assists</th>
+                <th>Goal Types</th>
+                <th>Per Club Level</th>
+                <th>Clubs Played For</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in player_performances.players %}
+              <tr data-row data-category="{{ row.category_name }}" data-metric="all-players">
+                <td>{{ row.player.full_name }}</td>
+                <td>
+                  <div class="chip-stack">
+                    {% for system_id in row.system_ids %}
+                      <span class="status approved">{{ system_id }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
+                <td>
+                  {% if row.photo_path %}
+                    <img class="thumb" src="{{ row.photo_path }}" alt="{{ row.player.full_name }}">
+                  {% else %}
+                    <span class="no-image">No photo</span>
+                  {% endif %}
+                </td>
+                <td>{{ row.team.team_name if row.team else '-' }}</td>
+                <td>{{ row.category_name or '-' }}</td>
+                <td>{{ row.goals }}</td>
+                <td>{{ row.assists }}</td>
+                <td>
+                  {% for goal_type, count in row.goal_types.items() %}
+                    <span class="status approved">{{ goal_type }}: {{ count }}</span>
+                  {% else %}
+                    -
+                  {% endfor %}
+                </td>
+                <td>
+                  <div class="performance-breakdown">
+                    {% for club_name, totals in row.category_totals.items() %}
+                      <div class="performance-breakdown__item">
+                        <strong>{{ club_name }}</strong>
+                        <small>G {{ totals.goals }} | A {{ totals.assists }}</small>
+                        <span>
+                          {% for goal_type, count in totals.goal_types.items() %}
+                            {{ goal_type }}: {{ count }}{% if not loop.last %}, {% endif %}
+                          {% else %}
+                            -
+                          {% endfor %}
+                        </span>
+                      </div>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
+                <td>
+                  <div class="chip-stack">
+                    {% for club_name in row.clubs_played_for %}
+                      <span class="status pending">{{ club_name }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="10" class="empty">No player performances recorded yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+          <div class="table-pager">
+            <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+            <span data-page-label>Page 1 of 1</span>
+            <button class="button button-primary small" type="button" data-page-next>Next</button>
+          </div>
+        </div>
       </div>
       <div class="panel" style="margin-bottom: 1.5rem;" data-performance-view="goals">
         <h3 style="margin-top: 0;">Top Scorers</h3>
@@ -804,16 +911,35 @@
             <thead>
               <tr>
                 <th>Player</th>
+                <th>System ID</th>
+                <th>Photo</th>
                 <th>Team</th>
                 <th>Category</th>
                 <th>Goals</th>
                 <th>Goal Types</th>
+                <th>Clubs</th>
               </tr>
             </thead>
             <tbody>
               {% for row in player_performances.scorers %}
               <tr data-row data-category="{{ row.category_name }}" data-metric="goals">
                 <td>{{ row.player.full_name }}</td>
+                <td>
+                  <div class="chip-stack">
+                    {% for system_id in row.system_ids %}
+                      <span class="status approved">{{ system_id }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
+                <td>
+                  {% if row.photo_path %}
+                    <img class="thumb" src="{{ row.photo_path }}" alt="{{ row.player.full_name }}">
+                  {% else %}
+                    <span class="no-image">No photo</span>
+                  {% endif %}
+                </td>
                 <td>{{ row.team.team_name }}</td>
                 <td>{{ row.category_name }}</td>
                 <td>{{ row.goals }}</td>
@@ -824,9 +950,18 @@
                     -
                   {% endfor %}
                 </td>
+                <td>
+                  <div class="chip-stack">
+                    {% for club_name in row.clubs_played_for %}
+                      <span class="status pending">{{ club_name }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
               </tr>
               {% else %}
-              <tr><td colspan="5" class="empty">No goals recorded yet.</td></tr>
+              <tr><td colspan="8" class="empty">No goals recorded yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -841,21 +976,49 @@
             <thead>
               <tr>
                 <th>Player</th>
+                <th>System ID</th>
+                <th>Photo</th>
                 <th>Team</th>
                 <th>Category</th>
                 <th>Assists</th>
+                <th>Clubs</th>
               </tr>
             </thead>
             <tbody>
               {% for row in player_performances.assisters %}
               <tr data-row data-category="{{ row.category_name }}" data-metric="assists">
                 <td>{{ row.player.full_name }}</td>
+                <td>
+                  <div class="chip-stack">
+                    {% for system_id in row.system_ids %}
+                      <span class="status approved">{{ system_id }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
+                <td>
+                  {% if row.photo_path %}
+                    <img class="thumb" src="{{ row.photo_path }}" alt="{{ row.player.full_name }}">
+                  {% else %}
+                    <span class="no-image">No photo</span>
+                  {% endif %}
+                </td>
                 <td>{{ row.team.team_name }}</td>
                 <td>{{ row.category_name }}</td>
                 <td>{{ row.assists }}</td>
+                <td>
+                  <div class="chip-stack">
+                    {% for club_name in row.clubs_played_for %}
+                      <span class="status pending">{{ club_name }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
               </tr>
               {% else %}
-              <tr><td colspan="4" class="empty">No assists recorded yet.</td></tr>
+              <tr><td colspan="7" class="empty">No assists recorded yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -1021,6 +1184,7 @@
 
   syncFixtureTeamFilters();
   filterSuperAdminFixtures();
+  filterDashboardMetric('performances', 'all-players');
 </script>
 
 {% endblock %}
