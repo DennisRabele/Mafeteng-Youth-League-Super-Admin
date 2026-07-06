@@ -20,7 +20,7 @@ from app.models import (
 connect_args = (
     {"check_same_thread": False}
     if settings.database_url.startswith("sqlite")
-    else {}
+    else {"prepare_threshold": None}
 )
 engine_kwargs = {"connect_args": connect_args, "future": True}
 if ".pooler.supabase.com" in settings.database_url:

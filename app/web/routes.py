@@ -1476,7 +1476,7 @@ def reject_team_admin_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
         reject_team_admin(db, team_admin_id, rejection_reason)
     except RegistrationError as exc:
@@ -1518,7 +1518,7 @@ def reject_team_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
         reject_team(db, team_id, rejection_reason)
     except RegistrationError as exc:
@@ -1560,7 +1560,7 @@ def reject_player_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
         reject_player(db, player_id, rejection_reason)
     except RegistrationError as exc:
@@ -1602,7 +1602,7 @@ def reject_renewal_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
         reject_renewal(db, registration_id, rejection_reason)
     except RegistrationError as exc:
@@ -1644,7 +1644,7 @@ def reject_transfer_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
         reject_transfer_registration(db, registration_id, rejection_reason)
     except RegistrationError as exc:
