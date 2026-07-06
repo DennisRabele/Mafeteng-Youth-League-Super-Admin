@@ -22,12 +22,12 @@
 }
 
 html {
-  background: var(--paper);
+  background: var(--black);
 }
 
 body {
   margin: 0;
-  background: var(--paper);
+  background: var(--black);
   color: var(--ink);
   display: flex;
   flex-direction: column;
@@ -244,10 +244,10 @@ main {
 }
 
 .nav-drawer {
-  background: linear-gradient(180deg, #ffd84d 0%, #f2b700 100%);
-  border-left: 1px solid rgba(0, 0, 0, 0.18);
-  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.28);
-  color: var(--black);
+  background: linear-gradient(180deg, #090909 0%, #1a1a1a 100%);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.48);
+  color: var(--white);
   height: 100vh;
   max-width: 88vw;
   overflow-y: auto;
@@ -273,10 +273,10 @@ main {
 }
 
 .drawer-close {
-  background: rgba(255, 255, 255, 0.42);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
-  color: var(--black);
+  color: var(--white);
   cursor: pointer;
   min-height: 36px;
   padding: 0 14px;
@@ -289,10 +289,10 @@ main {
 
 .drawer-link {
   align-items: center;
-  background: rgba(255, 255, 255, 0.52);
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  color: var(--black);
+  color: var(--white);
   cursor: pointer;
   display: flex;
   font-size: 13px;
@@ -306,12 +306,12 @@ main {
 }
 
 .drawer-link:hover {
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(0, 0, 0, 0.18);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .drawer-link.destructive {
-  color: #7b1f1f;
+  color: #ffb6b6;
 }
 
 .button {
@@ -804,6 +804,7 @@ textarea:focus {
 .workspace {
   min-width: 0;
   padding: 32px;
+  background: var(--paper);
 }
 
 .admin-hero {
@@ -1100,14 +1101,14 @@ textarea:focus {
   align-items: flex-end;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  justify-content: space-between;
+  gap: 8px;
+  justify-content: flex-start;
   margin-bottom: 14px;
 }
 
 .fixture-toolbar .filter-select {
-  flex: 1 1 180px;
-  min-width: 180px;
+  flex: 0 1 170px;
+  min-width: 160px;
 }
 
 .fixture-toolbar .filter-select input,
@@ -1397,6 +1398,27 @@ td {
   padding: 8px;
   resize: vertical;
   text-transform: none;
+}
+
+.notification-card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.notification-card-actions form {
+  margin: 0;
+}
+
+.notification-delete-button {
+  min-width: 38px;
+  padding-inline: 0;
+}
+
+.notification-delete-button,
+.notification-delete-button:hover {
+  line-height: 1;
 }
 
 .thumb {

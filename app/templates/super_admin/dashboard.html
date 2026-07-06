@@ -211,18 +211,18 @@
           <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('players', 'pending')" data-filter="pending">Pending</button>
         </div>
         <div style="display: flex; gap: 0.5rem;">
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+          <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; color: #666;">
             Team:
-            <select id="team-filter" onchange="filterPlayersByTeam()">
+            <select id="team-filter" onchange="filterPlayersByTeam()" style="font-size: 0.85rem; font-weight: 600;">
               <option value="">All Teams</option>
               {% for team in teams_list %}
                 <option value="{{ team.team_id }}">{{ team.team_name }}</option>
               {% endfor %}
             </select>
           </label>
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+          <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; color: #666;">
             Category:
-            <select id="category-filter" onchange="filterPlayersByCategory()">
+            <select id="category-filter" onchange="filterPlayersByCategory()" style="font-size: 0.85rem; font-weight: 600;">
               <option value="">All Categories</option>
               <option value="U13">U13</option>
               <option value="U15">U15</option>
@@ -866,11 +866,27 @@
 
     <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden>
       <div class="panel-heading">
-        <h2>Notifications{% if unread_notifications %} <span class="status approved">{{ unread_notifications }} new</span>{% endif %}</h2>
+        <div>
+          <h2>Notifications{% if unread_notifications %} <span class="status approved">{{ unread_notifications }} new</span>{% endif %}</h2>
+          <p class="section-copy">Manage updates, mark them as read, or clear the feed when you are done.</p>
+        </div>
+        <form method="post" action="/notifications/delete-all">
+          <button class="button button-muted small" type="submit">Delete All</button>
+        </form>
       </div>
       <div class="notification-list">
         {% for notification in notifications %}
           <article class="panel" style="margin-bottom: 1rem; border-left: 4px solid {% if notification.is_read %}#ccc{% else %}#2d6cdf{% endif %};">
+            <div class="notification-card-actions">
+              {% if not notification.is_read %}
+                <form method="post" action="/notifications/{{ notification.notification_id }}/read">
+                  <button class="button button-primary small" type="submit">Mark read</button>
+                </form>
+              {% endif %}
+              <form method="post" action="/notifications/{{ notification.notification_id }}/delete">
+                <button class="button button-muted small notification-delete-button" type="submit" aria-label="Delete notification">&times;</button>
+              </form>
+            </div>
             {% if notification.link %}
               <a class="notification-card-link" href="{{ notification.link }}">
                 <h3 style="margin-top: 0;">{{ notification.title }}</h3>
@@ -881,11 +897,6 @@
               <h3 style="margin-top: 0;">{{ notification.title }}</h3>
               <p>{{ notification.message }}</p>
               <small>{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
-            {% endif %}
-            {% if not notification.is_read %}
-              <form method="post" action="/notifications/{{ notification.notification_id }}/read" style="margin-top: 0.75rem;">
-                <button class="button button-primary small" type="submit">Mark read</button>
-              </form>
             {% endif %}
           </article>
         {% else %}

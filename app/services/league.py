@@ -163,6 +163,7 @@ def notify_team_admin(db: Session, team_id: int, title: str, message: str, link:
 def get_notifications_for_user(db: Session, user_id: int, *, limit: int = 20) -> list[Notification]:
     if not _has_table(db, "notifications"):
         return []
+    purge_expired_notifications(db)
     return db.scalars(
         select(Notification)
         .where(Notification.user_id == user_id)
@@ -174,6 +175,7 @@ def get_notifications_for_user(db: Session, user_id: int, *, limit: int = 20) ->
 def mark_notification_read(db: Session, notification_id: int, user_id: int) -> Notification:
     if not _has_table(db, "notifications"):
         raise RegistrationError("Notifications are not available yet.")
+    purge_expired_notifications(db)
     notification = db.scalar(
         select(Notification).where(
             Notification.notification_id == notification_id,
@@ -186,6 +188,41 @@ def mark_notification_read(db: Session, notification_id: int, user_id: int) -> N
     db.commit()
     db.refresh(notification)
     return notification
+
+
+def purge_expired_notifications(db: Session) -> int:
+    if not _has_table(db, "notifications"):
+        return 0
+    cutoff = datetime.utcnow() - timedelta(days=14)
+    deleted = db.execute(
+        delete(Notification).where(Notification.created_at < cutoff)
+    )
+    db.commit()
+    return int(getattr(deleted, "rowcount", 0) or 0)
+
+
+def delete_notification(db: Session, notification_id: int, user_id: int) -> None:
+    if not _has_table(db, "notifications"):
+        raise RegistrationError("Notifications are not available yet.")
+    purge_expired_notifications(db)
+    deleted = db.execute(
+        delete(Notification).where(
+            Notification.notification_id == notification_id,
+            Notification.user_id == user_id,
+        )
+    )
+    if not getattr(deleted, "rowcount", 0):
+        raise RegistrationError("Notification was not found.")
+    db.commit()
+
+
+def delete_all_notifications(db: Session, user_id: int) -> int:
+    if not _has_table(db, "notifications"):
+        raise RegistrationError("Notifications are not available yet.")
+    purge_expired_notifications(db)
+    deleted = db.execute(delete(Notification).where(Notification.user_id == user_id))
+    db.commit()
+    return int(getattr(deleted, "rowcount", 0) or 0)
 
 
 def create_fixture(
@@ -212,8 +249,8 @@ def create_fixture(
         raise RegistrationError("Both teams must be approved before a fixture can be created.")
     if home_team.category_id != category_id or away_team.category_id != category_id:
         raise RegistrationError("Selected teams must belong to the chosen category.")
-    if fixture_date < datetime.utcnow() + timedelta(days=7):
-        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
+    if fixture_date < datetime.utcnow() + timedelta(days=2):
+        raise RegistrationError("Fixtures must be scheduled at least 2 days before match day.")
     season = db.scalar(select(Season).order_by(Season.start_date.desc()))
     if not season:
         raise RegistrationError("No active season is available for fixture creation.")
@@ -267,8 +304,8 @@ def update_fixture(
     fixture_category_id = category_id or fixture.category_id
     home_team_id = home_team_id or fixture.home_team_id
     away_team_id = away_team_id or fixture.away_team_id
-    if fixture_date < datetime.utcnow() + timedelta(days=7):
-        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
+    if fixture_date < datetime.utcnow() + timedelta(days=2):
+        raise RegistrationError("Fixtures must be scheduled at least 2 days before match day.")
 
     category = db.get(Category, fixture_category_id)
     home_team = db.get(Team, home_team_id)
@@ -314,8 +351,8 @@ def postpone_fixture(db: Session, fixture_id: int, new_date: datetime) -> Fixtur
     fixture = db.get(Fixture, fixture_id)
     if not fixture:
         raise RegistrationError("Fixture was not found.")
-    if new_date < datetime.utcnow() + timedelta(days=7):
-        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
+    if new_date < datetime.utcnow() + timedelta(days=2):
+        raise RegistrationError("Fixtures must be scheduled at least 2 days before match day.")
     fixture.fixture_date = new_date
     fixture.status = FixtureStatus.POSTPONED.value
     if fixture.match:

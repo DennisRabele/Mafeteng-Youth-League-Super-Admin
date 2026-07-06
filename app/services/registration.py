@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 import re
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -14,17 +14,30 @@ from app.core.security import (
 from app.models import (
     ApprovalStatus,
     Category,
+    Coach,
+    CoachAward,
+    Fixture,
+    Match,
+    MatchEvent,
+    MatchOfficialAssignment,
+    MatchResultSubmission,
+    Notification,
     Parent,
     Player,
+    PlayerAward,
     PlayerDocument,
     PlayerRegistrationRequest,
+    PlayerPDI,
     PlayerTransferRequest,
+    PlayerRequest,
     QRPlayerCard,
     Season,
+    ResultVerification,
     SuperAdmin,
     Team,
     TeamAdmin,
     TeamSeason,
+    TrainingAttendance,
     TransferStatus,
     User,
     UserRole,
@@ -553,6 +566,81 @@ def is_first_team_admin_for_team(db: Session, team_id: int | None) -> bool:
     return get_team_admins_count(db, team_id) == 0
 
 
+def _delete_fixture_graph_for_team(db: Session, team_id: int) -> None:
+    fixture_ids = select(Fixture.fixture_id).where(
+        or_(Fixture.home_team_id == team_id, Fixture.away_team_id == team_id)
+    )
+    match_ids = select(Match.match_id).where(Match.fixture_id.in_(fixture_ids))
+    submission_ids = select(MatchResultSubmission.submission_id).where(
+        MatchResultSubmission.match_id.in_(match_ids)
+    )
+    db.execute(delete(ResultVerification).where(ResultVerification.submission_id.in_(submission_ids)))
+    db.execute(delete(MatchEvent).where(MatchEvent.match_id.in_(match_ids)))
+    db.execute(delete(MatchOfficialAssignment).where(MatchOfficialAssignment.match_id.in_(match_ids)))
+    db.execute(delete(MatchResultSubmission).where(MatchResultSubmission.match_id.in_(match_ids)))
+    db.execute(delete(Match).where(Match.match_id.in_(match_ids)))
+    db.execute(delete(Fixture).where(Fixture.fixture_id.in_(fixture_ids)))
+
+
+def _delete_player_graph(db: Session, player_id: int) -> None:
+    player = db.get(Player, player_id)
+    if not player:
+        return
+
+    db.execute(delete(PlayerRequest).where(PlayerRequest.player_id == player_id))
+    db.execute(delete(PlayerTransferRequest).where(PlayerTransferRequest.player_id == player_id))
+    db.execute(delete(PlayerRegistrationRequest).where(PlayerRegistrationRequest.player_id == player_id))
+    db.execute(delete(MatchEvent).where(MatchEvent.player_id == player_id))
+    db.execute(delete(PlayerAward).where(PlayerAward.player_id == player_id))
+    db.execute(delete(TrainingAttendance).where(TrainingAttendance.player_id == player_id))
+    db.execute(delete(PlayerPDI).where(PlayerPDI.player_id == player_id))
+    db.execute(delete(QRPlayerCard).where(QRPlayerCard.player_id == player_id))
+    db.execute(delete(PlayerDocument).where(PlayerDocument.player_id == player_id))
+    parent_id = player.parent_id
+    db.execute(delete(Player).where(Player.player_id == player_id))
+    if parent_id:
+        remaining_parent_use = db.scalar(
+            select(func.count()).select_from(Player).where(Player.parent_id == parent_id)
+        )
+        if not remaining_parent_use:
+            db.execute(delete(Parent).where(Parent.parent_id == parent_id))
+
+
+def _delete_team_graph(db: Session, team_id: int) -> None:
+    player_ids = db.scalars(select(Player.player_id).where(Player.team_id == team_id)).all()
+    for player_id in player_ids:
+        _delete_player_graph(db, player_id)
+
+    coach_ids = db.scalars(select(Coach.coach_id).where(Coach.team_id == team_id)).all()
+    for coach_id in coach_ids:
+        db.execute(delete(CoachAward).where(CoachAward.coach_id == coach_id))
+    db.execute(delete(Coach).where(Coach.team_id == team_id))
+    db.execute(delete(PlayerRequest).where(or_(PlayerRequest.from_team_id == team_id, PlayerRequest.to_team_id == team_id)))
+    db.execute(delete(PlayerTransferRequest).where(or_(PlayerTransferRequest.from_team_id == team_id, PlayerTransferRequest.to_team_id == team_id)))
+    db.execute(delete(PlayerRegistrationRequest).where(PlayerRegistrationRequest.team_id == team_id))
+    db.execute(delete(TeamSeason).where(TeamSeason.team_id == team_id))
+    _delete_fixture_graph_for_team(db, team_id)
+    db.execute(delete(Team).where(Team.team_id == team_id))
+
+
+def _delete_team_admin_graph(db: Session, team_admin: TeamAdmin) -> None:
+    team_ids = db.scalars(select(Team.team_id).where(Team.team_admin_id == team_admin.team_admin_id)).all()
+    for team_id in team_ids:
+        _delete_team_graph(db, team_id)
+
+    submission_ids = select(MatchResultSubmission.submission_id).where(
+        MatchResultSubmission.submitted_by_team_admin_id == team_admin.team_admin_id
+    )
+    db.execute(delete(ResultVerification).where(ResultVerification.submission_id.in_(submission_ids)))
+    db.execute(delete(MatchResultSubmission).where(MatchResultSubmission.submitted_by_team_admin_id == team_admin.team_admin_id))
+    db.execute(delete(PlayerRequest).where(PlayerRequest.requested_by_team_admin_id == team_admin.team_admin_id))
+    db.execute(delete(PlayerTransferRequest).where(PlayerTransferRequest.requested_by_team_admin_id == team_admin.team_admin_id))
+    db.execute(delete(PlayerRegistrationRequest).where(PlayerRegistrationRequest.requested_by_team_admin_id == team_admin.team_admin_id))
+    db.execute(delete(Notification).where(Notification.user_id == team_admin.user_id))
+    db.execute(delete(TeamAdmin).where(TeamAdmin.team_admin_id == team_admin.team_admin_id))
+    db.execute(delete(User).where(User.user_id == team_admin.user_id))
+
+
 def approve_team_admin(
     db: Session,
     team_admin_id: int,
@@ -607,22 +695,23 @@ def reject_team_admin(db: Session, team_admin_id: int, rejection_reason: str) ->
     if not rejection_reason.strip():
         raise RegistrationError("A rejection reason is required.")
 
-    team_admin.status = ApprovalStatus.REJECTED.value
-    team_admin.rejection_reason = rejection_reason.strip()
-    db.commit()
-    db.refresh(team_admin)
+    rejection_reason = rejection_reason.strip()
     try:
-        from app.services.league import create_notification
+        from app.services.email import send_notification_email
 
-        create_notification(
-            db,
-            user_id=team_admin.user_id,
-            title="Team Admin rejected",
-            message=f"Your Team Admin registration was rejected: {team_admin.rejection_reason}",
-            link="/login",
-        )
+        if team_admin.user.email:
+            send_notification_email(
+                to_email=team_admin.user.email,
+                title="Team Admin rejected",
+                message=f"Your Team Admin registration was rejected: {rejection_reason}",
+                link="/login",
+            )
     except Exception:
         pass
+
+    team_admin.rejection_reason = rejection_reason
+    _delete_team_admin_graph(db, team_admin)
+    db.commit()
     return team_admin
 
 
@@ -738,10 +827,7 @@ def reject_team(db: Session, team_id: int, rejection_reason: str) -> Team:
     if not rejection_reason.strip():
         raise RegistrationError("A rejection reason is required.")
 
-    team.status = ApprovalStatus.REJECTED.value
-    team.rejection_reason = rejection_reason.strip()
-    db.commit()
-    db.refresh(team)
+    rejection_reason = rejection_reason.strip()
     try:
         from app.services.league import notify_team_admin
 
@@ -749,11 +835,14 @@ def reject_team(db: Session, team_id: int, rejection_reason: str) -> Team:
             db,
             team.team_id,
             "Team rejected",
-            f"Your team {team.team_name} was rejected: {team.rejection_reason}",
+            f"Your team {team.team_name} was rejected: {rejection_reason}",
             "/team-admin/dashboard",
         )
     except Exception:
         pass
+    team.rejection_reason = rejection_reason
+    _delete_team_graph(db, team.team_id)
+    db.commit()
     return team
 
 
@@ -1181,10 +1270,7 @@ def reject_player(db: Session, player_id: int, rejection_reason: str) -> Player:
     if not rejection_reason.strip():
         raise RegistrationError("A rejection reason is required.")
 
-    player.status = ApprovalStatus.REJECTED.value
-    player.rejection_reason = rejection_reason.strip()
-    db.commit()
-    db.refresh(player)
+    rejection_reason = rejection_reason.strip()
     try:
         from app.services.league import notify_team_admin
 
@@ -1192,11 +1278,14 @@ def reject_player(db: Session, player_id: int, rejection_reason: str) -> Player:
             db,
             player.team_id,
             "Player rejected",
-            f"{player.full_name} was rejected: {player.rejection_reason}",
+            f"{player.full_name} was rejected: {rejection_reason}",
             "/team-admin/dashboard#my-players",
         )
     except Exception:
         pass
+    player.rejection_reason = rejection_reason
+    _delete_player_graph(db, player.player_id)
+    db.commit()
     return player
 
 

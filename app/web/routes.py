@@ -33,6 +33,8 @@ from app.models import (
     UserRole,
 )
 from app.services.league import (
+    delete_all_notifications,
+    delete_notification,
     create_fixture,
     get_league_tables,
     get_notifications_for_user,
@@ -1461,6 +1463,8 @@ def approve_team_admin_route(
             "message": f"Team Admin approved. {team_admin.user.full_name} can now log into the Team Admin app with the password they created.",
             "generated_code": team_admin.admin_code,
             "credential_email": team_admin.user.email,
+            "decision_label": "Approved By",
+            "decision_actor": user.full_name,
         },
     )
 
@@ -1477,7 +1481,15 @@ def reject_team_admin_route(
         reject_team_admin(db, team_admin_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Team Admin rejected by {user.full_name}. The registration record was permanently deleted.",
+            "decision_label": "Rejected By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.post("/super-admin/teams/{team_id}/approve")
@@ -1488,7 +1500,15 @@ def approve_team_route(team_id: int, request: Request, db: Session = Depends(get
         approve_team(db, team_id, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Team approved by {user.full_name}.",
+            "decision_label": "Approved By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.post("/super-admin/teams/{team_id}/reject")
@@ -1503,7 +1523,15 @@ def reject_team_route(
         reject_team(db, team_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Team rejected by {user.full_name}. The registration record was permanently deleted.",
+            "decision_label": "Rejected By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.post("/super-admin/players/{player_id}/approve")
@@ -1514,7 +1542,15 @@ def approve_player_route(player_id: int, request: Request, db: Session = Depends
         approve_player(db, player_id, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Player approved by {user.full_name}.",
+            "decision_label": "Approved By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.post("/super-admin/players/{player_id}/reject")
@@ -1529,7 +1565,15 @@ def reject_player_route(
         reject_player(db, player_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Player rejected by {user.full_name}. The registration record was permanently deleted.",
+            "decision_label": "Rejected By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.post("/super-admin/renewals/{registration_id}/approve")
@@ -1540,7 +1584,15 @@ def approve_renewal_route(registration_id: int, request: Request, db: Session = 
         approve_renewal(db, registration_id, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Renewal approved by {user.full_name}.",
+            "decision_label": "Approved By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.post("/super-admin/renewals/{registration_id}/reject")
@@ -1555,7 +1607,15 @@ def reject_renewal_route(
         reject_renewal(db, registration_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Renewal rejected by {user.full_name}.",
+            "decision_label": "Rejected By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.post("/super-admin/transfers/{registration_id}/approve")
@@ -1566,7 +1626,15 @@ def approve_transfer_route(registration_id: int, request: Request, db: Session =
         approve_transfer_registration(db, registration_id, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Transfer registration approved by {user.full_name}.",
+            "decision_label": "Approved By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.post("/super-admin/transfers/{registration_id}/reject")
@@ -1581,7 +1649,15 @@ def reject_transfer_route(
         reject_transfer_registration(db, registration_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": f"Transfer registration rejected by {user.full_name}.",
+            "decision_label": "Rejected By",
+            "decision_actor": user.full_name,
+        },
+    )
 
 
 @router.get("/team-admin/welcome")
@@ -1999,6 +2075,35 @@ def mark_notification_read_route(
     user = _require_user(request, db)
     try:
         mark_notification_read(db, notification_id, user.user_id)
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    destination = _destination_for_user(user)
+    return _redirect(f"{destination}#notifications")
+
+
+@router.post("/notifications/{notification_id}/delete")
+def delete_notification_route(
+    notification_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _require_user(request, db)
+    try:
+        delete_notification(db, notification_id, user.user_id)
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    destination = _destination_for_user(user)
+    return _redirect(f"{destination}#notifications")
+
+
+@router.post("/notifications/delete-all")
+def delete_all_notifications_route(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _require_user(request, db)
+    try:
+        delete_all_notifications(db, user.user_id)
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
     destination = _destination_for_user(user)

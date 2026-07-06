@@ -9,6 +9,12 @@
     {% else %}
       <h1>Approval Complete</h1>
       <p class="alert success">{{ message }}</p>
+      {% if decision_actor %}
+        <div class="credential-box">
+          <span>{{ decision_label or 'Processed By' }}</span>
+          <strong>{{ decision_actor }}</strong>
+        </div>
+      {% endif %}
       {% if generated_code %}
         <div class="credential-box">
           <span>Generated ID</span>
