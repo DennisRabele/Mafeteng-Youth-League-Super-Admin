@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+import logging
 import re
 
 from sqlalchemy import delete, func, or_, select
@@ -61,6 +62,7 @@ AGE_GROUP_MAX_AGE = {
 PERSON_NAME_PATTERN = re.compile(r"^[A-Za-z]+(?:[A-Za-z\s'\-]*[A-Za-z])?$")
 TEAM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9]+(?:[A-Za-z0-9\s'\-&]*[A-Za-z0-9])?$")
 PHONE_PATTERN = re.compile(r"^[0-9+\-\s]+$")
+logger = logging.getLogger(__name__)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -508,10 +510,24 @@ def _backfill_player_registration_expiry_fields(db: Session) -> int:
 
 
 def process_player_registration_lifecycle(db: Session) -> dict[str, int]:
-    _backfill_player_registration_expiry_fields(db)
-    reminders_sent = _send_registration_expiry_reminders(db)
-    expired_deleted = _delete_expired_player_registrations(db)
-    return {"reminders_sent": reminders_sent, "expired_deleted": expired_deleted}
+    stats = {"backfilled": 0, "reminders_sent": 0, "expired_deleted": 0}
+
+    try:
+        stats["backfilled"] = _backfill_player_registration_expiry_fields(db)
+    except Exception:
+        logger.exception("Player registration expiry backfill failed")
+
+    try:
+        stats["reminders_sent"] = _send_registration_expiry_reminders(db)
+    except Exception:
+        logger.exception("Player registration expiry reminder processing failed")
+
+    try:
+        stats["expired_deleted"] = _delete_expired_player_registrations(db)
+    except Exception:
+        logger.exception("Player registration expiry cleanup failed")
+
+    return stats
 
 
 def _release_player_for_transfer(transfer: PlayerTransferRequest) -> None:
