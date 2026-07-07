@@ -20,11 +20,14 @@
     if (!navDrawer || !navBackdrop) {
       return;
     }
+    navToggle?.setAttribute("aria-expanded", "true");
+    document.body.classList.add("nav-open");
     navDrawer.hidden = false;
     navBackdrop.hidden = false;
     window.requestAnimationFrame(() => {
       navDrawer.classList.add("is-open");
       navBackdrop.classList.add("is-visible");
+      navDrawer.querySelector("button, a, [tabindex]:not([tabindex='-1'])")?.focus?.();
     });
   };
 
@@ -32,6 +35,8 @@
     if (!navDrawer || !navBackdrop) {
       return;
     }
+    navToggle?.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("nav-open");
     navDrawer.classList.remove("is-open");
     navBackdrop.classList.remove("is-visible");
     window.setTimeout(() => {
@@ -41,7 +46,14 @@
   };
 
   if (navToggle) {
-    navToggle.addEventListener("click", openNav);
+    navToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (navDrawer?.hidden) {
+        openNav();
+      } else {
+        closeNav();
+      }
+    });
   }
   if (navClose) {
     navClose.addEventListener("click", closeNav);
@@ -49,6 +61,12 @@
   if (navBackdrop) {
     navBackdrop.addEventListener("click", closeNav);
   }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeNav();
+    }
+  });
 
   document.querySelectorAll("[data-nav-section-target]").forEach((button) => {
     button.addEventListener("click", () => {

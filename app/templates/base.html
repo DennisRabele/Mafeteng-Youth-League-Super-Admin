@@ -23,7 +23,7 @@
         </span>
         <span class="brand-copy">{{ app_name }}</span>
       </a>
-      <button class="menu-toggle" type="button" aria-label="Open navigation menu" data-nav-toggle>
+      <button class="menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="mobile-navigation" aria-expanded="false" data-nav-toggle>
         <span></span>
         <span></span>
         <span></span>
@@ -60,7 +60,7 @@
         {% endif %}
       </nav>
     </header>
-    <aside class="nav-drawer" data-nav-drawer aria-label="Mobile navigation" hidden>
+    <aside class="nav-drawer" id="mobile-navigation" data-nav-drawer aria-label="Mobile navigation" hidden>
       <div class="nav-drawer-head">
         <strong>Menu</strong>
         <button class="drawer-close" type="button" aria-label="Close navigation menu" data-nav-close>Close</button>
