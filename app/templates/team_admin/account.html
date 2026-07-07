@@ -23,7 +23,11 @@
         <div><dt>National ID</dt><dd>{{ team_admin.national_id }}</dd></div>
         <div><dt>Team Name</dt><dd>{{ team_admin.requested_team_name }}</dd></div>
         <div><dt>Team Admin ID</dt><dd>{{ team_admin.admin_code or 'Pending approval' }}</dd></div>
-        {% if team_admin.assigned_team and team_admin.assigned_team.team_code %}<div><dt>Team Code</dt><dd>{{ team_admin.assigned_team.team_code }}</dd></div>{% endif %}
+        {% if team_admin.assigned_team and team_admin.assigned_team.team_code %}
+          <div><dt>Team Code</dt><dd>{{ team_admin.assigned_team.team_code }}</dd></div>
+        {% elif team_admin.status == 'approved' %}
+          <div><dt>Team Code</dt><dd>Ask a colleague team admin for the team code</dd></div>
+        {% endif %}
         <div><dt>Status</dt><dd><span class="status {{ team_admin.status }}">{{ team_admin.status }}</span></dd></div>
         {% if team_admin.status == 'rejected' %}<div><dt>Explanation</dt><dd>{{ team_admin.rejection_reason or '-' }}</dd></div>{% endif %}
       </dl>

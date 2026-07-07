@@ -871,7 +871,7 @@ def team_admin_registration_form(
 def team_admin_registration(
     request: Request,
     full_name: str = Form(...),
-    team_name: str = Form(...),
+    team_name: str | None = Form(None),
     national_id: str = Form(...),
     phone: str = Form(...),
     email: str = Form(...),
@@ -885,6 +885,10 @@ def team_admin_registration(
 ):
     import re
     
+    is_first_registration = is_first_admin == "true"
+    normalized_team_name = (team_name or "").strip()
+    normalized_team_code = (team_code or "").strip()
+
     # Validate full_name - only letters and spaces
     if not re.match(r"^[A-Za-z\s'\-]+$", full_name.strip()):
         return _render(
@@ -892,7 +896,7 @@ def team_admin_registration(
             "team_admin_register.html",
             {
                 "error": "Full name can only contain letters and spaces.",
-                "is_first": is_first_admin == "true",
+                "is_first": is_first_registration,
                 "form_data": {
                     "full_name": full_name,
                     "team_name": team_name,
@@ -911,7 +915,7 @@ def team_admin_registration(
             "team_admin_register.html",
             {
                 "error": "National ID can only contain numbers.",
-                "is_first": is_first_admin == "true",
+                "is_first": is_first_registration,
                 "form_data": {
                     "full_name": full_name,
                     "team_name": team_name,
@@ -930,7 +934,7 @@ def team_admin_registration(
             "team_admin_register.html",
             {
                 "error": "Phone number can only contain numbers, +, -, or spaces.",
-                "is_first": is_first_admin == "true",
+                "is_first": is_first_registration,
                 "form_data": {
                     "full_name": full_name,
                     "team_name": team_name,
@@ -948,7 +952,7 @@ def team_admin_registration(
             "team_admin_register.html",
             {
                 "error": "Passwords do not match.",
-                "is_first": is_first_admin == "true",
+                "is_first": is_first_registration,
                 "form_data": {
                     "full_name": full_name,
                     "team_name": team_name,
@@ -960,10 +964,25 @@ def team_admin_registration(
             },
         )
 
-    # If not first admin, a team code or team ID is required
-    parsed_team_id = None
-    if is_first_admin == "false":
-        if not team_code and (not team_id or not team_id.strip()):
+    if is_first_registration:
+        if not normalized_team_name:
+            return _render(
+                request,
+                "team_admin_register.html",
+                {
+                    "error": "Team name is required for the first team admin registration.",
+                    "is_first": True,
+                    "form_data": {
+                        "full_name": full_name,
+                        "team_name": team_name,
+                        "national_id": national_id,
+                        "phone": phone,
+                        "email": email,
+                    },
+                },
+            )
+    else:
+        if not normalized_team_code and (not team_id or not team_id.strip()):
             return _render(
                 request,
                 "team_admin_register.html",
@@ -976,43 +995,46 @@ def team_admin_registration(
                         "national_id": national_id,
                         "phone": phone,
                         "email": email,
+                        "team_code": team_code,
                     },
                 },
             )
-        if team_id and team_id.strip():
-            try:
-                parsed_team_id = int(team_id.strip())
-            except (ValueError, TypeError):
-                return _render(
-                    request,
-                    "team_admin_register.html",
-                    {
-                        "error": "Invalid Team ID format.",
-                        "is_first": False,
-                        "form_data": {
-                            "full_name": full_name,
-                            "team_name": team_name,
-                            "national_id": national_id,
-                            "phone": phone,
-                            "email": email,
-                            "team_code": team_code,
-                        },
+
+    parsed_team_id = None
+    if team_id and team_id.strip():
+        try:
+            parsed_team_id = int(team_id.strip())
+        except (ValueError, TypeError):
+            return _render(
+                request,
+                "team_admin_register.html",
+                {
+                    "error": "Invalid Team ID format.",
+                    "is_first": is_first_registration,
+                    "form_data": {
+                        "full_name": full_name,
+                        "team_name": team_name,
+                        "national_id": national_id,
+                        "phone": phone,
+                        "email": email,
+                        "team_code": team_code,
                     },
-                )
+                },
+            )
 
     try:
         photo_path = _safe_upload(photo, "admin-photos")
         team_admin = create_team_admin_registration(
             db,
             full_name=full_name,
-            team_name=team_name,
+            team_name=normalized_team_name or None,
             national_id=national_id,
             phone=phone,
             email=email,
             password=password,
             photo_path=photo_path,
             team_id=parsed_team_id,
-            team_code=team_code,
+            team_code=normalized_team_code or None,
             commit=False,
         )
         verification_code = issue_email_verification_code(db, team_admin.user, commit=False)
@@ -1023,10 +1045,10 @@ def team_admin_registration(
             db,
             recipient_email=team_admin.user.email,
             title="Team admin registration submitted",
-            message=f"Your Team Admin registration for {team_name} has been submitted and is awaiting approval.",
+            message=f"Your Team Admin registration for {team_admin.requested_team_name} has been submitted and is awaiting approval.",
             link="/team-admin/account",
             super_admin_title="Team admin registration submitted",
-            super_admin_message=f"{full_name} submitted a Team Admin registration for {team_name}.",
+            super_admin_message=f"{full_name} submitted a Team Admin registration for {team_admin.requested_team_name}.",
             super_admin_link="/super-admin#team-admins",
         )
     except RegistrationError as exc:
@@ -1036,7 +1058,7 @@ def team_admin_registration(
             "team_admin_register.html",
             {
                 "error": str(exc),
-                "is_first": is_first_admin == "true",
+                "is_first": is_first_registration,
                 "form_data": {
                     "full_name": full_name,
                     "team_name": team_name,
@@ -1054,7 +1076,7 @@ def team_admin_registration(
             "team_admin_register.html",
             {
                 "error": "Verification code was not sent. Please try again.",
-                "is_first": is_first_admin == "true",
+                "is_first": is_first_registration,
                 "form_data": {
                     "full_name": full_name,
                     "team_name": team_name,
@@ -1072,7 +1094,7 @@ def team_admin_registration(
             "team_admin_register.html",
             {
                 "error": "Registration could not be completed right now. Please try again.",
-                "is_first": is_first_admin == "true",
+                "is_first": is_first_registration,
                 "form_data": {
                     "full_name": full_name,
                     "team_name": team_name,
@@ -2445,28 +2467,56 @@ def delete_all_notifications_route(
 @router.post("/team-admin/teams")
 def create_team_route(
     request: Request,
-    team_name: str = Form(...),
+    team_name: str | None = Form(None),
     category_id: int = Form(...),
     contact_information: str = Form(...),
     team_address: str = Form(...),
     training_ground: str = Form(...),
     home_ground: str = Form(...),
     logo: UploadFile | None = File(None),
+    team_code: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
+    is_first_team_registration = not db.scalar(
+        select(Team.team_id).where(Team.team_admin_id == team_admin.team_admin_id, Team.status == ApprovalStatus.APPROVED.value)
+    )
+    normalized_team_name = (team_name or "").strip()
+    normalized_team_code = (team_code or "").strip()
+
+    if is_first_team_registration and not normalized_team_name:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Team name is required for the first team registration."},
+        )
+    if is_first_team_registration and normalized_team_name:
+        expected_team_name = team_admin.requested_team_name.strip()
+        if expected_team_name.casefold() != normalized_team_name.casefold():
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "Team name must exactly match the team name used in your Team Admin registration."},
+            )
+    if not is_first_team_registration and not normalized_team_code:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Team code is required for additional team registrations."},
+        )
     try:
         logo_path = _safe_upload(logo, "team-logos")
         register_team(
             db,
             team_admin_id=team_admin.team_admin_id,
-            team_name=team_name,
+            team_name=normalized_team_name or None,
             category_id=category_id,
             contact_information=contact_information,
             team_address=team_address,
             training_ground=training_ground,
             home_ground=home_ground,
             logo=logo_path,
+            team_code=normalized_team_code or None,
         )
         _announce_submission(
             db,

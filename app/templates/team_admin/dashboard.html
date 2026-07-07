@@ -28,6 +28,11 @@
         <strong>Approval Pending</strong><br>
         Your Team Admin account is currently pending approval. Once approved, you'll have full access to all features. Please review your account details and check your email for updates.
       </div>
+    {% elif not team_admin.assigned_team %}
+      <div class="alert alert-info" style="margin-bottom: 1.5rem; padding: 1rem; background-color: #e7f1ff; border: 1px solid #8bb9ff; border-radius: 4px; color: #234;">
+        <strong>Team Code Needed</strong><br>
+        If your team was already registered by another Team Admin, ask a colleague for the team code before submitting the team registration form.
+      </div>
     {% endif %}
 
     <section class="panel dashboard-section" id="team-form" data-dashboard-section="team-form">
@@ -35,9 +40,17 @@
         <h2>Team Registration</h2>
       </div>
       <form class="form-grid two" method="post" action="/team-admin/teams" enctype="multipart/form-data">
-        <label>Team Name
-          <input name="team_name" required pattern="[A-Za-z0-9\s]+" title="Team name must contain only letters, numbers, and spaces">
-        </label>
+        {% if approved_teams %}
+          <label>Team Code
+            <input name="team_code" required placeholder="Enter the team code from a colleague">
+            <small style="display:block; margin-top:0.35rem; color:#666;">Use the team code from a colleague Team Admin if this team was already registered.</small>
+          </label>
+        {% else %}
+          <label>Team Name
+            <input name="team_name" value="{{ team_admin.requested_team_name }}" required pattern="[A-Za-z0-9\s]+" title="Team name must contain only letters, numbers, and spaces">
+            <small style="display:block; margin-top:0.35rem; color:#666;">Use the exact team name from your Team Admin registration.</small>
+          </label>
+        {% endif %}
         <label>Category
           <select name="category_id" required>
             {% for category in categories %}
@@ -58,7 +71,7 @@
           <input name="home_ground" required>
         </label>
         <label>Team Logo
-          <input name="logo" type="file" accept="image/*">
+          <input name="logo" type="file" accept="image/*" required>
         </label>
         <div class="form-actions wide">
           <button class="button button-primary" type="submit">Submit Team Registration</button>
@@ -113,7 +126,7 @@
                       <input name="full_name" placeholder="Enter full name" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
                     </label>
                     <label>Date Of Birth
-                      <input name="dob" type="text" placeholder="YYYY-MM-DD" inputmode="numeric" autocomplete="bday" required oninput="updatePlayerCategory(this)">
+                      <input name="dob" type="text" placeholder="YYYY-MM-DD" autocomplete="bday" required oninput="updatePlayerCategory(this)">
                     </label>
                     <label>Gender
                       <select name="gender" required onchange="updatePlayerCategory(this)">
@@ -1558,6 +1571,11 @@
           <div><dt>National ID</dt><dd>{{ team_admin.national_id }}</dd></div>
           <div><dt>Team Name</dt><dd>{{ team_admin.requested_team_name }}</dd></div>
           <div><dt>Team Admin ID</dt><dd>{{ team_admin.admin_code or 'Pending approval' }}</dd></div>
+          {% if team_admin.assigned_team and team_admin.assigned_team.team_code %}
+            <div><dt>Team Code</dt><dd>{{ team_admin.assigned_team.team_code }}</dd></div>
+          {% elif team_admin.status == 'approved' %}
+            <div><dt>Team Code</dt><dd>Ask a colleague team admin for the team code</dd></div>
+          {% endif %}
           <div><dt>Status</dt><dd><span class="status {{ team_admin.status }}">{{ team_admin.status }}</span></dd></div>
           <div><dt>Explanation</dt><dd>{{ team_admin.rejection_reason or '-' }}</dd></div>
         </dl>

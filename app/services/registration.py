@@ -611,7 +611,7 @@ def create_team_admin_registration(
     db: Session,
     *,
     full_name: str,
-    team_name: str,
+    team_name: str | None,
     email: str,
     password: str,
     national_id: str,
@@ -623,10 +623,10 @@ def create_team_admin_registration(
 ) -> TeamAdmin:
     full_name = _validate_person_name(full_name, "Full name")
     normalized_email = _validate_text(email, field_name="Email address").lower()
-    team_name = _validate_team_name(team_name)
     phone = _validate_phone(phone)
     normalized_team_code = _normalize_team_code(team_code)
     normalized_national_id = _normalize_text(national_id)
+    normalized_team_name = _normalize_text(team_name)
     existing_user = db.scalar(select(User).where(User.email == normalized_email))
     existing_id = db.scalar(
         select(TeamAdmin).where(TeamAdmin.national_id == normalized_national_id)
@@ -635,6 +635,8 @@ def create_team_admin_registration(
         raise RegistrationError("This email or national ID is already registered.")
     if len(password) < 8:
         raise RegistrationError("Password must be at least 8 characters long.")
+    if not photo_path:
+        raise RegistrationError("Profile photo is required.")
     team = _resolve_team_reference(db, team_id=team_id, team_code=normalized_team_code)
     if normalized_team_code and not team:
         raise RegistrationError("Specified team code does not exist.")
@@ -643,11 +645,19 @@ def create_team_admin_registration(
     if team:
         if team.status != ApprovalStatus.APPROVED.value:
             raise RegistrationError("This team must be approved before additional admins can join.")
-        if team.team_name.strip().casefold() != team_name.casefold():
-            raise RegistrationError("Team code does not match the team name you entered.")
+        if normalized_team_name:
+            normalized_team_name = _validate_team_name(normalized_team_name)
+            if team.team_name.strip().casefold() != normalized_team_name.casefold():
+                raise RegistrationError("Team code does not match the team name you entered.")
+        else:
+            normalized_team_name = team.team_name.strip()
         admin_count = len(db.scalars(select(TeamAdmin).where(TeamAdmin.team_id == team.team_id)).all())
         if admin_count >= 5:
             raise RegistrationError("Maximum number of team admins reached for this team.")
+    else:
+        if not normalized_team_name:
+            raise RegistrationError("Team name is required for the first team admin registration.")
+        normalized_team_name = _validate_team_name(normalized_team_name)
 
     user = User(
         full_name=full_name,
@@ -664,7 +674,7 @@ def create_team_admin_registration(
         user_id=user.user_id,
         national_id=normalized_national_id,
         phone=phone,
-        requested_team_name=team_name,
+        requested_team_name=normalized_team_name,
         team_id=team.team_id if team else team_id,
         status=ApprovalStatus.PENDING.value,
     )
@@ -796,11 +806,22 @@ def approve_team_admin(
     try:
         from app.services.league import create_notification
 
+        assigned_team = team_admin.assigned_team
+        if assigned_team and assigned_team.team_code:
+            approval_message = (
+                "Your Team Admin registration has been approved. "
+                f"Your team code is {assigned_team.team_code}. You can view it in My Account."
+            )
+        else:
+            approval_message = (
+                "Your Team Admin registration has been approved. "
+                "If your team has already been registered by another admin, ask a colleague for the team code before registering your team."
+            )
         create_notification(
             db,
             user_id=team_admin.user_id,
             title="Team Admin approved",
-            message="Your Team Admin registration has been approved. You can now continue to the Team Admin app.",
+            message=approval_message,
             link="/team-admin/welcome",
         )
     except Exception:
@@ -844,36 +865,60 @@ def register_team(
     db: Session,
     *,
     team_admin_id: int,
-    team_name: str,
+    team_name: str | None,
     category_id: int,
     contact_information: str,
     team_address: str,
     training_ground: str,
     home_ground: str,
     logo: str | None,
+    team_code: str | None = None,
 ) -> Team:
     category = db.get(Category, category_id)
     if not category:
         raise RegistrationError("Selected category does not exist.")
-    team_name = _validate_team_name(team_name)
+    normalized_team_name = _normalize_text(team_name)
+    normalized_team_code = _normalize_team_code(team_code)
     contact_information = _validate_phone(contact_information, "Contact information")
     team_address = _validate_text(team_address, field_name="Team address")
     training_ground = _validate_text(training_ground, field_name="Training ground")
     home_ground = _validate_text(home_ground, field_name="Home ground")
+    if not logo:
+        raise RegistrationError("Team logo is required.")
 
-    duplicate_team = db.scalar(
-        select(Team).where(
-            Team.category_id == category_id,
-            func.lower(Team.team_name) == team_name.casefold(),
+    team = _resolve_team_reference(db, team_code=normalized_team_code)
+    if normalized_team_code and not team:
+        raise RegistrationError("Specified team code does not exist.")
+    if team:
+        if team.status != ApprovalStatus.APPROVED.value:
+            raise RegistrationError("This team must be approved before another registration can use its code.")
+        if team.category_id != category_id:
+            raise RegistrationError("Selected category must match the team code you entered.")
+        if normalized_team_name:
+            normalized_team_name = _validate_team_name(normalized_team_name)
+            if team.team_name.strip().casefold() != normalized_team_name.casefold():
+                raise RegistrationError("Team name must match the team code you entered.")
+        else:
+            normalized_team_name = team.team_name.strip()
+    else:
+        if not normalized_team_name:
+            raise RegistrationError("Team name is required for the first team registration.")
+        normalized_team_name = _validate_team_name(normalized_team_name)
+
+    if not team:
+        duplicate_team = db.scalar(
+            select(Team).where(
+                Team.category_id == category_id,
+                func.lower(Team.team_name) == normalized_team_name.casefold(),
+            )
         )
-    )
-    if duplicate_team:
-        raise RegistrationError("This team name is already registered for the selected category.")
+        if duplicate_team:
+            raise RegistrationError("This team name is already registered for the selected category.")
 
     team = Team(
         team_admin_id=team_admin_id,
         category_id=category_id,
-        team_name=team_name,
+        team_name=normalized_team_name,
         contact_information=contact_information,
         team_address=team_address,
         training_ground=training_ground,

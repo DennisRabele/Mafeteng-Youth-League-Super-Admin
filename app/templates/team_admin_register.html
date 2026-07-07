@@ -14,27 +14,29 @@
     <fieldset style="margin-bottom: 30px;">
       <legend style="font-weight: 600; margin-bottom: 15px;">Is this the first team admin registration for your team?</legend>
       <label style="display: block; margin-bottom: 10px;">
-        <input type="radio" name="is_first_admin" value="true" required onchange="document.getElementById('team_code_field').style.display='none'; document.getElementById('team_name_hint').style.display='block';">
+        <input type="radio" name="is_first_admin" value="true" required onchange="setTeamAdminMode(true)">
         Yes, this is the first team admin for this team
       </label>
       <label style="display: block;">
-        <input type="radio" name="is_first_admin" value="false" onchange="document.getElementById('team_code_field').style.display='block'; document.getElementById('team_name_hint').style.display='block';">
+        <input type="radio" name="is_first_admin" value="false" onchange="setTeamAdminMode(false)">
         No, there are other team admins for this team
       </label>
     </fieldset>
     {% else %}
     <input type="hidden" name="is_first_admin" value="{% if is_first %}true{% else %}false{% endif %}">
     {% endif %}
-    
+
     <div class="form-grid two">
       <label>Full Name
         <input name="full_name" value="{{ form_data.full_name if form_data else '' }}" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
       </label>
-      <label>Team Name
-        <input id="team_name_hint" name="team_name" value="{{ form_data.team_name if form_data else '' }}" required>
+      <label id="team_name_field" {% if is_first is false %}hidden{% endif %}>Team Name
+        <input id="team_name_input" name="team_name" value="{{ form_data.team_name if form_data else '' }}" {% if is_first is not false %}required{% endif %}>
+        <small style="display:block; margin-top:0.35rem; color:#666;">Use the exact team name from your Team Admin registration.</small>
       </label>
-      <label id="team_code_field" {% if is_first != false %}style="display:none;"{% endif %}>Team Code
-        <input name="team_code" value="{{ form_data.team_code if form_data else '' }}" placeholder="Enter the team code">
+      <label id="team_code_field" {% if is_first != false %}hidden{% endif %}>Team Code
+        <input id="team_code_input" name="team_code" value="{{ form_data.team_code if form_data else '' }}" {% if is_first is false %}required{% endif %} placeholder="Enter the team code">
+        <small style="display:block; margin-top:0.35rem; color:#666;">Ask a colleague Team Admin for the code if the team was already registered.</small>
       </label>
       <label>National ID
         <input name="national_id" value="{{ form_data.national_id if form_data else '' }}" required pattern="[A-Za-z0-9+\-\/\s]+" title="National ID may contain letters, numbers, +, -, /, and spaces">
@@ -52,7 +54,7 @@
         <input name="confirm_password" type="password" required minlength="8" autocomplete="new-password">
       </label>
       <label>Profile Photo
-        <input name="photo" type="file" accept="image/*">
+        <input name="photo" type="file" accept="image/*" required>
       </label>
     </div>
     <div class="form-actions">
@@ -61,4 +63,36 @@
     </div>
   </form>
 </section>
+<script>
+  function setTeamAdminMode(isFirst) {
+    const teamNameField = document.getElementById('team_name_field');
+    const teamNameInput = document.getElementById('team_name_input');
+    const teamCodeField = document.getElementById('team_code_field');
+    const teamCodeInput = document.getElementById('team_code_input');
+    if (!teamNameField || !teamNameInput || !teamCodeField || !teamCodeInput) {
+      return;
+    }
+
+    if (isFirst) {
+      teamNameField.hidden = false;
+      teamNameInput.required = true;
+      teamCodeField.hidden = true;
+      teamCodeInput.required = false;
+      teamCodeInput.value = '';
+    } else {
+      teamNameField.hidden = true;
+      teamNameInput.required = false;
+      teamNameInput.value = '';
+      teamCodeField.hidden = false;
+      teamCodeInput.required = true;
+    }
+  }
+
+  (() => {
+    const selected = document.querySelector('input[name="is_first_admin"]:checked');
+    if (selected) {
+      setTeamAdminMode(selected.value === 'true');
+    }
+  })();
+</script>
 {% endblock %}
