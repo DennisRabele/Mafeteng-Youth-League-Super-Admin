@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <style>{{ export_styles | safe }}</style>
+  <style>
+    body.export-page {
+      background:
+        radial-gradient(circle at top left, rgba(255, 196, 0, 0.14), transparent 28%),
+        radial-gradient(circle at top right, rgba(0, 0, 0, 0.08), transparent 24%),
+        var(--paper);
+    }
+
+    .export-shell {
+      margin: 0 auto;
+      max-width: 1400px;
+      padding: 28px;
+    }
+
+    .export-header {
+      background: linear-gradient(135deg, #0f0f0f, #1d1d1d 58%, #2a2200);
+      border: 1px solid rgba(255, 196, 0, 0.22);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      color: var(--white);
+      margin-bottom: 22px;
+      padding: 24px 26px;
+    }
+
+    .export-header h1 {
+      font-size: 30px;
+      margin: 0 0 8px;
+      text-transform: uppercase;
+    }
+
+    .export-header p {
+      color: #efefef;
+      margin: 0;
+      max-width: 940px;
+    }
+
+    .export-note {
+      color: var(--yellow);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+
+    .export-section {
+      margin-top: 22px;
+    }
+
+    .export-section h2 {
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+
+    .export-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+
+    .export-card {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .export-card__head {
+      align-items: flex-start;
+      display: flex;
+      gap: 14px;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .export-card__title {
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1.2;
+      margin: 0;
+      text-transform: uppercase;
+    }
+
+    .export-card__meta {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .export-stat-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    }
+
+    .export-stat {
+      background: #fafafa;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .export-stat span {
+      color: var(--muted);
+      display: block;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .export-stat strong {
+      font-size: 18px;
+    }
+
+    .export-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .export-subsection {
+      margin-top: 18px;
+    }
+
+    .export-subsection h3 {
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+
+    .export-empty {
+      background: var(--white);
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      color: var(--muted);
+      padding: 18px;
+    }
+
+    .export-summary {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      margin-top: 18px;
+    }
+
+    .export-summary .metric {
+      min-height: 92px;
+    }
+
+    @media print {
+      body.export-page {
+        background: #fff;
+      }
+
+      .export-shell {
+        max-width: none;
+        padding: 0;
+      }
+
+      .export-header,
+      .export-card,
+      .metric {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body class="export-page">
+  <div class="export-shell">
+    <header class="export-header">
+      <div class="export-note">League Export</div>
+      <h1>{{ title }}</h1>
+      <p>{{ subtitle }}</p>
+      {% if fixture_filters %}
+        <div class="export-summary">
+          <div class="metric"><span>Category</span><strong>{{ fixture_filters.category }}</strong></div>
+          <div class="metric"><span>Bucket</span><strong>{{ fixture_filters.bucket }}</strong></div>
+          <div class="metric"><span>From</span><strong>{{ fixture_filters.date_from or '-' }}</strong></div>
+          <div class="metric"><span>To</span><strong>{{ fixture_filters.date_to or '-' }}</strong></div>
+        </div>
+      {% endif %}
+    </header>
+
+    {% if export_kind == 'fixtures' %}
+      <section class="export-section">
+        <div class="export-grid">
+          {% for fixture in fixtures %}
+            <article class="fixture-card fixture-card--compact">
+              <div class="fixture-card__date">
+                <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
+                <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
+                <span class="fixture-card__year">{{ fixture.dashboard_date_year }}</span>
+              </div>
+              <div class="fixture-card__time">
+                <strong>{{ fixture.dashboard_time }}</strong>
+                <span>{{ fixture.dashboard_day_name }}</span>
+              </div>
+              <div class="fixture-card__fixture">
+                <div class="fixture-matchup">
+                  <div class="fixture-team">
+                    {% if fixture.home_team.logo %}
+                      <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
+                    {% else %}
+                      <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
+                    {% endif %}
+                    <span>{{ fixture.home_team.team_name }}</span>
+                  </div>
+                  <span class="fixture-vs">VS</span>
+                  <div class="fixture-team">
+                    {% if fixture.away_team.logo %}
+                      <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                    {% else %}
+                      <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
+                    {% endif %}
+                    <span>{{ fixture.away_team.team_name }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="fixture-card__venue">
+                <strong>{{ fixture.venue }}</strong>
+                <span>Venue</span>
+              </div>
+            </article>
+          {% else %}
+            <div class="export-empty">No fixtures available for the selected filters.</div>
+          {% endfor %}
+        </div>
+      </section>
+    {% elif export_kind == 'results' %}
+      <section class="export-section">
+        <div class="export-grid">
+          {% for submission in result_submissions %}
+            <article class="export-card">
+              <div class="export-card__head">
+                <div>
+                  <h2 class="export-card__title">{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</h2>
+                  <div class="export-card__meta">{{ submission.match.fixture.category.category_name }} · {{ submission.submitted_by.user.full_name }}</div>
+                </div>
+                <span class="status {{ submission.status }}">{{ submission.status }}</span>
+              </div>
+              <div class="export-stat-grid">
+                <div class="export-stat"><span>Score</span><strong>{{ submission.home_score }}-{{ submission.away_score }}</strong></div>
+                <div class="export-stat"><span>Submitted</span><strong>{{ submission.submitted_date.strftime('%Y-%m-%d') }}</strong></div>
+                <div class="export-stat"><span>Scorers</span><strong>{{ submission.scorer_names_text or '-' }}</strong></div>
+                <div class="export-stat"><span>Assists</span><strong>{{ submission.assist_names_text or '-' }}</strong></div>
+              </div>
+            </article>
+          {% else %}
+            <div class="export-empty">No result submissions available.</div>
+          {% endfor %}
+        </div>
+      </section>
+    {% elif export_kind == 'league_tables' %}
+      <section class="export-stack">
+        {% for category_name, rows in league_tables.items() %}
+          <div class="export-section export-card">
+            <h2>{{ category_name }}</h2>
+            <div class="table-wrap fit-table">
+              <div class="table-scroll-x">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Pos</th>
+                      <th>Logo</th>
+                      <th>Team</th>
+                      <th>P</th>
+                      <th>W</th>
+                      <th>D</th>
+                      <th>L</th>
+                      <th>GF</th>
+                      <th>GA</th>
+                      <th>GD</th>
+                      <th>Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in rows %}
+                      <tr>
+                        <td>{{ row.position }}</td>
+                        <td>
+                          {% if row.team.logo %}
+                            <img class="thumb" src="{{ row.team.logo }}" alt="{{ row.team.team_name }}">
+                          {% else %}
+                            <span class="no-image">No logo</span>
+                          {% endif %}
+                        </td>
+                        <td>{{ row.team.team_name }}</td>
+                        <td>{{ row.played }}</td>
+                        <td>{{ row.wins }}</td>
+                        <td>{{ row.draws }}</td>
+                        <td>{{ row.losses }}</td>
+                        <td>{{ row.goals_for }}</td>
+                        <td>{{ row.goals_against }}</td>
+                        <td>{{ row.goal_difference }}</td>
+                        <td>{{ row.points }}</td>
+                      </tr>
+                    {% else %}
+                      <tr><td colspan="11" class="empty">No league table data yet.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        {% else %}
+          <div class="export-empty">No league tables available yet.</div>
+        {% endfor %}
+      </section>
+    {% elif export_kind == 'performances' %}
+      <section class="export-stack">
+        <div class="export-section">
+          <h2>Player Overview</h2>
+          <div class="export-grid">
+            {% for row in player_performances.players %}
+              <article class="export-card">
+                <div class="export-card__head">
+                  <div>
+                    <h2 class="export-card__title">{{ row.player.full_name }}</h2>
+                    <div class="export-card__meta">{{ row.team.team_name }} · {{ row.category_name }}</div>
+                  </div>
+                  <span class="status approved">{{ row.goals }} goals</span>
+                </div>
+                <div class="export-stat-grid">
+                  <div class="export-stat"><span>System IDs</span><strong>{% for system_id in row.system_ids %}{{ system_id }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</strong></div>
+                  <div class="export-stat"><span>Assists</span><strong>{{ row.assists }}</strong></div>
+                  <div class="export-stat"><span>Goal Types</span><strong>{% for goal_type, count in row.goal_types.items() %}{{ goal_type }}: {{ count }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</strong></div>
+                </div>
+              </article>
+            {% else %}
+              <div class="export-empty">No player overview data available.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="export-section">
+          <h2>Top Scorers</h2>
+          <div class="export-grid">
+            {% for row in player_performances.scorers %}
+              <article class="export-card">
+                <div class="export-card__head">
+                  <div>
+                    <h2 class="export-card__title">{{ row.player.full_name }}</h2>
+                    <div class="export-card__meta">{{ row.team.team_name }} · {{ row.category_name }}</div>
+                  </div>
+                  <span class="status approved">{{ row.goals }} goals</span>
+                </div>
+                <div class="export-stat-grid">
+                  <div class="export-stat"><span>Goals</span><strong>{{ row.goals }}</strong></div>
+                  <div class="export-stat"><span>Goal Types</span><strong>{% for goal_type, count in row.goal_types.items() %}{{ goal_type }}: {{ count }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</strong></div>
+                </div>
+              </article>
+            {% else %}
+              <div class="export-empty">No goals recorded yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="export-section">
+          <h2>Top Assisters</h2>
+          <div class="export-grid">
+            {% for row in player_performances.assisters %}
+              <article class="export-card">
+                <div class="export-card__head">
+                  <div>
+                    <h2 class="export-card__title">{{ row.player.full_name }}</h2>
+                    <div class="export-card__meta">{{ row.team.team_name }} · {{ row.category_name }}</div>
+                  </div>
+                  <span class="status approved">{{ row.assists }} assists</span>
+                </div>
+                <div class="export-stat-grid">
+                  <div class="export-stat"><span>Assists</span><strong>{{ row.assists }}</strong></div>
+                </div>
+              </article>
+            {% else %}
+              <div class="export-empty">No assists recorded yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+  </div>
+</body>
+</html>

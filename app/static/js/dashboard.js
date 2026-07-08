@@ -284,9 +284,19 @@
     }
   };
 
+  const applyInitialCategoryPanelFilters = () => {
+    document.querySelectorAll("[data-dashboard-category-filter]").forEach((select) => {
+      const section = select.closest("[data-dashboard-section]");
+      if (section && section.id && window.filterDashboardPanels) {
+        window.filterDashboardPanels(section.id, select.value, null);
+      }
+    });
+  };
+
   window.addEventListener("pageshow", hideLoading);
   window.addEventListener("hashchange", activateSectionFromHash);
   activateSectionFromHash();
+  applyInitialCategoryPanelFilters();
   const activeSectionButton = document.querySelector("[data-section-target].active");
   if (activeSectionButton && window.syncDashboardContext) {
     window.syncDashboardContext(activeSectionButton.dataset.sectionTarget);

@@ -84,7 +84,6 @@
         {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
           {% if current_user.team_admin_profile and current_user.team_admin_profile.status == 'approved' %}
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="team-form" data-dashboard-route="/team-admin/dashboard">Teams Registration</button>
-            <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="player-form" data-dashboard-route="/team-admin/dashboard">Players Registration</button>
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="my-teams" data-dashboard-route="/team-admin/dashboard">My Clubs</button>
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="my-players" data-dashboard-route="/team-admin/dashboard">My Players</button>
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="fixtures" data-dashboard-route="/team-admin/dashboard">Fixtures</button>

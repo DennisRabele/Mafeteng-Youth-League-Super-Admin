@@ -1,7 +1,7 @@
 from datetime import date, datetime
-import csv
-import io
 import logging
+from functools import lru_cache
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse, Response
@@ -115,6 +115,29 @@ def _load_assets() -> dict[str, str]:
     return {
         "league_logo": "/static/images/logo.jpg",
     }
+
+
+@lru_cache(maxsize=1)
+def _load_export_styles() -> str:
+    return (BASE_DIR / "app" / "static" / "css" / "styles.css").read_text(encoding="utf-8")
+
+
+def _render_downloadable_cards(
+    template_name: str,
+    *,
+    filename: str,
+    context: dict,
+) -> Response:
+    template = templates.env.get_template(template_name)
+    html = template.render(
+        **context,
+        export_styles=_load_export_styles(),
+    )
+    return Response(
+        content=html,
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _current_user(request: Request, db: Session | None = None) -> User | None:
@@ -1750,12 +1773,22 @@ def team_admin_welcome(request: Request, db: Session = Depends(get_db)):
 @router.get("/team-admin/account")
 def team_admin_account(request: Request, db: Session = Depends(get_db)):
     team_admin = _require_team_admin_account(request, db)
+    approved_team = db.scalar(
+        select(Team)
+        .options(selectinload(Team.category))
+        .where(
+            Team.team_admin_id == team_admin.team_admin_id,
+            Team.status == ApprovalStatus.APPROVED.value,
+        )
+        .order_by(Team.team_id.desc())
+    )
     return _render(
         request,
         "team_admin/account.html",
         {
             "current_user": team_admin.user,
             "team_admin": team_admin,
+            "approved_team": approved_team,
         },
     )
 
@@ -1782,6 +1815,7 @@ def team_admin_dashboard(
     approved_teams = [
         team for team in teams if team.status == ApprovalStatus.APPROVED.value
     ]
+    approved_team = approved_teams[0] if approved_teams else None
     own_team_ids = [team.team_id for team in teams]
     players = db.scalars(
         select(Player)
@@ -1889,7 +1923,7 @@ def team_admin_dashboard(
         .where(Player.status == ApprovalStatus.APPROVED.value)
         .order_by(Player.full_name)
     ).all()
-    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=own_team_ids), [])
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
     filtered_fixtures = _filter_fixtures_for_dashboard(
         fixtures,
         category_name=fixture_category,
@@ -1901,10 +1935,7 @@ def team_admin_dashboard(
         lambda: _load_result_submissions(db, team_ids=own_team_ids),
         [],
     )
-    league_tables = _safe_dashboard_value(
-        lambda: get_league_tables(db, team_ids=own_team_ids),
-        {},
-    )
+    league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_performances = _safe_dashboard_value(
         lambda: get_player_performances(db, team_ids=own_team_ids),
         {"players": [], "scorers": [], "assisters": []},
@@ -1924,6 +1955,7 @@ def team_admin_dashboard(
             "categories": categories,
             "teams": teams,
             "approved_teams": approved_teams,
+            "approved_team": approved_team,
             "players": players,
             "approved_players": approved_players,
             "renewal_requests": renewal_requests,
@@ -1962,13 +1994,7 @@ def export_team_admin_fixtures(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    team_ids = [
-        team.team_id
-        for team in db.scalars(
-            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
-        ).all()
-    ]
-    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=team_ids), [])
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
     fixtures = _filter_fixtures_for_dashboard(
         fixtures,
         category_name=fixture_category,
@@ -1976,30 +2002,22 @@ def export_team_admin_fixtures(
         date_from=fixture_date_from,
         date_to=fixture_date_to,
     )
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Category", "Home Team", "Away Team", "Date", "Time", "Venue", "Status", "Score"])
-    for fixture in fixtures:
-        score = "-"
-        if fixture.match and fixture.match.home_score is not None and fixture.match.away_score is not None:
-            score = f"{fixture.match.home_score}-{fixture.match.away_score}"
-        writer.writerow([
-            fixture.category.category_name if fixture.category else "",
-            fixture.home_team.team_name if fixture.home_team else "",
-            fixture.away_team.team_name if fixture.away_team else "",
-            fixture.fixture_date.strftime("%Y-%m-%d"),
-            fixture.fixture_date.strftime("%I:%M %p").lstrip("0"),
-            fixture.venue,
-            fixture.status,
-            score,
-        ])
-
-    filename = f"fixtures_{fixture_category}_{fixture_bucket}.csv".replace(" ", "_")
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    filename = f"fixtures_{fixture_category}_{fixture_bucket}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Fixtures Cards Export",
+            "subtitle": "Downloaded fixture cards rendered with the same dashboard design.",
+            "export_kind": "fixtures",
+            "fixtures": fixtures,
+            "fixture_filters": {
+                "category": fixture_category,
+                "bucket": fixture_bucket,
+                "date_from": fixture_date_from or "",
+                "date_to": fixture_date_to or "",
+            },
+        },
     )
 
 
@@ -2010,32 +2028,20 @@ def export_team_admin_league_tables(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    team_ids = [
-        team.team_id
-        for team in db.scalars(
-            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
-        ).all()
-    ]
-    league_tables = _safe_dashboard_value(lambda: get_league_tables(db, team_ids=team_ids), {})
-    categories = [category] if category != "all" else list(league_tables.keys())
-    rows: list[list[object]] = [["Category", "Position", "Team", "Played", "Won", "Drawn", "Lost", "GF", "GA", "GD", "Points"]]
-    for category_name in categories:
-        for row in league_tables.get(category_name, []):
-            rows.append([
-                category_name,
-                row.get("position", ""),
-                row["team"].team_name if row.get("team") else "",
-                row.get("played", 0),
-                row.get("wins", 0),
-                row.get("draws", 0),
-                row.get("losses", 0),
-                row.get("goals_for", 0),
-                row.get("goals_against", 0),
-                row.get("goal_difference", 0),
-                row.get("points", 0),
-            ])
-    filename = f"league_tables_{category}.csv".replace(" ", "_")
-    return _csv_response(filename, rows)
+    league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
+    if category != "all":
+        league_tables = {category: league_tables.get(category, [])}
+    filename = f"league_tables_{category}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "League Tables Cards Export",
+            "subtitle": "Downloaded league table cards rendered with the same dashboard design.",
+            "export_kind": "league_tables",
+            "league_tables": league_tables,
+        },
+    )
 
 
 @router.get("/team-admin/dashboard/performances/export")
@@ -2054,47 +2060,21 @@ def export_team_admin_performances(
     ]
     performances = _safe_dashboard_value(lambda: get_player_performances(db, team_ids=team_ids), {"players": [], "scorers": [], "assisters": []})
     metric_key = {"all": "players", "goals": "scorers", "assists": "assisters"}.get(metric, "players")
-    rows = performances.get(metric_key, [])
-    rows = [row for row in rows if category == "all" or row["category_name"] == category]
-    csv_rows: list[list[object]] = [[]]
-    if metric_key == "players":
-        csv_rows = [["Player", "System IDs", "Team", "Category", "Goals", "Assists", "Goal Types", "Clubs Played For"]]
-        for row in rows:
-            csv_rows.append([
-                row["player"].full_name,
-                " | ".join(row.get("system_ids", [])),
-                row["team"].team_name if row.get("team") else "",
-                row["category_name"],
-                row["goals"],
-                row["assists"],
-                "; ".join(f"{goal_type}: {count}" for goal_type, count in row["goal_types"].items()),
-                " | ".join(row.get("clubs_played_for", [])),
-            ])
-    elif metric_key == "scorers":
-        csv_rows = [["Player", "System IDs", "Team", "Category", "Goals", "Goal Types", "Clubs Played For"]]
-        for row in rows:
-            csv_rows.append([
-                row["player"].full_name,
-                " | ".join(row.get("system_ids", [])),
-                row["team"].team_name if row.get("team") else "",
-                row["category_name"],
-                row["goals"],
-                "; ".join(f"{goal_type}: {count}" for goal_type, count in row["goal_types"].items()),
-                " | ".join(row.get("clubs_played_for", [])),
-            ])
-    else:
-        csv_rows = [["Player", "System IDs", "Team", "Category", "Assists", "Clubs Played For"]]
-        for row in rows:
-            csv_rows.append([
-                row["player"].full_name,
-                " | ".join(row.get("system_ids", [])),
-                row["team"].team_name if row.get("team") else "",
-                row["category_name"],
-                row["assists"],
-                " | ".join(row.get("clubs_played_for", [])),
-            ])
-    filename = f"performances_{metric}_{category}.csv".replace(" ", "_")
-    return _csv_response(filename, csv_rows)
+    performances[metric_key] = [
+        row for row in performances.get(metric_key, [])
+        if category == "all" or row["category_name"] == category
+    ]
+    filename = f"performances_{metric}_{category}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Player Performances Cards Export",
+            "subtitle": "Downloaded performance cards rendered with the same dashboard design.",
+            "export_kind": "performances",
+            "player_performances": performances,
+        },
+    )
 
 
 @router.get("/team-admin/dashboard/results/export")
@@ -2112,21 +2092,17 @@ def export_team_admin_results(
     ]
     submissions = _safe_dashboard_value(lambda: _load_result_submissions(db, team_ids=team_ids), [])
     submissions = _filter_result_submissions_by_category(submissions, category)
-    csv_rows: list[list[object]] = [["Category", "Fixture", "Submitted", "Score", "Status", "Scorers", "Assists"]]
-    for submission in submissions:
-        fixture = submission.match.fixture if submission.match else None
-        category_name = fixture.category.category_name if fixture and fixture.category else ""
-        csv_rows.append([
-            category_name,
-            f"{fixture.home_team.team_name} vs {fixture.away_team.team_name}" if fixture and fixture.home_team and fixture.away_team else "",
-            submission.submitted_date.strftime("%Y-%m-%d %H:%M"),
-            f"{submission.home_score}-{submission.away_score}",
-            submission.status,
-            submission.scorer_names_text or "",
-            submission.assist_names_text or "",
-        ])
-    filename = f"results_{category}.csv".replace(" ", "_")
-    return _csv_response(filename, csv_rows)
+    filename = f"results_{category}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Results Cards Export",
+            "subtitle": "Downloaded result cards rendered with the same dashboard design.",
+            "export_kind": "results",
+            "result_submissions": submissions,
+        },
+    )
 
 
 @router.get("/super-admin/league-tables/export")
@@ -2137,31 +2113,18 @@ def export_super_admin_league_tables(
 ):
     _require_super_admin(request, db)
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Category", "Position", "Team", "Played", "Won", "Drawn", "Lost", "GF", "GA", "GD", "Points"])
-    categories_to_write = [category] if category != "all" else list(league_tables.keys())
-    for category_name in categories_to_write:
-        for row in league_tables.get(category_name, []):
-            writer.writerow([
-                category_name,
-                row.get("position", ""),
-                row["team"].team_name if row.get("team") else "",
-                row.get("played", 0),
-                row.get("wins", 0),
-                row.get("draws", 0),
-                row.get("losses", 0),
-                row.get("goals_for", 0),
-                row.get("goals_against", 0),
-                row.get("goal_difference", 0),
-                row.get("points", 0),
-            ])
-
-    filename = f"league_tables_{category}.csv".replace(" ", "_")
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    if category != "all":
+        league_tables = {category: league_tables.get(category, [])}
+    filename = f"league_tables_{category}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "League Tables Cards Export",
+            "subtitle": "Downloaded league table cards rendered with the same dashboard design.",
+            "export_kind": "league_tables",
+            "league_tables": league_tables,
+        },
     )
 
 
@@ -2263,23 +2226,23 @@ def export_super_admin_fixtures(
         date_from=fixture_date_from,
         date_to=fixture_date_to,
     )
-    rows: list[list[object]] = [["Category", "Home Team", "Away Team", "Date", "Time", "Venue", "Status", "Score"]]
-    for fixture in fixtures:
-        score = "-"
-        if fixture.match and fixture.match.home_score is not None and fixture.match.away_score is not None:
-            score = f"{fixture.match.home_score}-{fixture.match.away_score}"
-        rows.append([
-            fixture.category.category_name if fixture.category else "",
-            fixture.home_team.team_name if fixture.home_team else "",
-            fixture.away_team.team_name if fixture.away_team else "",
-            fixture.fixture_date.strftime("%Y-%m-%d"),
-            fixture.fixture_date.strftime("%I:%M %p").lstrip("0"),
-            fixture.venue,
-            fixture.status,
-            score,
-        ])
-    filename = f"fixtures_{fixture_category}_{fixture_bucket}.csv".replace(" ", "_")
-    return _csv_response(filename, rows)
+    filename = f"fixtures_{fixture_category}_{fixture_bucket}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Fixtures Cards Export",
+            "subtitle": "Downloaded fixture cards rendered with the same dashboard design.",
+            "export_kind": "fixtures",
+            "fixtures": fixtures,
+            "fixture_filters": {
+                "category": fixture_category,
+                "bucket": fixture_bucket,
+                "date_from": fixture_date_from or "",
+                "date_to": fixture_date_to or "",
+            },
+        },
+    )
 
 
 @router.get("/super-admin/results/export")
@@ -2291,21 +2254,17 @@ def export_super_admin_results(
     _require_super_admin(request, db)
     submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
     submissions = _filter_result_submissions_by_category(submissions, category)
-    rows: list[list[object]] = [["Category", "Fixture", "Submitted", "Score", "Status", "Scorers", "Assists"]]
-    for submission in submissions:
-        fixture = submission.match.fixture if submission.match else None
-        category_name = fixture.category.category_name if fixture and fixture.category else ""
-        rows.append([
-            category_name,
-            f"{fixture.home_team.team_name} vs {fixture.away_team.team_name}" if fixture and fixture.home_team and fixture.away_team else "",
-            submission.submitted_date.strftime("%Y-%m-%d %H:%M"),
-            f"{submission.home_score}-{submission.away_score}",
-            submission.status,
-            submission.scorer_names_text or "",
-            submission.assist_names_text or "",
-        ])
-    filename = f"results_{category}.csv".replace(" ", "_")
-    return _csv_response(filename, rows)
+    filename = f"results_{category}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Results Cards Export",
+            "subtitle": "Downloaded result cards rendered with the same dashboard design.",
+            "export_kind": "results",
+            "result_submissions": submissions,
+        },
+    )
 
 
 @router.get("/super-admin/performances/export")
@@ -2318,47 +2277,21 @@ def export_super_admin_performances(
     _require_super_admin(request, db)
     performances = _safe_dashboard_value(lambda: get_player_performances(db), {"players": [], "scorers": [], "assisters": []})
     metric_key = {"all": "players", "goals": "scorers", "assists": "assisters"}.get(metric, "players")
-    rows = performances.get(metric_key, [])
-    rows = [row for row in rows if category == "all" or row["category_name"] == category]
-    csv_rows: list[list[object]]
-    if metric_key == "players":
-        csv_rows = [["Player", "System IDs", "Team", "Category", "Goals", "Assists", "Goal Types", "Clubs Played For"]]
-        for row in rows:
-            csv_rows.append([
-                row["player"].full_name,
-                " | ".join(row.get("system_ids", [])),
-                row["team"].team_name if row.get("team") else "",
-                row["category_name"],
-                row["goals"],
-                row["assists"],
-                "; ".join(f"{goal_type}: {count}" for goal_type, count in row["goal_types"].items()),
-                " | ".join(row.get("clubs_played_for", [])),
-            ])
-    elif metric_key == "scorers":
-        csv_rows = [["Player", "System IDs", "Team", "Category", "Goals", "Goal Types", "Clubs Played For"]]
-        for row in rows:
-            csv_rows.append([
-                row["player"].full_name,
-                " | ".join(row.get("system_ids", [])),
-                row["team"].team_name if row.get("team") else "",
-                row["category_name"],
-                row["goals"],
-                "; ".join(f"{goal_type}: {count}" for goal_type, count in row["goal_types"].items()),
-                " | ".join(row.get("clubs_played_for", [])),
-            ])
-    else:
-        csv_rows = [["Player", "System IDs", "Team", "Category", "Assists", "Clubs Played For"]]
-        for row in rows:
-            csv_rows.append([
-                row["player"].full_name,
-                " | ".join(row.get("system_ids", [])),
-                row["team"].team_name if row.get("team") else "",
-                row["category_name"],
-                row["assists"],
-                " | ".join(row.get("clubs_played_for", [])),
-            ])
-    filename = f"performances_{metric}_{category}.csv".replace(" ", "_")
-    return _csv_response(filename, csv_rows)
+    performances[metric_key] = [
+        row for row in performances.get(metric_key, [])
+        if category == "all" or row["category_name"] == category
+    ]
+    filename = f"performances_{metric}_{category}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Player Performances Cards Export",
+            "subtitle": "Downloaded performance cards rendered with the same dashboard design.",
+            "export_kind": "performances",
+            "player_performances": performances,
+        },
+    )
 
 
 @router.post("/team-admin/results")

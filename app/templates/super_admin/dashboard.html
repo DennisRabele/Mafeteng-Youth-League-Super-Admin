@@ -97,12 +97,12 @@
               <td><span class="status {{ item.status }}">{{ item.status }}</span></td>
               <td>{% if item.approver_user %}{{ item.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if item.status != 'approved' %}
+                {% if item.status == 'pending' %}
                 <form method="post" action="/super-admin/team-admins/{{ item.team_admin_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if item.status != 'rejected' %}
+                {% if item.status == 'pending' %}
                 <form method="post" action="/super-admin/team-admins/{{ item.team_admin_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -172,12 +172,12 @@
               <td><span class="status {{ team.status }}">{{ team.status }}</span></td>
               <td>{% if team.approver_user %}{{ team.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if team.status != 'approved' %}
+                {% if team.status == 'pending' %}
                 <form method="post" action="/super-admin/teams/{{ team.team_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if team.status != 'rejected' %}
+                {% if team.status == 'pending' %}
                 <form method="post" action="/super-admin/teams/{{ team.team_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -289,12 +289,12 @@
               <td><span class="status {{ player.status }}">{{ player.status }}</span></td>
               <td>{% if player.approver_user %}{{ player.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if player.status != 'approved' %}
+                {% if player.status == 'pending' %}
                 <form method="post" action="/super-admin/players/{{ player.player_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if player.status != 'rejected' %}
+                {% if player.status == 'pending' %}
                 <form method="post" action="/super-admin/players/{{ player.player_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -367,12 +367,12 @@
               <td>{{ renewal.requested_by.user.full_name }}</td>
               <td>{% if renewal.approver_user %}{{ renewal.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if renewal.status != 'approved' %}
+                {% if renewal.status == 'pending' %}
                 <form method="post" action="/super-admin/renewals/{{ renewal.registration_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if renewal.status != 'rejected' %}
+                {% if renewal.status == 'pending' %}
                 <form method="post" action="/super-admin/renewals/{{ renewal.registration_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -455,12 +455,12 @@
               <td>{{ transfer.requested_by.user.full_name }}</td>
               <td>{% if transfer.approver_user %}{{ transfer.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if transfer.status != 'approved' %}
+                {% if transfer.status == 'pending' %}
                 <form method="post" action="/super-admin/transfers/{{ transfer.registration_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if transfer.status != 'rejected' %}
+                {% if transfer.status == 'pending' %}
                 <form method="post" action="/super-admin/transfers/{{ transfer.registration_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -490,7 +490,7 @@
         </div>
         <div class="panel-heading-actions">
           <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
-          <button class="button button-muted small" type="button" onclick="window.location='/super-admin/fixtures/export?fixture_category=' + encodeURIComponent(document.getElementById('fixture-category-filter').value || 'all') + '&fixture_bucket=' + encodeURIComponent(document.getElementById('fixtures-board').dataset.fixtureBucket || 'all') + '&fixture_date_from=' + encodeURIComponent(document.getElementById('fixture-date-from').value || '') + '&fixture_date_to=' + encodeURIComponent(document.getElementById('fixture-date-to').value || '')">Download CSV</button>
+          <button class="button button-primary small" type="button" onclick="window.location='/super-admin/fixtures/export?fixture_category=' + encodeURIComponent(document.getElementById('fixture-category-filter').value || 'all') + '&fixture_bucket=' + encodeURIComponent(document.getElementById('fixtures-board').dataset.fixtureBucket || 'all') + '&fixture_date_from=' + encodeURIComponent(document.getElementById('fixture-date-from').value || '') + '&fixture_date_to=' + encodeURIComponent(document.getElementById('fixture-date-to').value || '')">Download Cards</button>
         </div>
       </div>
 
@@ -565,7 +565,7 @@
 
       <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in fixtures %}
-        <article class="fixture-card" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+        <article class="fixture-card fixture-card--compact" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
             <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
             <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
@@ -594,10 +594,6 @@
                 {% endif %}
                 <span>{{ fixture.away_team.team_name }}</span>
               </div>
-            </div>
-            <div class="fixture-meta">
-              <span class="fixture-badge">{{ fixture.category.category_name }}</span>
-              <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
             </div>
           </div>
           <div class="fixture-card__venue">
@@ -648,7 +644,7 @@
       <div class="panel-heading">
         <h2>Results</h2>
         <div class="panel-heading-actions">
-          <button class="button button-muted small" type="button" onclick="window.location='/super-admin/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download CSV</button>
+          <button class="button button-primary small" type="button" onclick="window.location='/super-admin/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">
@@ -730,12 +726,12 @@
       <div class="panel-heading">
         <h2>League Tables</h2>
         <div class="panel-heading-actions">
-          <button class="button button-muted small" type="button" onclick="window.location='/super-admin/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download CSV</button>
+          <button class="button button-primary small" type="button" onclick="window.location='/super-admin/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select id="league-table-category" onchange="filterDashboardPanels('league-tables', this.value, event)">
+          <select id="league-table-category" data-dashboard-category-filter="league-tables" onchange="filterDashboardPanels('league-tables', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -751,7 +747,8 @@
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
+                  <th>Pos</th>
+                  <th>Logo</th>
                   <th>Team</th>
                   <th>P</th>
                   <th>W</th>
@@ -768,15 +765,13 @@
                 <tr>
                   <td>{{ row.position }}</td>
                   <td>
-                    <div class="table-team-cell">
-                      {% if row.team_logo %}
-                        <img class="table-team-logo" src="{{ row.team_logo }}" alt="{{ row.team.team_name }}">
-                      {% else %}
-                        <span class="table-team-logo fallback">{{ row.team.team_name[:1] }}</span>
-                      {% endif %}
-                      <span>{{ row.team.team_name }}</span>
-                    </div>
+                    {% if row.team.logo %}
+                      <img class="thumb" src="{{ row.team.logo }}" alt="{{ row.team.team_name }}">
+                    {% else %}
+                      <span class="no-image">No logo</span>
+                    {% endif %}
                   </td>
+                  <td>{{ row.team.team_name }}</td>
                   <td>{{ row.played }}</td>
                   <td>{{ row.wins }}</td>
                   <td>{{ row.draws }}</td>
@@ -787,7 +782,7 @@
                   <td>{{ row.points }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="10" class="empty">No league table data yet.</td></tr>
+                <tr><td colspan="11" class="empty">No league table data yet.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -803,7 +798,7 @@
       <div class="panel-heading">
         <h2>Player Performances</h2>
         <div class="panel-heading-actions">
-          <button class="button button-muted small" type="button" onclick="window.location='/super-admin/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download CSV</button>
+          <button class="button button-primary small" type="button" onclick="window.location='/super-admin/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">

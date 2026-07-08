@@ -762,6 +762,20 @@ textarea:focus {
   border-color: var(--danger);
 }
 
+.dashboard-notice {
+  transition: opacity 0.22s ease, transform 0.22s ease, max-height 0.22s ease, margin 0.22s ease, padding 0.22s ease;
+}
+
+.dashboard-notice.is-fading {
+  max-height: 0;
+  margin-bottom: 0 !important;
+  opacity: 0;
+  overflow: hidden;
+  padding-bottom: 0;
+  padding-top: 0;
+  transform: translateY(-6px);
+}
+
 .app-layout {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);
@@ -1150,6 +1164,10 @@ textarea:focus {
   padding: 14px;
 }
 
+.fixture-card--compact {
+  grid-template-columns: 108px 84px minmax(0, 1.85fr) minmax(120px, 1fr);
+}
+
 .fixture-card__date {
   align-items: center;
   background: var(--black);
@@ -1242,9 +1260,12 @@ textarea:focus {
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 999px;
+  flex: 0 0 auto;
   height: 32px;
   object-fit: contain;
   padding: 3px;
+  max-height: 32px;
+  max-width: 32px;
   width: 32px;
 }
 
@@ -1305,6 +1326,11 @@ textarea:focus {
 
 .fixture-card__status .status {
   align-self: flex-start;
+}
+
+.fixture-card--compact .fixture-card__status,
+.fixture-card--compact .fixture-card__actions {
+  grid-column: 1 / -1;
 }
 
 .fixture-card__actions details {
@@ -1625,6 +1651,20 @@ td {
   display: block;
   height: 170px;
   object-fit: cover;
+  width: 100%;
+}
+
+.account-photo--logo {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  min-height: 92px;
+  overflow: hidden;
+}
+
+.account-photo--logo img {
+  height: 100%;
+  object-fit: contain;
+  padding: 10px;
   width: 100%;
 }
 
@@ -1964,6 +2004,10 @@ td {
     grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr);
   }
 
+  .fixture-card--compact {
+    grid-template-columns: 92px 72px minmax(0, 1fr) minmax(110px, 1fr);
+  }
+
   .fixture-card__fixture {
     grid-column: span 2;
   }
@@ -2108,6 +2152,10 @@ td {
   }
 
   .fixture-card {
+    grid-template-columns: 1fr;
+  }
+
+  .fixture-card--compact {
     grid-template-columns: 1fr;
   }
 
