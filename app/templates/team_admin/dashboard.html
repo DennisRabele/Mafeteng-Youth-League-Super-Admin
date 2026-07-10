@@ -1321,7 +1321,7 @@
       <div class="panel-heading">
         <div>
           <h2>Fixtures</h2>
-          <p class="section-copy">Published fixtures from Super Admins appear here automatically.</p>
+          <p class="section-copy">Published fixtures from Super Admins appear here automatically. Team admins see a text-only fixture view here and should download the fixture card for the enhanced version.</p>
         </div>
         <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
       </div>
@@ -1342,7 +1342,7 @@
           <input name="fixture_date_to" id="fixture-date-to" type="date" value="{{ fixture_filters.date_to }}" onchange="this.form.submit()">
         </label>
         <button class="button button-primary" type="submit" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Filter</button>
-        <button class="button button-muted" type="submit" formaction="/team-admin/dashboard/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download Cards</button>
+        <button class="button button-success" type="submit" formaction="/team-admin/dashboard/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download Cards</button>
       </form>
 
       <div class="dashboard-chip-row fixture-tabs">
@@ -1404,7 +1404,7 @@
       <div class="panel-heading">
         <h2>Result Submissions</h2>
         <div class="panel-heading-actions">
-          <button class="button button-primary small" type="button" onclick="window.location='/team-admin/dashboard/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
+          <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">
@@ -1459,7 +1459,7 @@
       <div class="panel-heading">
         <h2>League Tables</h2>
         <div class="panel-heading-actions">
-          <button class="button button-primary small" type="button" onclick="window.location='/team-admin/dashboard/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download Cards</button>
+          <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">
@@ -1531,7 +1531,7 @@
       <div class="panel-heading">
         <h2>Player Performances</h2>
         <div class="panel-heading-actions">
-          <button class="button button-primary small" type="button" onclick="window.location='/team-admin/dashboard/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download Cards</button>
+          <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">

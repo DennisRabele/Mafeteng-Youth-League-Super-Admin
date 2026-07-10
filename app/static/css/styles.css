@@ -367,6 +367,15 @@ main {
   background: #14623a;
 }
 
+.button-success {
+  background: var(--success);
+  color: var(--white);
+}
+
+.button-success:hover {
+  background: #14623a;
+}
+
 .button-outline {
   background: transparent;
   border-color: var(--yellow);

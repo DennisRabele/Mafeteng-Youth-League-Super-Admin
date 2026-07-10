@@ -8,9 +8,10 @@
   <style>
     body.export-page {
       background:
-        radial-gradient(circle at top left, rgba(255, 196, 0, 0.14), transparent 28%),
-        radial-gradient(circle at top right, rgba(0, 0, 0, 0.08), transparent 24%),
-        var(--paper);
+        radial-gradient(circle at top left, rgba(255, 196, 0, 0.12), transparent 28%),
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 24%),
+        var(--black);
+      color: var(--white);
     }
 
     .export-shell {
@@ -20,8 +21,8 @@
     }
 
     .export-header {
-      background: linear-gradient(135deg, #0f0f0f, #1d1d1d 58%, #2a2200);
-      border: 1px solid rgba(255, 196, 0, 0.22);
+      background: linear-gradient(135deg, #050505, #111111 58%, #171717);
+      border: 1px solid rgba(255, 196, 0, 0.2);
       border-radius: 18px;
       box-shadow: var(--shadow);
       color: var(--white);
@@ -57,6 +58,7 @@
     .export-section h2 {
       margin-bottom: 12px;
       text-transform: uppercase;
+      color: var(--white);
     }
 
     .export-grid {
@@ -66,10 +68,11 @@
     }
 
     .export-card {
-      background: var(--white);
-      border: 1px solid var(--line);
+      background: #0d0d0d;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 14px;
       box-shadow: var(--shadow);
+      color: var(--white);
       padding: 18px;
     }
 
@@ -90,7 +93,7 @@
     }
 
     .export-card__meta {
-      color: var(--muted);
+      color: #cfcfcf;
       font-size: 12px;
       font-weight: 700;
       margin-top: 4px;
@@ -103,14 +106,14 @@
     }
 
     .export-stat {
-      background: #fafafa;
-      border: 1px solid var(--line);
+      background: #121212;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
       padding: 12px;
     }
 
     .export-stat span {
-      color: var(--muted);
+      color: #c9c9c9;
       display: block;
       font-size: 11px;
       font-weight: 900;
@@ -138,10 +141,10 @@
     }
 
     .export-empty {
-      background: var(--white);
-      border: 1px dashed var(--line);
+      background: #0d0d0d;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
       border-radius: 14px;
-      color: var(--muted);
+      color: #d9d9d9;
       padding: 18px;
     }
 
@@ -153,12 +156,15 @@
     }
 
     .export-summary .metric {
+      background: #121212;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--white);
       min-height: 92px;
     }
 
     .export-actions {
       align-items: center;
-      background: rgba(5, 5, 5, 0.92);
+      background: rgba(5, 5, 5, 0.96);
       border-bottom: 1px solid rgba(255, 196, 0, 0.32);
       color: var(--white);
       display: flex;
@@ -174,6 +180,32 @@
       color: #eeeeee;
       font-size: 12px;
       font-weight: 800;
+    }
+
+    .export-page .fixture-card,
+    .export-page .fixture-card__actions details,
+    .export-page table {
+      background: #0d0d0d;
+      border-color: rgba(255, 255, 255, 0.12);
+      color: var(--white);
+    }
+
+    .export-page th {
+      background: #161616;
+      color: var(--white);
+    }
+
+    .export-page td {
+      background: #0d0d0d;
+      color: var(--white);
+    }
+
+    .export-page .fixture-card__year,
+    .export-page .fixture-card__time span,
+    .export-page .fixture-subtle,
+    .export-page .fixture-card__venue span,
+    .export-page .fixture-card__status small {
+      color: #c8c8c8;
     }
 
     @media print {
@@ -200,7 +232,7 @@
 </head>
 <body class="export-page">
   <div class="export-actions" data-html2canvas-ignore="true">
-    <button class="button button-primary small" type="button" data-export-download>Download PNG</button>
+    <button class="button button-success small" type="button" data-export-download>Download PNG</button>
     <span data-export-status>Preparing PNG...</span>
   </div>
 
@@ -209,7 +241,7 @@
       <div class="export-note">League Export</div>
       <h1>{{ title }}</h1>
       <p>{{ subtitle }}</p>
-      {% if fixture_filters %}
+      {% if fixture_filters and export_kind != 'fixtures' %}
         <div class="export-summary">
           <div class="metric"><span>Category</span><strong>{{ fixture_filters.category }}</strong></div>
           <div class="metric"><span>Bucket</span><strong>{{ fixture_filters.bucket }}</strong></div>
@@ -458,7 +490,7 @@
         await waitForImages();
         const canvas = await window.html2canvas(root, {
           allowTaint: false,
-          backgroundColor: "#f5f5f3",
+          backgroundColor: "#050505",
           logging: false,
           scale: Math.min(window.devicePixelRatio || 2, 2),
           useCORS: true,
