@@ -1169,7 +1169,7 @@
             {% for team in approved_teams %}
               <article class="panel" style="margin:0; border-left:4px solid #2d6cdf;">
                 <div style="display:flex; gap:0.85rem; align-items:center; margin-bottom:0.85rem;">
-                  <div class="account-photo account-photo--logo" style="flex:0 0 92px;">
+                  <div class="account-photo account-photo--logo club-logo-card">
                     {% if team.logo %}
                       <img src="{{ team.logo }}" alt="{{ team.team_name }}">
                     {% else %}
@@ -1317,7 +1317,7 @@
       </div>
     </section>
 
-    <section class="panel dashboard-section fixtures-panel" id="fixtures" data-dashboard-section="fixtures" hidden>
+    <section class="panel dashboard-section fixtures-panel team-fixtures-panel" id="fixtures" data-dashboard-section="fixtures" hidden>
       <div class="panel-heading">
         <div>
           <h2>Fixtures</h2>
@@ -1354,7 +1354,7 @@
 
       <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in filtered_fixtures %}
-        <article class="fixture-card fixture-card--compact" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+        <article class="fixture-card fixture-card--compact fixture-card--team" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
             <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
             <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
@@ -1368,18 +1368,22 @@
             <div class="fixture-matchup">
               <div class="fixture-team">
                 {% if fixture.home_team.logo %}
-                  <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
+                  <span class="fixture-logo-frame">
+                    <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
+                  </span>
                 {% else %}
-                  <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
+                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture.home_team.team_name[:1] }}</span>
                 {% endif %}
                 <span>{{ fixture.home_team.team_name }}</span>
               </div>
               <span class="fixture-vs">VS</span>
               <div class="fixture-team">
                 {% if fixture.away_team.logo %}
-                  <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                  <span class="fixture-logo-frame">
+                    <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                  </span>
                 {% else %}
-                  <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
+                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture.away_team.team_name[:1] }}</span>
                 {% endif %}
                 <span>{{ fixture.away_team.team_name }}</span>
               </div>

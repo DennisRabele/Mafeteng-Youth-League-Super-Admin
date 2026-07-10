@@ -129,6 +129,7 @@ def _render_downloadable_cards(
     context: dict,
 ) -> Response:
     template = templates.env.get_template(template_name)
+    context.setdefault("export_filename", filename)
     html = template.render(
         **context,
         export_styles=_load_export_styles(),
@@ -136,7 +137,6 @@ def _render_downloadable_cards(
     return Response(
         content=html,
         media_type="text/html",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -2002,7 +2002,7 @@ def export_team_admin_fixtures(
         date_from=fixture_date_from,
         date_to=fixture_date_to,
     )
-    filename = f"fixtures_{fixture_category}_{fixture_bucket}.html".replace(" ", "_")
+    filename = f"fixtures_{fixture_category}_{fixture_bucket}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2031,7 +2031,7 @@ def export_team_admin_league_tables(
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     if category != "all":
         league_tables = {category: league_tables.get(category, [])}
-    filename = f"league_tables_{category}.html".replace(" ", "_")
+    filename = f"league_tables_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2064,7 +2064,7 @@ def export_team_admin_performances(
         row for row in performances.get(metric_key, [])
         if category == "all" or row["category_name"] == category
     ]
-    filename = f"performances_{metric}_{category}.html".replace(" ", "_")
+    filename = f"performances_{metric}_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2092,7 +2092,7 @@ def export_team_admin_results(
     ]
     submissions = _safe_dashboard_value(lambda: _load_result_submissions(db, team_ids=team_ids), [])
     submissions = _filter_result_submissions_by_category(submissions, category)
-    filename = f"results_{category}.html".replace(" ", "_")
+    filename = f"results_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2115,7 +2115,7 @@ def export_super_admin_league_tables(
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     if category != "all":
         league_tables = {category: league_tables.get(category, [])}
-    filename = f"league_tables_{category}.html".replace(" ", "_")
+    filename = f"league_tables_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2226,7 +2226,7 @@ def export_super_admin_fixtures(
         date_from=fixture_date_from,
         date_to=fixture_date_to,
     )
-    filename = f"fixtures_{fixture_category}_{fixture_bucket}.html".replace(" ", "_")
+    filename = f"fixtures_{fixture_category}_{fixture_bucket}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2254,7 +2254,7 @@ def export_super_admin_results(
     _require_super_admin(request, db)
     submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
     submissions = _filter_result_submissions_by_category(submissions, category)
-    filename = f"results_{category}.html".replace(" ", "_")
+    filename = f"results_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2281,7 +2281,7 @@ def export_super_admin_performances(
         row for row in performances.get(metric_key, [])
         if category == "all" or row["category_name"] == category
     ]
-    filename = f"performances_{metric}_{category}.html".replace(" ", "_")
+    filename = f"performances_{metric}_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,

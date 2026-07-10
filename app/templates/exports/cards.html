@@ -156,9 +156,33 @@
       min-height: 92px;
     }
 
+    .export-actions {
+      align-items: center;
+      background: rgba(5, 5, 5, 0.92);
+      border-bottom: 1px solid rgba(255, 196, 0, 0.32);
+      color: var(--white);
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      padding: 12px 18px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    .export-actions span {
+      color: #eeeeee;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
     @media print {
       body.export-page {
         background: #fff;
+      }
+
+      .export-actions {
+        display: none;
       }
 
       .export-shell {
@@ -175,7 +199,12 @@
   </style>
 </head>
 <body class="export-page">
-  <div class="export-shell">
+  <div class="export-actions" data-html2canvas-ignore="true">
+    <button class="button button-primary small" type="button" data-export-download>Download PNG</button>
+    <span data-export-status>Preparing PNG...</span>
+  </div>
+
+  <div class="export-shell" data-export-root>
     <header class="export-header">
       <div class="export-note">League Export</div>
       <h1>{{ title }}</h1>
@@ -208,18 +237,22 @@
                 <div class="fixture-matchup">
                   <div class="fixture-team">
                     {% if fixture.home_team.logo %}
-                      <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
+                      <span class="fixture-logo-frame">
+                        <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}" crossorigin="anonymous">
+                      </span>
                     {% else %}
-                      <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
+                      <span class="fixture-logo fallback fixture-logo-frame">{{ fixture.home_team.team_name[:1] }}</span>
                     {% endif %}
                     <span>{{ fixture.home_team.team_name }}</span>
                   </div>
                   <span class="fixture-vs">VS</span>
                   <div class="fixture-team">
                     {% if fixture.away_team.logo %}
-                      <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                      <span class="fixture-logo-frame">
+                        <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}" crossorigin="anonymous">
+                      </span>
                     {% else %}
-                      <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
+                      <span class="fixture-logo fallback fixture-logo-frame">{{ fixture.away_team.team_name[:1] }}</span>
                     {% endif %}
                     <span>{{ fixture.away_team.team_name }}</span>
                   </div>
@@ -288,7 +321,7 @@
                         <td>{{ row.position }}</td>
                         <td>
                           {% if row.team.logo %}
-                            <img class="thumb" src="{{ row.team.logo }}" alt="{{ row.team.team_name }}">
+                            <img class="thumb" src="{{ row.team.logo }}" alt="{{ row.team.team_name }}" crossorigin="anonymous">
                           {% else %}
                             <span class="no-image">No logo</span>
                           {% endif %}
@@ -388,5 +421,73 @@
       </section>
     {% endif %}
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+    (function () {
+      const root = document.querySelector("[data-export-root]");
+      const button = document.querySelector("[data-export-download]");
+      const status = document.querySelector("[data-export-status]");
+      const filename = {{ export_filename|tojson }};
+      let hasDownloaded = false;
+
+      const setStatus = (message) => {
+        if (status) {
+          status.textContent = message;
+        }
+      };
+
+      const waitForImages = () => Promise.all(
+        Array.from(root.querySelectorAll("img")).map((image) => {
+          if (image.complete) {
+            return Promise.resolve();
+          }
+          return new Promise((resolve) => {
+            image.addEventListener("load", resolve, { once: true });
+            image.addEventListener("error", resolve, { once: true });
+          });
+        })
+      );
+
+      const downloadPng = async () => {
+        if (!root || !window.html2canvas) {
+          setStatus("PNG renderer did not load. Check your connection and try again.");
+          return;
+        }
+        setStatus("Rendering PNG...");
+        await document.fonts?.ready;
+        await waitForImages();
+        const canvas = await window.html2canvas(root, {
+          allowTaint: false,
+          backgroundColor: "#f5f5f3",
+          logging: false,
+          scale: Math.min(window.devicePixelRatio || 2, 2),
+          useCORS: true,
+          windowWidth: Math.max(root.scrollWidth, document.documentElement.clientWidth),
+        });
+        const link = document.createElement("a");
+        link.download = filename;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        hasDownloaded = true;
+        setStatus("PNG downloaded.");
+      };
+
+      button?.addEventListener("click", () => {
+        downloadPng().catch(() => {
+          setStatus("PNG download failed. Try again after the logos finish loading.");
+        });
+      });
+
+      window.addEventListener("load", () => {
+        window.setTimeout(() => {
+          if (!hasDownloaded) {
+            downloadPng().catch(() => {
+              setStatus("PNG download failed. Use Download PNG to retry.");
+            });
+          }
+        }, 500);
+      }, { once: true });
+    })();
+  </script>
 </body>
 </html>

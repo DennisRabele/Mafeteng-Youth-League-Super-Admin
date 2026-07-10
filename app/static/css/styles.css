@@ -970,6 +970,7 @@ textarea:focus {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  margin-left: auto;
 }
 
 .panel-heading h2,
@@ -1152,6 +1153,14 @@ textarea:focus {
   gap: 12px;
 }
 
+.team-fixtures-panel .fixture-board {
+  gap: 0;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
 .fixture-card {
   align-items: center;
   background: var(--white);
@@ -1162,6 +1171,19 @@ textarea:focus {
   gap: 12px;
   grid-template-columns: 108px 84px minmax(0, 1.8fr) minmax(120px, 1fr) 140px 180px;
   padding: 14px;
+}
+
+.team-fixtures-panel .fixture-card {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  grid-template-columns: 64px 58px minmax(0, 1.8fr) minmax(120px, 0.9fr);
+  padding: 10px 12px;
+}
+
+.team-fixtures-panel .fixture-card:last-child {
+  border-bottom: 0;
 }
 
 .fixture-card--compact {
@@ -1181,10 +1203,20 @@ textarea:focus {
   text-align: center;
 }
 
+.team-fixtures-panel .fixture-card__date {
+  border-radius: 0;
+  min-height: 62px;
+  padding: 8px 0;
+}
+
 .fixture-card__day {
   font-size: 34px;
   font-weight: 900;
   line-height: 0.9;
+}
+
+.team-fixtures-panel .fixture-card__day {
+  font-size: 24px;
 }
 
 .fixture-card__month {
@@ -1192,6 +1224,11 @@ textarea:focus {
   font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.team-fixtures-panel .fixture-card__month {
+  font-size: 9px;
+  letter-spacing: 0.12em;
 }
 
 .fixture-card__year,
@@ -1215,10 +1252,22 @@ textarea:focus {
   font-weight: 900;
 }
 
+.team-fixtures-panel .fixture-card__time strong {
+  font-size: 13px;
+}
+
+.team-fixtures-panel .fixture-card__time span {
+  font-size: 10px;
+}
+
 .fixture-card__fixture {
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.team-fixtures-panel .fixture-card__fixture {
+  gap: 6px;
 }
 
 .fixture-matchup {
@@ -1226,6 +1275,11 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.team-fixtures-panel .fixture-matchup {
+  flex-wrap: nowrap;
+  gap: 8px;
 }
 
 .fixture-inline {
@@ -1238,8 +1292,14 @@ textarea:focus {
 .fixture-team {
   align-items: center;
   display: flex;
+  flex: 1 1 148px;
   gap: 8px;
   min-width: 0;
+}
+
+.team-fixtures-panel .fixture-team {
+  flex: 1 1 auto;
+  gap: 6px;
 }
 
 .fixture-team span:last-child {
@@ -1247,6 +1307,10 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.team-fixtures-panel .fixture-team span:last-child {
+  font-size: 12px;
 }
 
 .fixture-vs {
@@ -1267,6 +1331,39 @@ textarea:focus {
   max-height: 32px;
   max-width: 32px;
   width: 32px;
+}
+
+.fixture-logo-frame {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 32px;
+  height: 32px;
+  justify-content: center;
+  overflow: hidden;
+  width: 32px;
+}
+
+.team-fixtures-panel .fixture-logo-frame {
+  flex-basis: 28px;
+  height: 28px;
+  width: 28px;
+}
+
+.fixture-logo-frame .fixture-logo {
+  border: 0;
+  height: 100%;
+  max-height: none;
+  max-width: none;
+  object-fit: contain;
+  padding: 3px;
+  width: 100%;
+}
+
+.team-fixtures-panel .fixture-logo-frame .fixture-logo {
+  padding: 2px;
 }
 
 .fixture-logo.fallback {
@@ -1303,8 +1400,21 @@ textarea:focus {
   gap: 4px;
 }
 
+.team-fixtures-panel .fixture-card__venue {
+  justify-self: end;
+  text-align: right;
+}
+
 .fixture-card__venue strong {
   font-size: 14px;
+}
+
+.team-fixtures-panel .fixture-card__venue strong {
+  font-size: 12px;
+}
+
+.team-fixtures-panel .fixture-card__venue span {
+  font-size: 10px;
 }
 
 .fixture-card__score {
@@ -1668,6 +1778,16 @@ td {
   width: 100%;
 }
 
+.club-logo-card {
+  flex: 0 0 128px;
+  min-height: 128px;
+  width: 128px;
+}
+
+.club-logo-card img {
+  padding: 8px;
+}
+
 .account-details {
   display: grid;
   gap: 10px;
@@ -2008,6 +2128,15 @@ td {
     grid-template-columns: 92px 72px minmax(0, 1fr) minmax(110px, 1fr);
   }
 
+  .team-fixtures-panel .fixture-card,
+  .team-fixtures-panel .fixture-card--compact {
+    grid-template-columns: 56px 52px minmax(0, 1fr) 116px;
+  }
+
+  .team-fixtures-panel .fixture-card__date {
+    min-height: 56px;
+  }
+
   .fixture-card__fixture {
     grid-column: span 2;
   }
@@ -2159,6 +2288,11 @@ td {
     grid-template-columns: 1fr;
   }
 
+  .team-fixtures-panel .fixture-card,
+  .team-fixtures-panel .fixture-card--compact {
+    grid-template-columns: 1fr;
+  }
+
   .fixture-card__date,
   .fixture-card__time,
   .fixture-card__fixture,
@@ -2170,6 +2304,10 @@ td {
 
   .fixture-card__date {
     min-height: 88px;
+  }
+
+  .fixture-team {
+    width: 100%;
   }
 
   .actions-cell form,
