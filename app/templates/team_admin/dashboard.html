@@ -1565,7 +1565,10 @@
 
       <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in filtered_fixtures %}
-        <article class="fixture-card fixture-card--compact fixture-card--team" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+        {% set fixture_category = fixture.category.category_name if fixture.category else 'uncategorized' %}
+        {% set fixture_home_team = fixture.home_team if fixture.home_team else None %}
+        {% set fixture_away_team = fixture.away_team if fixture.away_team else None %}
+        <article class="fixture-card fixture-card--compact fixture-card--team" data-fixture-card data-category="{{ fixture_category }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
             <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
             <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
@@ -1578,25 +1581,25 @@
           <div class="fixture-card__fixture">
             <div class="fixture-matchup">
               <div class="fixture-team">
-                {% if fixture.home_team.logo %}
+                {% if fixture_home_team and fixture_home_team.logo %}
                   <span class="fixture-logo-frame">
-                    <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
+                    <img class="fixture-logo" src="{{ fixture_home_team.logo }}" alt="{{ fixture_home_team.team_name }}">
                   </span>
                 {% else %}
-                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture.home_team.team_name[:1] }}</span>
+                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture_home_team.team_name[:1] if fixture_home_team else '?' }}</span>
                 {% endif %}
-                <span>{{ fixture.home_team.team_name }}</span>
+                <span>{{ fixture_home_team.team_name if fixture_home_team else 'Unknown team' }}</span>
               </div>
               <span class="fixture-vs">VS</span>
               <div class="fixture-team">
-                {% if fixture.away_team.logo %}
+                {% if fixture_away_team and fixture_away_team.logo %}
                   <span class="fixture-logo-frame">
-                    <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                    <img class="fixture-logo" src="{{ fixture_away_team.logo }}" alt="{{ fixture_away_team.team_name }}">
                   </span>
                 {% else %}
-                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture.away_team.team_name[:1] }}</span>
+                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture_away_team.team_name[:1] if fixture_away_team else '?' }}</span>
                 {% endif %}
-                <span>{{ fixture.away_team.team_name }}</span>
+                <span>{{ fixture_away_team.team_name if fixture_away_team else 'Unknown team' }}</span>
               </div>
             </div>
           </div>
@@ -1700,9 +1703,15 @@
           </thead>
           <tbody>
             {% for submission in result_submissions %}
-            <tr data-row data-status="{{ submission.status }}" data-category="{{ submission.match.fixture.category.category_name }}">
-              <td data-label="Fixture">{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</td>
-              <td data-label="Set By">{{ submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' }}</td>
+            {% set submission_match = submission.match if submission.match else None %}
+            {% set submission_fixture = submission_match.fixture if submission_match and submission_match.fixture else None %}
+            {% set submission_home_team = submission_fixture.home_team if submission_fixture and submission_fixture.home_team else None %}
+            {% set submission_away_team = submission_fixture.away_team if submission_fixture and submission_fixture.away_team else None %}
+            {% set submission_category = submission_fixture.category.category_name if submission_fixture and submission_fixture.category else 'uncategorized' %}
+            {% set submitted_by_name = submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' %}
+            <tr data-row data-status="{{ submission.status }}" data-category="{{ submission_category }}">
+              <td data-label="Fixture">{{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}</td>
+              <td data-label="Set By">{{ submitted_by_name }}</td>
               <td data-label="Submitted">{{ submission.submitted_date.strftime('%Y-%m-%d %H:%M') }}</td>
               <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
