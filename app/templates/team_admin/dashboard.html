@@ -846,6 +846,217 @@
             });
           });
 
+          const resultForm = document.querySelector('[data-result-form]');
+          const resultFixtureSelect = document.getElementById('result-fixture-select');
+          const resultPlayedOn = document.getElementById('result-played-on');
+          const resultFixtureTeams = document.getElementById('result-fixture-teams');
+          const resultHomeScore = document.getElementById('result-home-score');
+          const resultAwayScore = document.getElementById('result-away-score');
+          const resultGoalRows = document.querySelector('[data-result-goal-rows]');
+          const resultSuggestions = document.getElementById('result-player-suggestions');
+          const resultScorerNames = document.getElementById('result-scorer-names');
+          const resultGoalTypes = document.getElementById('result-goal-types');
+          const resultAssistNames = document.getElementById('result-assist-names');
+          const resultAddRowButton = document.querySelector('[data-result-add-row]');
+          const resultGoalTypeOptions = [
+            ['freekick', 'Freekick'],
+            ['penalty', 'Penalty'],
+            ['header from open play', 'Header from open play'],
+            ['header from corner kick', 'Header from corner kick'],
+          ];
+
+          function buildResultGoalRow(index) {
+            const row = document.createElement('div');
+            row.className = 'result-goal-row';
+            row.dataset.resultGoalRow = 'true';
+            row.innerHTML = `
+              <div class="result-goal-row__title">Goal ${index + 1}</div>
+              <label>Scorer
+                <input type="text" data-result-scorer list="result-player-suggestions" placeholder="Type player name" autocomplete="off">
+              </label>
+              <label>Goal type
+                <select data-result-goal-type>
+                  ${resultGoalTypeOptions.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
+                </select>
+              </label>
+              <label>Assist
+                <input type="text" data-result-assist list="result-player-suggestions" placeholder="Type player name" autocomplete="off">
+              </label>
+            `;
+            return row;
+          }
+
+          function ensureResultGoalRows(minRows) {
+            if (!resultGoalRows) {
+              return;
+            }
+            const requiredRows = Math.max(1, minRows);
+            while (resultGoalRows.children.length < requiredRows) {
+              const row = buildResultGoalRow(resultGoalRows.children.length);
+              resultGoalRows.appendChild(row);
+            }
+            while (resultGoalRows.children.length > requiredRows) {
+              resultGoalRows.removeChild(resultGoalRows.lastElementChild);
+            }
+            Array.from(resultGoalRows.children).forEach((row, index) => {
+              const title = row.querySelector('.result-goal-row__title');
+              if (title) {
+                title.textContent = `Goal ${index + 1}`;
+              }
+            });
+          }
+
+          async function updateResultPlayerSuggestions(searchTerm) {
+            if (!resultSuggestions) {
+              return;
+            }
+            if (!searchTerm || searchTerm.length < 2) {
+              resultSuggestions.innerHTML = '';
+              return;
+            }
+            try {
+              const response = await fetch(`/api/search-players-by-name?name=${encodeURIComponent(searchTerm)}`);
+              const data = await response.json();
+              resultSuggestions.innerHTML = '';
+              data.players.forEach((player) => {
+                const option = document.createElement('option');
+                option.value = player.player_name;
+                option.label = `${player.player_name} - ${player.team_name} (${player.age_group})`;
+                resultSuggestions.appendChild(option);
+              });
+            } catch (error) {
+              console.error('Error searching result players:', error);
+            }
+          }
+
+          function updateResultFixtureSummary() {
+            if (!resultFixtureSelect) {
+              return;
+            }
+            const selectedOption = resultFixtureSelect.selectedOptions[0];
+            if (resultPlayedOn) {
+              resultPlayedOn.value = selectedOption?.dataset.playedOn || '';
+            }
+            if (resultFixtureTeams) {
+              const home = selectedOption?.dataset.home || '';
+              const away = selectedOption?.dataset.away || '';
+              resultFixtureTeams.value = home && away ? `${home} vs ${away}` : '';
+            }
+          }
+
+          function collectResultGoalRows(event) {
+            if (!resultGoalRows || !resultScorerNames || !resultGoalTypes || !resultAssistNames) {
+              return true;
+            }
+            const home = Number.parseInt(resultHomeScore?.value || '0', 10);
+            const away = Number.parseInt(resultAwayScore?.value || '0', 10);
+            const totalGoals = Number.isFinite(home) && Number.isFinite(away) ? Math.max(0, home + away) : 0;
+            const rows = Array.from(resultGoalRows.querySelectorAll('[data-result-goal-row]'));
+            const hasEnteredDetails = rows.some((row) => {
+              const scorerInput = row.querySelector('[data-result-scorer]');
+              const assistInput = row.querySelector('[data-result-assist]');
+              return Boolean((scorerInput?.value || '').trim() || (assistInput?.value || '').trim());
+            });
+            if (totalGoals === 0) {
+              if (hasEnteredDetails) {
+                event?.preventDefault();
+                alert('A 0-0 result must not include scorer or assist entries.');
+                return false;
+              }
+              resultScorerNames.value = '';
+              resultGoalTypes.value = '';
+              resultAssistNames.value = '';
+              return true;
+            }
+            if (rows.length < totalGoals) {
+              event?.preventDefault();
+              alert(`This fixture has ${totalGoals} goal(s). Please fill every goal row.`);
+              return false;
+            }
+            const scorers = [];
+            const goalTypes = [];
+            const assists = [];
+            for (let index = 0; index < totalGoals; index += 1) {
+              const row = rows[index];
+              const scorerInput = row.querySelector('[data-result-scorer]');
+              const goalTypeSelect = row.querySelector('[data-result-goal-type]');
+              const assistInput = row.querySelector('[data-result-assist]');
+              const scorer = scorerInput ? scorerInput.value.trim() : '';
+              const goalType = goalTypeSelect ? goalTypeSelect.value : 'freekick';
+              const assist = assistInput ? assistInput.value.trim() : '';
+              if (!scorer) {
+                event?.preventDefault();
+                scorerInput?.focus();
+                alert('Each filled goal row must have a scorer name.');
+                return false;
+              }
+              scorers.push(scorer);
+              goalTypes.push(goalType);
+              assists.push(assist);
+            }
+            const extraRows = rows.slice(totalGoals);
+            const hasExtraContent = extraRows.some((row) => {
+              const scorerInput = row.querySelector('[data-result-scorer]');
+              const assistInput = row.querySelector('[data-result-assist]');
+              const goalTypeSelect = row.querySelector('[data-result-goal-type]');
+              return Boolean(
+                (scorerInput?.value || '').trim() ||
+                (assistInput?.value || '').trim() ||
+                (goalTypeSelect?.value || '').trim()
+              );
+            });
+            if (hasExtraContent) {
+              event?.preventDefault();
+              alert('Clear any extra goal rows so they match the fixture score exactly.');
+              return false;
+            }
+            resultScorerNames.value = scorers.join('\n');
+            resultGoalTypes.value = goalTypes.join('\n');
+            resultAssistNames.value = assists.join('\n');
+            return true;
+          }
+
+          function syncResultGoalRowsFromScores() {
+            if (!resultHomeScore || !resultAwayScore) {
+              return;
+            }
+            const home = Number.parseInt(resultHomeScore.value || '0', 10);
+            const away = Number.parseInt(resultAwayScore.value || '0', 10);
+            const totalGoals = Number.isFinite(home) && Number.isFinite(away) ? home + away : 1;
+            ensureResultGoalRows(totalGoals);
+          }
+
+          if (resultFixtureSelect) {
+            updateResultFixtureSummary();
+            resultFixtureSelect.addEventListener('change', updateResultFixtureSummary);
+          }
+          if (resultHomeScore) {
+            resultHomeScore.addEventListener('input', syncResultGoalRowsFromScores);
+          }
+          if (resultAwayScore) {
+            resultAwayScore.addEventListener('input', syncResultGoalRowsFromScores);
+          }
+          if (resultAddRowButton) {
+            resultAddRowButton.addEventListener('click', () => ensureResultGoalRows((resultGoalRows?.children.length || 0) + 1));
+          }
+          if (resultGoalRows) {
+            resultGoalRows.addEventListener('input', (event) => {
+              const input = event.target;
+              if (!input.matches('[data-result-scorer], [data-result-assist]')) {
+                return;
+              }
+              updateResultPlayerSuggestions(input.value.trim());
+            });
+          }
+          if (resultForm) {
+            ensureResultGoalRows(1);
+            resultForm.addEventListener('submit', (event) => {
+              if (!collectResultGoalRows(event)) {
+                return;
+              }
+            });
+          }
+
           // Form validation to ensure player_id is set
           const formsWithPlayerSelect = document.querySelectorAll('form[action="/team-admin/player-requests"], form[action="/team-admin/transfers"]');
           formsWithPlayerSelect.forEach(form => {
@@ -1423,12 +1634,63 @@
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="approved" onclick="filterDashboardRows('results', 'approved', event)">Approved</button>
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="rejected" onclick="filterDashboardRows('results', 'rejected', event)">Rejected</button>
       </div>
+      <div class="panel result-entry-panel" style="margin-bottom: 1.5rem;">
+        <div class="panel-heading">
+          <h2>Set Match Result</h2>
+        </div>
+        {% if played_fixtures %}
+        <form class="form-grid result-entry-form" method="post" action="/team-admin/results" data-result-form>
+          <label class="result-field result-field--full">Played fixture
+            <select id="result-fixture-select" name="fixture_id" required>
+              <option value="">Select a played fixture</option>
+              {% for fixture in played_fixtures %}
+                <option value="{{ fixture.fixture_id }}" data-played-on="{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}" data-home="{{ fixture.home_team.team_name }}" data-away="{{ fixture.away_team.team_name }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <div class="form-grid two result-summary-grid">
+            <label>Played on
+              <input id="result-played-on" type="text" readonly value="">
+            </label>
+            <label>Fixture teams
+              <input id="result-fixture-teams" type="text" readonly value="">
+            </label>
+          </div>
+          <div class="form-grid two">
+            <label>Home score
+              <input id="result-home-score" name="home_score" type="number" min="0" inputmode="numeric" required>
+            </label>
+            <label>Away score
+              <input id="result-away-score" name="away_score" type="number" min="0" inputmode="numeric" required>
+            </label>
+          </div>
+          <div class="result-goal-block">
+            <div class="result-goal-block__head">
+              <h3>Scorers, goal types and assists</h3>
+              <button class="button button-muted small" type="button" data-result-add-row>Add Goal Row</button>
+            </div>
+            <p class="section-copy">Type player names exactly as they appear in the database. The suggestions below will autofill matching players, including opponents.</p>
+            <div class="result-goal-rows" data-result-goal-rows></div>
+          </div>
+          <input type="hidden" name="scorer_names_text" id="result-scorer-names">
+          <input type="hidden" name="goal_types_text" id="result-goal-types">
+          <input type="hidden" name="assist_names_text" id="result-assist-names">
+          <datalist id="result-player-suggestions"></datalist>
+          <div class="form-actions wide">
+            <button class="button button-success" type="submit">Save Result</button>
+          </div>
+        </form>
+        {% else %}
+          <p class="empty">No played fixtures are available yet. Results can only be entered after kick-off.</p>
+        {% endif %}
+      </div>
       <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
         <div class="table-scroll-x">
         <table class="responsive-card-table">
           <thead>
             <tr>
               <th>Fixture</th>
+              <th>Set By</th>
               <th>Submitted</th>
               <th>Score</th>
               <th>Status</th>
@@ -1440,6 +1702,7 @@
             {% for submission in result_submissions %}
             <tr data-row data-status="{{ submission.status }}" data-category="{{ submission.match.fixture.category.category_name }}">
               <td data-label="Fixture">{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</td>
+              <td data-label="Set By">{{ submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' }}</td>
               <td data-label="Submitted">{{ submission.submitted_date.strftime('%Y-%m-%d %H:%M') }}</td>
               <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
@@ -1447,7 +1710,7 @@
               <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="empty">No submissions yet.</td></tr>
+            <tr><td colspan="7" class="empty">No submissions yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -1546,10 +1809,98 @@
         <label class="filter-select">Metric
           <select id="performance-metric-filter" onchange="filterDashboardMetric('performances', this.value, event)">
             <option value="all">All Metrics</option>
+            <option value="all-players">Players Overview</option>
             <option value="goals">Goals</option>
             <option value="assists">Assists</option>
           </select>
         </label>
+      </div>
+      <div class="panel" style="margin-bottom: 1.5rem;" data-performance-view="all-players">
+        <h3 style="margin-top: 0;">Player Overview</h3>
+        <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+          <div class="table-scroll-x">
+          <table>
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>System IDs</th>
+                <th>Photo</th>
+                <th>Team</th>
+                <th>Category</th>
+                <th>Goals</th>
+                <th>Assists</th>
+                <th>Goal Types</th>
+                <th>Per Club Level</th>
+                <th>Clubs Played For</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in player_performances.players %}
+              <tr data-row data-category="{{ row.category_name }}" data-metric="all-players">
+                <td>{{ row.player.full_name }}</td>
+                <td>
+                  <div class="chip-stack">
+                    {% for system_id in row.system_ids %}
+                      <span class="status approved">{{ system_id }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
+                <td>
+                  {% if row.photo_path %}
+                    <img class="thumb" src="{{ row.photo_path }}" alt="{{ row.player.full_name }}">
+                  {% else %}
+                    <span class="no-image">No photo</span>
+                  {% endif %}
+                </td>
+                <td>{{ row.team.team_name if row.team else '-' }}</td>
+                <td>{{ row.category_name or '-' }}</td>
+                <td>{{ row.goals }}</td>
+                <td>{{ row.assists }}</td>
+                <td>
+                  {% for goal_type, count in row.goal_types.items() %}
+                    <span class="status approved">{{ goal_type }}: {{ count }}</span>
+                  {% else %}
+                    -
+                  {% endfor %}
+                </td>
+                <td>
+                  <div class="performance-breakdown">
+                    {% for club_name, totals in row.category_totals.items() %}
+                      <div class="performance-breakdown__item">
+                        <strong>{{ club_name }}</strong>
+                        <small>G {{ totals.goals }} | A {{ totals.assists }}</small>
+                        <span>
+                          {% for goal_type, count in totals.goal_types.items() %}
+                            {{ goal_type }}: {{ count }}{% if not loop.last %}, {% endif %}
+                          {% else %}
+                            -
+                          {% endfor %}
+                        </span>
+                      </div>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
+                <td>
+                  <div class="chip-stack">
+                    {% for club_name in row.clubs_played_for %}
+                      <span class="status pending">{{ club_name }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="10" class="empty">No player performances recorded yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        </div>
       </div>
       <div class="panel" style="margin-bottom: 1.5rem;" data-performance-view="goals">
         <h3 style="margin-top: 0;">Top Scorers</h3>
@@ -1559,21 +1910,49 @@
             <thead>
               <tr>
                 <th>Player</th>
+                <th>System ID</th>
+                <th>Photo</th>
                 <th>Team</th>
                 <th>Category</th>
                 <th>Goals</th>
+                <th>Goal Types</th>
+                <th>Clubs</th>
               </tr>
             </thead>
             <tbody>
               {% for row in player_performances.scorers %}
               <tr data-row data-category="{{ row.category_name }}" data-metric="goals">
                 <td>{{ row.player.full_name }}</td>
-                <td>{{ row.team.team_name }}</td>
-                <td>{{ row.category_name }}</td>
+                <td>{{ row.system_id }}</td>
+                <td>
+                  {% if row.photo_path %}
+                    <img class="thumb" src="{{ row.photo_path }}" alt="{{ row.player.full_name }}">
+                  {% else %}
+                    <span class="no-image">No photo</span>
+                  {% endif %}
+                </td>
+                <td>{{ row.team.team_name if row.team else '-' }}</td>
+                <td>{{ row.category_name or '-' }}</td>
                 <td>{{ row.goals }}</td>
+                <td>
+                  {% for goal_type, count in row.goal_types.items() %}
+                    <span class="status approved">{{ goal_type }}: {{ count }}</span>
+                  {% else %}
+                    -
+                  {% endfor %}
+                </td>
+                <td>
+                  <div class="chip-stack">
+                    {% for club_name in row.clubs_played_for %}
+                      <span class="status pending">{{ club_name }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
               </tr>
               {% else %}
-              <tr><td colspan="4" class="empty">No goals recorded yet.</td></tr>
+              <tr><td colspan="8" class="empty">No goals recorded yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -1588,21 +1967,41 @@
             <thead>
               <tr>
                 <th>Player</th>
+                <th>System ID</th>
+                <th>Photo</th>
                 <th>Team</th>
                 <th>Category</th>
                 <th>Assists</th>
+                <th>Clubs</th>
               </tr>
             </thead>
             <tbody>
               {% for row in player_performances.assisters %}
               <tr data-row data-category="{{ row.category_name }}" data-metric="assists">
                 <td>{{ row.player.full_name }}</td>
-                <td>{{ row.team.team_name }}</td>
-                <td>{{ row.category_name }}</td>
+                <td>{{ row.system_id }}</td>
+                <td>
+                  {% if row.photo_path %}
+                    <img class="thumb" src="{{ row.photo_path }}" alt="{{ row.player.full_name }}">
+                  {% else %}
+                    <span class="no-image">No photo</span>
+                  {% endif %}
+                </td>
+                <td>{{ row.team.team_name if row.team else '-' }}</td>
+                <td>{{ row.category_name or '-' }}</td>
                 <td>{{ row.assists }}</td>
+                <td>
+                  <div class="chip-stack">
+                    {% for club_name in row.clubs_played_for %}
+                      <span class="status pending">{{ club_name }}</span>
+                    {% else %}
+                      -
+                    {% endfor %}
+                  </div>
+                </td>
               </tr>
               {% else %}
-              <tr><td colspan="4" class="empty">No assists recorded yet.</td></tr>
+              <tr><td colspan="7" class="empty">No assists recorded yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>

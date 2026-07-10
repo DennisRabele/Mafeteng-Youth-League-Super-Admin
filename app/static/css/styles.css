@@ -652,9 +652,11 @@ h2 {
 .form-card,
 .panel,
 .metric {
-  background: var(--white);
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(18, 18, 18, 0.98), rgba(7, 7, 7, 0.98));
+  border: 1px solid rgba(255, 196, 0, 0.2);
+  border-radius: 14px;
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.22);
+  color: var(--white);
 }
 
 .form-card {
@@ -697,7 +699,7 @@ h2 {
 }
 
 label {
-  color: var(--ink);
+  color: #f5f5f5;
   display: grid;
   font-size: 12px;
   font-weight: 900;
@@ -708,10 +710,10 @@ label {
 input,
 select,
 textarea {
-  background: var(--white);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 196, 0, 0.18);
+  border-radius: 10px;
+  color: var(--white);
   min-height: 42px;
   padding: 10px 12px;
   width: 100%;
@@ -789,6 +791,15 @@ textarea:focus {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);
   min-height: calc(100vh - var(--header-height) - var(--footer-height));
+}
+
+.workspace {
+  min-width: 0;
+  padding: 32px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 196, 0, 0.08), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(255, 196, 0, 0.04), transparent 34%),
+    linear-gradient(180deg, #0c0c0c 0%, #111111 100%);
 }
 
 .sidebar {
@@ -940,10 +951,10 @@ textarea:focus {
 }
 
 .switch-button {
-  background: var(--white);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 196, 0, 0.18);
+  border-radius: 999px;
+  color: var(--white);
   cursor: pointer;
   font-size: 12px;
   font-weight: 900;
@@ -956,6 +967,7 @@ textarea:focus {
 .switch-button:hover {
   background: var(--yellow);
   border-color: var(--yellow);
+  color: var(--black);
 }
 
 .panel {
@@ -965,7 +977,7 @@ textarea:focus {
 
 .panel-heading {
   align-items: center;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid rgba(255, 196, 0, 0.12);
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
@@ -986,9 +998,13 @@ textarea:focus {
 .form-section h2,
 .upload-panel h2 {
   font-size: 16px;
+  color: var(--yellow);
 }
 
 .table-wrap {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 196, 0, 0.1);
+  border-radius: 12px;
   overflow-x: auto;
   overflow-y: hidden;
   width: 100%;
@@ -1080,10 +1096,10 @@ textarea:focus {
 
 .dashboard-chip {
   align-items: center;
-  background: var(--soft);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 196, 0, 0.18);
   border-radius: 999px;
-  color: var(--ink);
+  color: var(--white);
   cursor: pointer;
   display: inline-flex;
   font-size: 12px;
@@ -1100,14 +1116,14 @@ textarea:focus {
 }
 
 .section-copy {
-  color: var(--muted);
+  color: #d8d8d8;
   font-size: 13px;
   margin: 6px 0 0;
 }
 
 .fixture-builder {
-  background: linear-gradient(180deg, #ffffff 0%, #fbfbf8 100%);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(16, 16, 16, 0.98), rgba(7, 7, 7, 0.98));
+  border: 1px solid rgba(255, 196, 0, 0.18);
   border-radius: 18px;
   margin-bottom: 16px;
   overflow: hidden;
@@ -1127,7 +1143,7 @@ textarea:focus {
 }
 
 .fixture-builder[open] > summary {
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid rgba(255, 196, 0, 0.12);
 }
 
 .fixture-builder-form {
@@ -1164,18 +1180,18 @@ textarea:focus {
 
 .team-fixtures-panel .fixture-board {
   gap: 0;
-  background: var(--white);
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  background: rgba(8, 8, 8, 0.96);
+  border: 1px solid rgba(255, 196, 0, 0.14);
+  border-radius: 14px;
   overflow: hidden;
 }
 
 .fixture-card {
   align-items: center;
-  background: var(--white);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(19, 19, 19, 0.98), rgba(8, 8, 8, 0.98));
+  border: 1px solid rgba(255, 196, 0, 0.14);
   border-radius: 18px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
   display: grid;
   gap: 12px;
   grid-template-columns: 108px 84px minmax(0, 1.8fr) minmax(120px, 1fr) 140px 180px;
@@ -1201,7 +1217,8 @@ textarea:focus {
 
 .fixture-card__date {
   align-items: center;
-  background: var(--black);
+  background: linear-gradient(180deg, #050505, #121212);
+  border: 1px solid rgba(255, 196, 0, 0.22);
   border-radius: 16px;
   color: var(--white);
   display: flex;
@@ -1330,8 +1347,8 @@ textarea:focus {
 }
 
 .fixture-logo {
-  background: #ffffff;
-  border: 1px solid var(--line);
+  background: #050505;
+  border: 1px solid rgba(255, 196, 0, 0.14);
   border-radius: 999px;
   flex: 0 0 auto;
   height: 32px;
@@ -1344,8 +1361,8 @@ textarea:focus {
 
 .fixture-logo-frame {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid var(--line);
+  background: #050505;
+  border: 1px solid rgba(255, 196, 0, 0.14);
   border-radius: 999px;
   display: inline-flex;
   flex: 0 0 32px;
@@ -1377,8 +1394,8 @@ textarea:focus {
 
 .fixture-logo.fallback {
   align-items: center;
-  background: var(--soft);
-  color: var(--ink);
+  background: var(--yellow);
+  color: var(--black);
   display: inline-flex;
   font-size: 12px;
   font-weight: 900;
@@ -1394,10 +1411,10 @@ textarea:focus {
 }
 
 .fixture-badge {
-  background: rgba(255, 196, 0, 0.18);
-  border: 1px solid rgba(255, 196, 0, 0.4);
+  background: rgba(255, 196, 0, 0.16);
+  border: 1px solid rgba(255, 196, 0, 0.42);
   border-radius: 999px;
-  color: var(--ink);
+  color: var(--white);
   font-size: 11px;
   font-weight: 900;
   padding: 4px 10px;
@@ -1453,8 +1470,8 @@ textarea:focus {
 }
 
 .fixture-card__actions details {
-  background: var(--soft);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 196, 0, 0.14);
   border-radius: 14px;
   padding: 10px 12px;
 }
@@ -1532,9 +1549,9 @@ textarea:focus {
 }
 
 .performance-breakdown__item {
-  background: var(--soft);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 196, 0, 0.12);
+  border-radius: 10px;
   display: grid;
   gap: 4px;
   padding: 8px 10px;
@@ -1548,7 +1565,7 @@ textarea:focus {
 
 .performance-breakdown__item small,
 .performance-breakdown__item span {
-  color: var(--muted);
+  color: #d4d4d4;
   font-size: 11px;
   font-weight: 700;
 }
@@ -1557,6 +1574,71 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.result-entry-panel {
+  background: linear-gradient(180deg, rgba(14, 14, 14, 0.98), rgba(8, 8, 8, 0.98));
+}
+
+.result-entry-form {
+  gap: 18px;
+}
+
+.result-summary-grid {
+  gap: 12px;
+}
+
+.result-goal-block {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 196, 0, 0.14);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.result-goal-block__head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.result-goal-block__head h3 {
+  color: var(--yellow);
+  font-size: 14px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.result-goal-rows {
+  display: grid;
+  gap: 12px;
+}
+
+.result-goal-row {
+  background: rgba(0, 0, 0, 0.26);
+  border: 1px solid rgba(255, 196, 0, 0.12);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(140px, 1.2fr) minmax(140px, 1fr) minmax(140px, 1.2fr);
+  padding: 12px;
+}
+
+.result-goal-row__title {
+  color: var(--yellow);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.result-goal-row label {
+  min-width: 0;
+}
+
+.result-goal-row input,
+.result-goal-row select {
+  min-width: 0;
 }
 
 .responsive-card-table {
@@ -1577,7 +1659,8 @@ table {
 }
 
 th {
-  background: var(--black);
+  background: linear-gradient(180deg, #141414, #070707);
+  border-bottom: 1px solid rgba(255, 196, 0, 0.12);
   color: var(--white);
   font-size: 11px;
   padding: 12px;
@@ -1586,7 +1669,9 @@ th {
 }
 
 td {
-  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 196, 0, 0.08);
+  color: #f4f4f4;
   font-size: 13px;
   line-height: 1.35;
   padding: 12px;
@@ -2079,8 +2164,8 @@ td {
   }
 
   .section-switcher {
-    background: rgba(255, 255, 255, 0.92);
-    border: 1px solid var(--line);
+    background: rgba(8, 8, 8, 0.96);
+    border: 1px solid rgba(255, 196, 0, 0.14);
     border-radius: 18px;
     display: flex;
     flex-wrap: nowrap;
@@ -2101,6 +2186,15 @@ td {
     flex: 0 0 auto;
     scroll-snap-align: start;
     white-space: nowrap;
+  }
+
+  .result-goal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .result-goal-block__head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .metric-grid {

@@ -674,6 +674,7 @@
             <tr>
               <th>Fixture</th>
               <th>Submitted By</th>
+              <th>Verified By</th>
               <th>Score</th>
               <th>Status</th>
               <th>Scorers</th>
@@ -686,6 +687,7 @@
             <tr data-row data-status="{{ submission.status }}" data-category="{{ submission.match.fixture.category.category_name }}">
               <td data-label="Fixture">{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</td>
               <td data-label="Submitted By">{{ submission.submitted_by.user.full_name }}</td>
+              <td data-label="Verified By">{{ submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by else '-' }}</td>
               <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
               <td data-label="Scorers">{{ submission.scorer_names_text or '-' }}</td>
@@ -718,7 +720,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="7" class="empty">No result submissions yet.</td></tr>
+            <tr><td colspan="8" class="empty">No result submissions yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

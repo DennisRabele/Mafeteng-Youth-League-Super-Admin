@@ -273,12 +273,14 @@
     render();
   });
 
-  const activateSectionFromHash = () => {
+  const activateSectionFromLocation = () => {
     const hash = window.location.hash.replace("#", "");
-    if (!hash) {
+    const search = new URLSearchParams(window.location.search);
+    const sectionTarget = hash || search.get("dashboard_section") || "";
+    if (!sectionTarget) {
       return;
     }
-    const matchingSectionButton = document.querySelector(`[data-section-target="${hash}"]`);
+    const matchingSectionButton = document.querySelector(`[data-section-target="${sectionTarget}"]`);
     if (matchingSectionButton) {
       matchingSectionButton.click();
     }
@@ -294,8 +296,8 @@
   };
 
   window.addEventListener("pageshow", hideLoading);
-  window.addEventListener("hashchange", activateSectionFromHash);
-  activateSectionFromHash();
+  window.addEventListener("hashchange", activateSectionFromLocation);
+  activateSectionFromLocation();
   applyInitialCategoryPanelFilters();
   const activeSectionButton = document.querySelector("[data-section-target].active");
   if (activeSectionButton && window.syncDashboardContext) {

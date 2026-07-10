@@ -1469,6 +1469,14 @@ def super_admin_dashboard(
     ).all()
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    played_fixtures = [
+        fixture
+        for fixture in fixtures
+        if fixture.home_team
+        and fixture.away_team
+        and fixture.fixture_date <= datetime.utcnow()
+        and (fixture.home_team_id in own_team_ids or fixture.away_team_id in own_team_ids)
+    ]
     fixtures = _filter_fixtures_for_dashboard(
         fixtures,
         category_name=fixture_category,
