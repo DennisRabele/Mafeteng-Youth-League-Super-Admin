@@ -846,24 +846,6 @@
             });
           });
 
-          const resultForm = document.querySelector('[data-result-form]');
-          const resultFixtureSelect = document.getElementById('result-fixture-select');
-          const resultHomeScore = document.getElementById('result-home-score');
-          const resultAwayScore = document.getElementById('result-away-score');
-          const resultSuggestions = document.getElementById('result-player-suggestions');
-          const resultScorerNames = document.getElementById('result-scorer-names');
-          const resultGoalTypes = document.getElementById('result-goal-types');
-          const resultAssistNames = document.getElementById('result-assist-names');
-          const resultGoalSections = {
-            home: {
-              scorers: document.querySelector('[data-result-goal-rows="home-scorers"]'),
-              assists: document.querySelector('[data-result-goal-rows="home-assists"]'),
-            },
-            away: {
-              scorers: document.querySelector('[data-result-goal-rows="away-scorers"]'),
-              assists: document.querySelector('[data-result-goal-rows="away-assists"]'),
-            },
-          };
           const resultGoalTypeOptions = [
             ['freekick', 'Freekick'],
             ['penalty', 'Penalty'],
@@ -871,8 +853,31 @@
             ['header from corner kick', 'Header from corner kick'],
           ];
 
+          function getResultEntryState() {
+            return {
+              resultForm: document.querySelector('[data-result-form]'),
+              resultFixtureSelect: document.getElementById('result-fixture-select'),
+              resultHomeScore: document.getElementById('result-home-score'),
+              resultAwayScore: document.getElementById('result-away-score'),
+              resultSuggestions: document.getElementById('result-player-suggestions'),
+              resultScorerNames: document.getElementById('result-scorer-names'),
+              resultGoalTypes: document.getElementById('result-goal-types'),
+              resultAssistNames: document.getElementById('result-assist-names'),
+              resultGoalSections: {
+                home: {
+                  scorers: document.querySelector('[data-result-goal-rows="home-scorers"]'),
+                  assists: document.querySelector('[data-result-goal-rows="home-assists"]'),
+                },
+                away: {
+                  scorers: document.querySelector('[data-result-goal-rows="away-scorers"]'),
+                  assists: document.querySelector('[data-result-goal-rows="away-assists"]'),
+                },
+              },
+            };
+          }
+
           function getResultGoalContainer(side, kind) {
-            return resultGoalSections[side]?.[kind] || null;
+            return getResultEntryState().resultGoalSections[side]?.[kind] || null;
           }
 
           function buildResultGoalRow(side, kind, index) {
@@ -938,6 +943,7 @@
           }
 
           async function updateResultPlayerSuggestions(searchTerm) {
+            const { resultSuggestions } = getResultEntryState();
             if (!resultSuggestions) {
               return;
             }
@@ -961,10 +967,11 @@
           }
 
           function updateResultFixtureSummary() {
-            void resultFixtureSelect;
+            void getResultEntryState().resultFixtureSelect;
           }
 
           function collectResultGoalRows(event) {
+            const { resultScorerNames, resultGoalTypes, resultAssistNames, resultHomeScore, resultAwayScore, resultGoalSections } = getResultEntryState();
             if (!resultScorerNames || !resultGoalTypes || !resultAssistNames) {
               return true;
             }
@@ -1083,6 +1090,7 @@
           }
 
           function syncResultGoalRowsFromScores() {
+            const { resultHomeScore, resultAwayScore } = getResultEntryState();
             if (!resultHomeScore || !resultAwayScore) {
               return;
             }
@@ -1096,42 +1104,49 @@
             ensureResultGoalRows('away', 'assist', awayGoals);
           }
 
-          if (resultFixtureSelect) {
-            updateResultFixtureSummary();
-            resultFixtureSelect.addEventListener('change', () => {
+          function initResultEntryControls() {
+            const state = getResultEntryState();
+            if (!state.resultForm || !state.resultFixtureSelect || !state.resultHomeScore || !state.resultAwayScore) {
+              return;
+            }
+            if (window.__resultEntryControlsBound) {
+              return;
+            }
+            window.__resultEntryControlsBound = true;
+            state.resultFixtureSelect.addEventListener('change', () => {
               updateResultFixtureSummary();
               syncResultGoalRowsFromScores();
             });
-          }
-          if (resultHomeScore) {
-            resultHomeScore.addEventListener('input', syncResultGoalRowsFromScores);
-          }
-          if (resultAwayScore) {
-            resultAwayScore.addEventListener('input', syncResultGoalRowsFromScores);
-          }
-          Object.values(resultGoalSections).forEach((section) => {
-            Object.values(section).forEach((container) => {
-              if (!container) {
-                return;
-              }
-              container.addEventListener('input', (event) => {
-                const input = event.target;
-                if (!input.matches('[data-result-scorer], [data-result-assist]')) {
+            state.resultHomeScore.addEventListener('input', syncResultGoalRowsFromScores);
+            state.resultAwayScore.addEventListener('input', syncResultGoalRowsFromScores);
+            Object.values(state.resultGoalSections).forEach((section) => {
+              Object.values(section).forEach((container) => {
+                if (!container) {
                   return;
                 }
-                updateResultPlayerSuggestions(input.value.trim());
+                container.addEventListener('input', (event) => {
+                  const input = event.target;
+                  if (!input.matches('[data-result-scorer], [data-result-assist]')) {
+                    return;
+                  }
+                  updateResultPlayerSuggestions(input.value.trim());
+                });
               });
             });
-          });
-          if (resultForm) {
-            resultForm.addEventListener('submit', (event) => {
+            state.resultForm.addEventListener('submit', (event) => {
               syncResultGoalRowsFromScores();
               if (!collectResultGoalRows(event)) {
                 return;
               }
             });
+            window.addResultGoalRow = addResultGoalRow;
           }
-          window.addResultGoalRow = addResultGoalRow;
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initResultEntryControls);
+          } else {
+            initResultEntryControls();
+          }
 
           // Form validation to ensure player_id is set
           const formsWithPlayerSelect = document.querySelectorAll('form[action="/team-admin/player-requests"], form[action="/team-admin/transfers"]');
