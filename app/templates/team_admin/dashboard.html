@@ -1449,8 +1449,8 @@
           document.addEventListener('DOMContentLoaded', applyMyPlayersFilters);
           document.addEventListener('DOMContentLoaded', () => {
             const filterSelect = document.querySelector('[data-dashboard-category-filter="league-tables"]');
-            if (filterSelect) {
-              filterDashboardPanels('league-tables', filterSelect.value, null);
+            if (filterSelect && window.filterDashboardPanels) {
+              window.filterDashboardPanels('league-tables', filterSelect.value, null);
             }
           });
         </script>
