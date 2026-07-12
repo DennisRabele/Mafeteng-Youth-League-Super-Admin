@@ -850,12 +850,20 @@
           const resultFixtureSelect = document.getElementById('result-fixture-select');
           const resultHomeScore = document.getElementById('result-home-score');
           const resultAwayScore = document.getElementById('result-away-score');
-          const resultGoalRows = document.querySelector('[data-result-goal-rows]');
           const resultSuggestions = document.getElementById('result-player-suggestions');
           const resultScorerNames = document.getElementById('result-scorer-names');
           const resultGoalTypes = document.getElementById('result-goal-types');
           const resultAssistNames = document.getElementById('result-assist-names');
-          const resultAddRowButton = document.querySelector('[data-result-add-row]');
+          const resultGoalSections = {
+            home: {
+              scorers: document.querySelector('[data-result-goal-rows="home-scorers"]'),
+              assists: document.querySelector('[data-result-goal-rows="home-assists"]'),
+            },
+            away: {
+              scorers: document.querySelector('[data-result-goal-rows="away-scorers"]'),
+              assists: document.querySelector('[data-result-goal-rows="away-assists"]'),
+            },
+          };
           const resultGoalTypeOptions = [
             ['freekick', 'Freekick'],
             ['penalty', 'Penalty'],
@@ -863,54 +871,70 @@
             ['header from corner kick', 'Header from corner kick'],
           ];
 
-          function buildResultGoalRow(index) {
+          function getResultGoalContainer(side, kind) {
+            return resultGoalSections[side]?.[kind] || null;
+          }
+
+          function buildResultGoalRow(side, kind, index) {
             const row = document.createElement('div');
             row.className = 'result-goal-row';
             row.dataset.resultGoalRow = 'true';
-            row.innerHTML = `
-              <div class="result-goal-row__title">Goal ${index + 1}</div>
-              <label>Scorer
-                <input type="text" data-result-scorer list="result-player-suggestions" placeholder="Type player name" autocomplete="off">
-              </label>
-              <label>Goal type
-                <select data-result-goal-type>
-                  ${resultGoalTypeOptions.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
-                </select>
-              </label>
-              <label>Assist
-                <input type="text" data-result-assist list="result-player-suggestions" placeholder="Type player name" autocomplete="off">
-              </label>
-            `;
+            row.dataset.resultSide = side;
+            row.dataset.resultKind = kind;
+            const sideLabel = side === 'home' ? 'Home Team' : 'Away Team';
+            const titleLabel = kind === 'scorer' ? 'Goal' : 'Assist';
+            row.innerHTML = kind === 'scorer'
+              ? `
+                <div class="result-goal-row__title">${sideLabel} ${titleLabel} ${index + 1}</div>
+                <label>Scorer
+                  <input type="text" data-result-scorer list="result-player-suggestions" placeholder="Type player name" autocomplete="off">
+                </label>
+                <label>Goal type
+                  <select data-result-goal-type>
+                    ${resultGoalTypeOptions.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
+                  </select>
+                </label>
+              `
+              : `
+                <div class="result-goal-row__title">${sideLabel} ${titleLabel} ${index + 1}</div>
+                <label>Assister
+                  <input type="text" data-result-assist list="result-player-suggestions" placeholder="Type player name" autocomplete="off">
+                </label>
+              `;
             return row;
           }
 
-          function ensureResultGoalRows(minRows) {
-            if (!resultGoalRows) {
+          function ensureResultGoalRows(side, kind, minRows) {
+            const container = getResultGoalContainer(side, kind);
+            if (!container) {
               return;
             }
-            const requiredRows = Math.max(1, minRows);
-            while (resultGoalRows.children.length < requiredRows) {
-              const row = buildResultGoalRow(resultGoalRows.children.length);
-              resultGoalRows.appendChild(row);
+            const requiredRows = Math.max(0, minRows);
+            while (container.children.length < requiredRows) {
+              const row = buildResultGoalRow(side, kind, container.children.length);
+              container.appendChild(row);
             }
-            while (resultGoalRows.children.length > requiredRows) {
-              resultGoalRows.removeChild(resultGoalRows.lastElementChild);
-            }
-            Array.from(resultGoalRows.children).forEach((row, index) => {
+            Array.from(container.children).forEach((row, index) => {
               const title = row.querySelector('.result-goal-row__title');
               if (title) {
-                title.textContent = `Goal ${index + 1}`;
+                const sideLabel = side === 'home' ? 'Home Team' : 'Away Team';
+                const titleLabel = kind === 'scorer' ? 'Goal' : 'Assist';
+                title.textContent = `${sideLabel} ${titleLabel} ${index + 1}`;
               }
             });
           }
 
-          function addResultGoalRow(event) {
+          function addResultGoalRow(side, kind, event) {
             if (event) {
               event.preventDefault();
             }
-            ensureResultGoalRows((resultGoalRows?.children.length || 0) + 1);
-            const lastRow = resultGoalRows?.lastElementChild;
-            lastRow?.querySelector('[data-result-scorer]')?.focus?.();
+            const container = getResultGoalContainer(side, kind);
+            if (!container) {
+              return;
+            }
+            ensureResultGoalRows(side, kind, container.children.length + 1);
+            const lastRow = container.lastElementChild;
+            lastRow?.querySelector('[data-result-scorer], [data-result-assist]')?.focus?.();
           }
 
           async function updateResultPlayerSuggestions(searchTerm) {
@@ -941,17 +965,27 @@
           }
 
           function collectResultGoalRows(event) {
-            if (!resultGoalRows || !resultScorerNames || !resultGoalTypes || !resultAssistNames) {
+            if (!resultScorerNames || !resultGoalTypes || !resultAssistNames) {
               return true;
             }
             const home = Number.parseInt(resultHomeScore?.value || '0', 10);
             const away = Number.parseInt(resultAwayScore?.value || '0', 10);
-            const totalGoals = Number.isFinite(home) && Number.isFinite(away) ? Math.max(0, home + away) : 0;
-            const rows = Array.from(resultGoalRows.querySelectorAll('[data-result-goal-row]'));
-            const hasEnteredDetails = rows.some((row) => {
+            const homeGoals = Number.isFinite(home) ? Math.max(0, home) : 0;
+            const awayGoals = Number.isFinite(away) ? Math.max(0, away) : 0;
+            const totalGoals = homeGoals + awayGoals;
+            const allRows = Object.values(resultGoalSections).flatMap((section) => [
+              ...(section.scorers ? Array.from(section.scorers.querySelectorAll('[data-result-goal-row]')) : []),
+              ...(section.assists ? Array.from(section.assists.querySelectorAll('[data-result-goal-row]')) : []),
+            ]);
+            const hasEnteredDetails = allRows.some((row) => {
               const scorerInput = row.querySelector('[data-result-scorer]');
+              const goalTypeSelect = row.querySelector('[data-result-goal-type]');
               const assistInput = row.querySelector('[data-result-assist]');
-              return Boolean((scorerInput?.value || '').trim() || (assistInput?.value || '').trim());
+              return Boolean(
+                (scorerInput?.value || '').trim() ||
+                (goalTypeSelect?.value || '').trim() ||
+                (assistInput?.value || '').trim()
+              );
             });
             if (totalGoals === 0) {
               if (hasEnteredDetails) {
@@ -964,51 +998,87 @@
               resultAssistNames.value = '';
               return true;
             }
-            if (rows.length < totalGoals) {
+            const homeScorerRows = Array.from(resultGoalSections.home.scorers?.querySelectorAll('[data-result-goal-row]') || []);
+            const awayScorerRows = Array.from(resultGoalSections.away.scorers?.querySelectorAll('[data-result-goal-row]') || []);
+            const homeAssistRows = Array.from(resultGoalSections.home.assists?.querySelectorAll('[data-result-goal-row]') || []);
+            const awayAssistRows = Array.from(resultGoalSections.away.assists?.querySelectorAll('[data-result-goal-row]') || []);
+            if (homeScorerRows.length < homeGoals || awayScorerRows.length < awayGoals) {
               event?.preventDefault();
-              alert(`This fixture has ${totalGoals} goal(s). Please fill every goal row.`);
+              alert('Please add enough scorer rows to cover the selected home and away scores.');
               return false;
             }
-            const scorers = [];
-            const goalTypes = [];
-            const assists = [];
-            for (let index = 0; index < totalGoals; index += 1) {
-              const row = rows[index];
-              const scorerInput = row.querySelector('[data-result-scorer]');
-              const goalTypeSelect = row.querySelector('[data-result-goal-type]');
-              const assistInput = row.querySelector('[data-result-assist]');
-              const scorer = scorerInput ? scorerInput.value.trim() : '';
-              const goalType = goalTypeSelect ? goalTypeSelect.value : 'freekick';
-              const assist = assistInput ? assistInput.value.trim() : '';
-              if (!scorer) {
+            if (homeAssistRows.length < homeGoals || awayAssistRows.length < awayGoals) {
+              event?.preventDefault();
+              alert('Please add enough assist rows to cover the selected home and away scores.');
+              return false;
+            }
+            const collectScorerRows = (rows, requiredRows, sideLabel) => {
+              const scorers = [];
+              const goalTypes = [];
+              rows.slice(0, requiredRows).forEach((row) => {
+                const scorerInput = row.querySelector('[data-result-scorer]');
+                const goalTypeSelect = row.querySelector('[data-result-goal-type]');
+                const scorer = scorerInput ? scorerInput.value.trim() : '';
+                const goalType = goalTypeSelect ? goalTypeSelect.value : 'freekick';
+                if (!scorer) {
+                  event?.preventDefault();
+                  scorerInput?.focus();
+                  alert(`Each ${sideLabel} goal row must have a scorer name.`);
+                  throw new Error('missing scorer');
+                }
+                scorers.push(scorer);
+                goalTypes.push(goalType || 'freekick');
+              });
+              const hasOverflow = rows.slice(requiredRows).some((row) => {
+                const scorerInput = row.querySelector('[data-result-scorer]');
+                const goalTypeSelect = row.querySelector('[data-result-goal-type]');
+                return Boolean((scorerInput?.value || '').trim() || (goalTypeSelect?.value || '').trim());
+              });
+              if (hasOverflow) {
                 event?.preventDefault();
-                scorerInput?.focus();
-                alert('Each filled goal row must have a scorer name.');
+                alert(`Clear any extra ${sideLabel} scorer rows so they match the selected score.`);
+                throw new Error('extra scorer rows');
+              }
+              return { scorers, goalTypes };
+            };
+            const collectAssistRows = (rows, requiredRows, sideLabel) => {
+              const assists = rows.slice(0, requiredRows).map((row) => row.querySelector('[data-result-assist]')?.value.trim() || '');
+              const hasOverflow = rows.slice(requiredRows).some((row) => Boolean((row.querySelector('[data-result-assist]')?.value || '').trim()));
+              if (hasOverflow) {
+                event?.preventDefault();
+                alert(`Clear any extra ${sideLabel} assist rows so they match the selected score.`);
+                throw new Error('extra assist rows');
+              }
+              return assists;
+            };
+
+            let homeScorerData;
+            let awayScorerData;
+            try {
+              homeScorerData = collectScorerRows(homeScorerRows, homeGoals, 'home');
+              awayScorerData = collectScorerRows(awayScorerRows, awayGoals, 'away');
+            } catch (error) {
+              if (String(error?.message || '') !== 'missing scorer') {
+                event?.preventDefault();
                 return false;
               }
-              scorers.push(scorer);
-              goalTypes.push(goalType);
-              assists.push(assist);
-            }
-            const extraRows = rows.slice(totalGoals);
-            const hasExtraContent = extraRows.some((row) => {
-              const scorerInput = row.querySelector('[data-result-scorer]');
-              const assistInput = row.querySelector('[data-result-assist]');
-              const goalTypeSelect = row.querySelector('[data-result-goal-type]');
-              return Boolean(
-                (scorerInput?.value || '').trim() ||
-                (assistInput?.value || '').trim() ||
-                (goalTypeSelect?.value || '').trim()
-              );
-            });
-            if (hasExtraContent) {
-              event?.preventDefault();
-              alert('Clear any extra goal rows so they match the fixture score exactly.');
               return false;
             }
-            resultScorerNames.value = scorers.join('\n');
-            resultGoalTypes.value = goalTypes.join('\n');
-            resultAssistNames.value = assists.join('\n');
+            let homeAssists;
+            let awayAssists;
+            try {
+              homeAssists = collectAssistRows(homeAssistRows, homeGoals, 'home');
+              awayAssists = collectAssistRows(awayAssistRows, awayGoals, 'away');
+            } catch (error) {
+              if (String(error?.message || '') !== 'extra assist rows') {
+                event?.preventDefault();
+                return false;
+              }
+              return false;
+            }
+            resultScorerNames.value = [...homeScorerData.scorers, ...awayScorerData.scorers].join('\n');
+            resultGoalTypes.value = [...homeScorerData.goalTypes, ...awayScorerData.goalTypes].join('\n');
+            resultAssistNames.value = [...homeAssists, ...awayAssists].join('\n');
             return true;
           }
 
@@ -1018,8 +1088,12 @@
             }
             const home = Number.parseInt(resultHomeScore.value || '0', 10);
             const away = Number.parseInt(resultAwayScore.value || '0', 10);
-            const totalGoals = Number.isFinite(home) && Number.isFinite(away) ? home + away : 1;
-            ensureResultGoalRows(totalGoals);
+            const homeGoals = Number.isFinite(home) ? Math.max(0, home) : 0;
+            const awayGoals = Number.isFinite(away) ? Math.max(0, away) : 0;
+            ensureResultGoalRows('home', 'scorer', homeGoals);
+            ensureResultGoalRows('away', 'scorer', awayGoals);
+            ensureResultGoalRows('home', 'assist', homeGoals);
+            ensureResultGoalRows('away', 'assist', awayGoals);
           }
 
           if (resultFixtureSelect) {
@@ -1035,18 +1109,23 @@
           if (resultAwayScore) {
             resultAwayScore.addEventListener('input', syncResultGoalRowsFromScores);
           }
-          if (resultGoalRows) {
-            resultGoalRows.addEventListener('input', (event) => {
-              const input = event.target;
-              if (!input.matches('[data-result-scorer], [data-result-assist]')) {
+          Object.values(resultGoalSections).forEach((section) => {
+            Object.values(section).forEach((container) => {
+              if (!container) {
                 return;
               }
-              updateResultPlayerSuggestions(input.value.trim());
+              container.addEventListener('input', (event) => {
+                const input = event.target;
+                if (!input.matches('[data-result-scorer], [data-result-assist]')) {
+                  return;
+                }
+                updateResultPlayerSuggestions(input.value.trim());
+              });
             });
-          }
+          });
           if (resultForm) {
-            ensureResultGoalRows(1);
             resultForm.addEventListener('submit', (event) => {
+              syncResultGoalRowsFromScores();
               if (!collectResultGoalRows(event)) {
                 return;
               }
@@ -1656,13 +1735,51 @@
               <input id="result-away-score" name="away_score" type="number" min="0" inputmode="numeric" required>
             </label>
           </div>
-          <div class="result-goal-block">
-            <div class="result-goal-block__head">
-              <h3>Scorers, goal types and assists</h3>
-              <button class="button button-muted small" type="button" data-result-add-row onclick="addResultGoalRow(event)">Add Goal Row</button>
+          <div class="result-team-grid">
+            <div class="result-team-column">
+              <div class="result-goal-block">
+                <div class="result-goal-block__head">
+                  <div>
+                    <h3>Home Team Scorers AND Goal Types</h3>
+                    <p class="section-copy">Use players from the home team. Every scored goal gets one scorer and one goal type.</p>
+                  </div>
+                  <button class="button button-muted small" type="button" onclick="addResultGoalRow('home', 'scorer', event)">Add Home Scorer</button>
+                </div>
+                <div class="result-goal-rows" data-result-goal-rows="home-scorers"></div>
+              </div>
+              <div class="result-goal-block result-goal-block--assist">
+                <div class="result-goal-block__head">
+                  <div>
+                    <h3>Home Team Assisters</h3>
+                    <p class="section-copy">Leave blank when a goal has no assist, such as a penalty or direct free kick.</p>
+                  </div>
+                  <button class="button button-muted small" type="button" onclick="addResultGoalRow('home', 'assist', event)">Add Home Assist</button>
+                </div>
+                <div class="result-goal-rows" data-result-goal-rows="home-assists"></div>
+              </div>
             </div>
-            <p class="section-copy">Type player names exactly as they appear in the database. The suggestions below will autofill matching players, including opponents.</p>
-            <div class="result-goal-rows" data-result-goal-rows></div>
+            <div class="result-team-column">
+              <div class="result-goal-block">
+                <div class="result-goal-block__head">
+                  <div>
+                    <h3>Away Team Scorers AND Goal Types</h3>
+                    <p class="section-copy">Use players from the away team. Every scored goal gets one scorer and one goal type.</p>
+                  </div>
+                  <button class="button button-muted small" type="button" onclick="addResultGoalRow('away', 'scorer', event)">Add Away Scorer</button>
+                </div>
+                <div class="result-goal-rows" data-result-goal-rows="away-scorers"></div>
+              </div>
+              <div class="result-goal-block result-goal-block--assist">
+                <div class="result-goal-block__head">
+                  <div>
+                    <h3>Away Team Assisters</h3>
+                    <p class="section-copy">Leave blank when a goal has no assist, such as a penalty or direct free kick.</p>
+                  </div>
+                  <button class="button button-muted small" type="button" onclick="addResultGoalRow('away', 'assist', event)">Add Away Assist</button>
+                </div>
+                <div class="result-goal-rows" data-result-goal-rows="away-assists"></div>
+              </div>
+            </div>
           </div>
           <input type="hidden" name="scorer_names_text" id="result-scorer-names">
           <input type="hidden" name="goal_types_text" id="result-goal-types">
