@@ -155,10 +155,22 @@
       const matchesStatus = statusFilter === "all" || rowStatus === statusFilter;
       const matchesCategory = categoryFilter === "all" || rowCategory === categoryFilter;
       const matchesMetric = metricFilter === "all" || rowMetric === metricFilter;
-      row.hidden = !(matchesStatus && matchesCategory && matchesMetric);
+      row.dataset.filterHidden = String(!(matchesStatus && matchesCategory && matchesMetric));
     });
     section.querySelectorAll("[data-filter-chip]").forEach((chip) => {
       chip.classList.toggle("active", chip.dataset.filterValue === statusFilter);
+    });
+  };
+
+  const syncPaginatedTables = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    section.querySelectorAll("[data-paginated-table]").forEach((tableRoot) => {
+      if (typeof tableRoot.__resetPagination === "function") {
+        tableRoot.__resetPagination();
+      }
     });
   };
 
@@ -172,6 +184,7 @@
     }
     section.dataset.statusFilter = status;
     applyStatusAndCategoryFilters(sectionId);
+    syncPaginatedTables(sectionId);
   };
 
   const filterDashboardCategory = (sectionId, category, event) => {
@@ -184,6 +197,7 @@
     }
     section.dataset.categoryFilter = category;
     applyStatusAndCategoryFilters(sectionId);
+    syncPaginatedTables(sectionId);
   };
 
   const filterDashboardMetric = (sectionId, metric, event) => {
@@ -201,6 +215,7 @@
       view.hidden = metric !== "all" && viewMetric !== metric;
     });
     applyStatusAndCategoryFilters(sectionId);
+    syncPaginatedTables(sectionId);
   };
 
   const filterDashboardPanels = (sectionId, category, event) => {
@@ -216,6 +231,7 @@
     panels.forEach((panel) => {
       panel.hidden = category !== "all" && panel.dataset.categoryPanel !== category;
     });
+    syncPaginatedTables(sectionId);
   };
 
   window.filterDashboardRows = filterDashboardRows;
@@ -223,6 +239,7 @@
   window.filterDashboardMetric = filterDashboardMetric;
   window.filterDashboardPanels = filterDashboardPanels;
   window.syncDashboardContext = syncDashboardContext;
+  window.syncPaginatedTables = syncPaginatedTables;
 
   document.querySelectorAll("[data-paginated-table]").forEach((tableRoot) => {
     const rows = Array.from(tableRoot.querySelectorAll("tbody tr[data-row]"));
@@ -232,9 +249,16 @@
     const label = tableRoot.querySelector("[data-page-label]");
     let page = 0;
 
+    const getVisibleRows = () => rows.filter((row) => row.dataset.filterHidden !== "true");
+
     const render = () => {
-      const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
-      rows.forEach((row, index) => {
+      const visibleRows = getVisibleRows();
+      const pageCount = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+      page = Math.min(page, pageCount - 1);
+      rows.forEach((row) => {
+        row.hidden = row.dataset.filterHidden === "true";
+      });
+      visibleRows.forEach((row, index) => {
         row.hidden = index < page * pageSize || index >= (page + 1) * pageSize;
       });
       if (label) {
@@ -246,6 +270,11 @@
       if (next) {
         next.disabled = page >= pageCount - 1;
       }
+    };
+
+    tableRoot.__resetPagination = () => {
+      page = 0;
+      render();
     };
 
     if (prev) {

@@ -1095,23 +1095,23 @@
 
 <script>
   function filterSuperAdminTable(tableId, status) {
-    const rows = document.querySelectorAll(`#${tableId} table tbody tr[data-row]`);
+    const section = document.getElementById(tableId);
+    const rows = section ? section.querySelectorAll('table tbody tr[data-row]') : [];
     const buttons = document.querySelectorAll(`#${tableId} [data-filter]`);
     
-    buttons.forEach(btn => btn.classList.remove('button-primary'));
-    buttons.forEach(btn => btn.classList.add('button-muted'));
-    event.target.classList.remove('button-muted');
-    event.target.classList.add('button-primary');
-    
-    rows.forEach(row => {
-      if (status === 'all') {
-        row.style.display = '';
-      } else if (row.dataset.status === status) {
-        row.style.display = '';
-      } else {
-        row.style.display = 'none';
-      }
+    buttons.forEach((btn) => {
+      const isActive = btn.dataset.filter === status;
+      btn.classList.toggle('button-primary', isActive);
+      btn.classList.toggle('button-muted', !isActive);
     });
+    
+    rows.forEach((row) => {
+      const matches = status === 'all' || row.dataset.status === status;
+      row.dataset.filterHidden = String(!matches);
+    });
+    if (window.syncPaginatedTables) {
+      window.syncPaginatedTables(tableId);
+    }
   }
 
   function syncFixtureTeamFilters() {

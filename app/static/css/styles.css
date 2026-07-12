@@ -35,6 +35,24 @@ body {
   overflow-x: hidden;
 }
 
+body[data-app-mode="team_admin"] {
+  background:
+    radial-gradient(circle at top, rgba(255, 196, 0, 0.14), transparent 28%),
+    linear-gradient(180deg, #050505 0%, #0b0b0b 48%, #111111 100%);
+  color: var(--white);
+}
+
+body[data-app-mode="team_admin"] main {
+  background:
+    radial-gradient(circle at top right, rgba(255, 196, 0, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(7, 7, 7, 0.98), rgba(12, 12, 12, 0.98));
+}
+
+body[data-app-mode="team_admin"] .page-shell,
+body[data-app-mode="team_admin"] .auth-shell {
+  color: var(--white);
+}
+
 body.nav-open {
   overflow: hidden;
 }
@@ -766,11 +784,13 @@ textarea:focus {
 .alert.success {
   background: #eaf7f0;
   border-color: var(--success);
+  color: var(--success);
 }
 
 .alert.error {
   background: #faecec;
   border-color: var(--danger);
+  color: var(--danger);
 }
 
 .dashboard-notice {
@@ -785,6 +805,38 @@ textarea:focus {
   padding-bottom: 0;
   padding-top: 0;
   transform: translateY(-6px);
+}
+
+body[data-app-mode="team_admin"] .alert-warning,
+body[data-app-mode="team_admin"] .alert-info {
+  background: rgba(255, 196, 0, 0.12) !important;
+  border-color: rgba(255, 196, 0, 0.32) !important;
+  color: var(--white) !important;
+}
+
+body[data-app-mode="team_admin"] .transfer-list article,
+body[data-app-mode="team_admin"] .transfer-list .panel,
+body[data-app-mode="team_admin"] .section-content article,
+body[data-app-mode="team_admin"] [style*="background: white"],
+body[data-app-mode="team_admin"] [style*="background:white"],
+body[data-app-mode="team_admin"] [style*="background-color: white"],
+body[data-app-mode="team_admin"] [style*="background-color:white"],
+body[data-app-mode="team_admin"] [style*="background: #fff"],
+body[data-app-mode="team_admin"] [style*="background:#fff"] {
+  background: linear-gradient(180deg, rgba(16, 16, 16, 0.98), rgba(8, 8, 8, 0.98)) !important;
+  color: var(--white) !important;
+  border-color: rgba(255, 196, 0, 0.16) !important;
+}
+
+body[data-app-mode="team_admin"] .section-content article p,
+body[data-app-mode="team_admin"] .section-content article h3,
+body[data-app-mode="team_admin"] .section-content article h4,
+body[data-app-mode="team_admin"] .section-content article small,
+body[data-app-mode="team_admin"] .transfer-list article p,
+body[data-app-mode="team_admin"] .transfer-list article h3,
+body[data-app-mode="team_admin"] .transfer-list article h4,
+body[data-app-mode="team_admin"] .transfer-list article small {
+  color: inherit !important;
 }
 
 .app-layout {
