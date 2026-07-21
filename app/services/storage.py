@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlparse
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -117,6 +117,67 @@ def _save_to_supabase(upload: UploadFile, folder: str) -> str:
         },
     )
     return _supabase_public_url(bucket, object_name)
+
+
+def _delete_from_supabase(path: str) -> bool:
+    client = _get_supabase_client()
+    if client is None:
+        return False
+
+    parsed = urlparse(path)
+    if not parsed.netloc:
+        return False
+
+    parts = [part for part in parsed.path.split("/") if part]
+    try:
+        bucket_index = parts.index("public") + 1
+    except ValueError:
+        return False
+    if bucket_index >= len(parts):
+        return False
+    bucket = unquote(parts[bucket_index])
+    object_name = "/".join(unquote(part) for part in parts[bucket_index + 1 :])
+    if not bucket or not object_name:
+        return False
+
+    client.storage.from_(bucket).remove([object_name])
+    return True
+
+
+def _delete_local_upload(path: str) -> bool:
+    root = _local_upload_root()
+    candidates: list[Path] = []
+    if path.startswith("/uploads/"):
+        candidates.append(root / path.removeprefix("/uploads/"))
+    else:
+        candidates.append(Path(path))
+
+    deleted = False
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                candidate.unlink()
+                deleted = True
+        except Exception:
+            continue
+    return deleted
+
+
+def delete_upload(path: str | None, folder: str | None = None) -> bool:
+    if not path:
+        return False
+    normalized = path.strip()
+    if not normalized:
+        return False
+    if normalized.startswith("http://") or normalized.startswith("https://"):
+        if _supabase_ready():
+            return _delete_from_supabase(normalized)
+        return False
+    if normalized.startswith("/uploads/") or normalized.startswith(str(_local_upload_root())):
+        return _delete_local_upload(normalized)
+    if folder:
+        return _delete_local_upload(f"/uploads/{folder}/{normalized.lstrip('/')}")
+    return _delete_local_upload(normalized)
 
 
 def save_upload(upload: UploadFile | None, folder: str) -> str | None:

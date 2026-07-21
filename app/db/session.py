@@ -169,6 +169,7 @@ def _ensure_schema_columns() -> None:
             column["name"] for column in inspector.get_columns("match_result_submissions")
         }
         missing_result_columns = {
+            "result_file_path": "ALTER TABLE match_result_submissions ADD COLUMN result_file_path VARCHAR(500)",
             "scorer_names_text": "ALTER TABLE match_result_submissions ADD COLUMN scorer_names_text TEXT",
             "goal_types_text": "ALTER TABLE match_result_submissions ADD COLUMN goal_types_text TEXT",
             "assist_names_text": "ALTER TABLE match_result_submissions ADD COLUMN assist_names_text TEXT",
@@ -176,6 +177,18 @@ def _ensure_schema_columns() -> None:
         with engine.begin() as connection:
             for column_name, statement in missing_result_columns.items():
                 if column_name not in result_columns:
+                    connection.execute(text(statement))
+
+    if inspector.has_table("result_verifications"):
+        verification_columns = {
+            column["name"] for column in inspector.get_columns("result_verifications")
+        }
+        missing_verification_columns = {
+            "rejection_reason": "ALTER TABLE result_verifications ADD COLUMN rejection_reason TEXT",
+        }
+        with engine.begin() as connection:
+            for column_name, statement in missing_verification_columns.items():
+                if column_name not in verification_columns:
                     connection.execute(text(statement))
 
 

@@ -1,4 +1,6 @@
-from datetime import date, datetime
+import csv
+from datetime import date, datetime, timedelta
+import io
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -41,6 +43,7 @@ from app.services.league import (
     get_player_performances,
     mark_notification_read,
     postpone_fixture,
+    purge_expired_result_files,
     submit_match_result,
     update_fixture,
     verify_match_result,
@@ -88,7 +91,7 @@ from app.services.email import (
     send_notification_email,
     send_verification_code,
 )
-from app.services.storage import save_upload
+from app.services.storage import delete_upload, save_upload
 
 
 router = APIRouter()
@@ -503,6 +506,7 @@ def _load_result_submissions(
     *,
     team_ids: list[int] | None = None,
 ) -> list[MatchResultSubmission]:
+    purge_expired_result_files(db)
     query = (
         select(MatchResultSubmission)
         .options(
@@ -525,6 +529,82 @@ def _load_result_submissions(
             )
         )
     return db.scalars(query).all()
+
+
+def _combine_result_lines(*chunks: str | None) -> str | None:
+    lines: list[str] = []
+    for chunk in chunks:
+        if not chunk:
+            continue
+        normalized = chunk.replace("\r\n", "\n").replace("\r", "\n")
+        lines.extend([line.strip() for line in normalized.split("\n") if line.strip()])
+    return "\n".join(lines) if lines else None
+
+
+def _parse_uploaded_result_file(upload: UploadFile, *, home_score: int, away_score: int) -> tuple[str | None, str | None, str | None]:
+    raw_content = upload.file.read()
+    upload.file.seek(0)
+    text_content = raw_content.decode("utf-8-sig", errors="replace")
+    expected_goals = max(0, home_score + away_score)
+    if expected_goals == 0:
+        if text_content.strip():
+            raise RegistrationError("A 0-0 result should not include scorer rows in the upload file.")
+        return None, None, None
+
+    parsed_rows: list[dict[str, str]] = []
+    if (upload.filename or "").lower().endswith(".csv"):
+        reader = csv.DictReader(io.StringIO(text_content))
+        for row in reader:
+            parsed_rows.append({(key or "").strip().lower(): (value or "").strip() for key, value in row.items()})
+    else:
+        for raw_line in text_content.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            separator = "," if "," in line else "|" if "|" in line else ";"
+            parts = [part.strip() for part in line.split(separator)]
+            if len(parts) < 4:
+                raise RegistrationError(
+                    "Each result line must provide side, scorer, assist, and goal type."
+                )
+            parsed_rows.append(
+                {
+                    "side": parts[0],
+                    "scorer": parts[1],
+                    "assist": parts[2],
+                    "goal type": parts[3],
+                }
+            )
+
+    if len(parsed_rows) != expected_goals:
+        raise RegistrationError(f"Expected {expected_goals} goal rows in the uploaded result file.")
+
+    scorers: list[str] = []
+    goal_types: list[str] = []
+    assists: list[str] = []
+    home_rows = 0
+    away_rows = 0
+    for row in parsed_rows:
+        side = (row.get("side") or row.get("team") or row.get("half") or "").strip().lower()
+        if side in {"home", "h"}:
+            home_rows += 1
+        elif side in {"away", "a"}:
+            away_rows += 1
+        else:
+            raise RegistrationError("Each uploaded result row must mark the side as home or away.")
+        scorer = row.get("scorer") or row.get("scorer name") or row.get("goal scorer") or row.get("player")
+        assist = row.get("assist") or row.get("assister") or row.get("assist name") or row.get("goal assist") or ""
+        goal_type = row.get("goal type") or row.get("goal_type") or row.get("type") or "Open Play"
+        if not (scorer or "").strip():
+            raise RegistrationError("Each uploaded result row must include a scorer name.")
+        scorers.append((scorer or "").strip())
+        assists.append((assist or "").strip())
+        goal_types.append((goal_type or "").strip() or "Open Play")
+
+    if home_rows != home_score or away_rows != away_score:
+        raise RegistrationError("The upload file side counts must match the home and away scores.")
+
+    return "\n".join(scorers), "\n".join(goal_types), "\n".join(assists)
 
 
 def _csv_response(filename: str, rows: list[list[object]]) -> Response:
@@ -1950,6 +2030,20 @@ def team_admin_dashboard(
         lambda: _load_result_submissions(db, team_ids=own_team_ids),
         [],
     )
+    latest_result_by_fixture: dict[int, MatchResultSubmission] = {}
+    for submission in result_submissions:
+        fixture = submission.match.fixture if submission.match and submission.match.fixture else None
+        if fixture and fixture.fixture_id not in latest_result_by_fixture:
+            latest_result_by_fixture[fixture.fixture_id] = submission
+    for fixture in played_fixtures:
+        latest_submission = latest_result_by_fixture.get(fixture.fixture_id)
+        fixture.latest_result_submission = latest_submission
+        fixture.latest_result_status = latest_submission.status if latest_submission else None
+        fixture.latest_result_rejection_reason = (
+            latest_submission.verification.rejection_reason
+            if latest_submission and latest_submission.verification
+            else None
+        )
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_performances = _safe_dashboard_value(
         lambda: get_player_performances(db, team_ids=own_team_ids),
@@ -2337,21 +2431,93 @@ def submit_result_route(
     return _redirect("/team-admin/dashboard#results")
 
 
+@router.post("/team-admin/results/upload")
+def upload_result_file(
+    request: Request,
+    fixture_id: int = Form(...),
+    home_score: int = Form(...),
+    away_score: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    saved = None
+    try:
+        fixture = db.get(Fixture, fixture_id)
+        if not fixture:
+            raise RegistrationError("Fixture was not found.")
+        try:
+            from app.services.league import _fixture_allows_result_submission
+
+            allows = _fixture_allows_result_submission(fixture)
+        except Exception:
+            allows = fixture.fixture_date <= datetime.utcnow()
+        if not allows:
+            raise RegistrationError("Results can only be uploaded after the fixture has been played.")
+        if team_admin.team_admin_id not in {fixture.home_team.team_admin_id, fixture.away_team.team_admin_id}:
+            raise RegistrationError("You can only upload results for fixtures involving your teams.")
+        scorer_names_text, goal_types_text, assist_names_text = _parse_uploaded_result_file(
+            file,
+            home_score=home_score,
+            away_score=away_score,
+        )
+        saved = _safe_upload(file, "match-results")
+        submit_match_result(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            fixture_id=fixture_id,
+            home_score=home_score,
+            away_score=away_score,
+            result_file_path=saved,
+            scorer_names_text=scorer_names_text,
+            goal_types_text=goal_types_text,
+            assist_names_text=assist_names_text,
+        )
+        try:
+            from app.services.league import notify_super_admins
+
+            notify_super_admins(
+                db,
+                "Match results file uploaded",
+                f"A match results file was uploaded for {fixture.home_team.team_name} vs {fixture.away_team.team_name}.",
+                "/super-admin#results",
+            )
+        except Exception:
+            pass
+    except RegistrationError as exc:
+        if saved:
+            delete_upload(saved, "match-results")
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        if saved:
+            delete_upload(saved, "match-results")
+        logger.exception("Result file upload failed")
+        return _render(request, "team_admin/action_result.html", {"error": "Result file upload failed. Please try again."})
+    return _redirect("/team-admin/dashboard#results")
+
+
 @router.post("/super-admin/results/{submission_id}/verify")
 def verify_result_route(
     submission_id: int,
     request: Request,
     home_score: int = Form(...),
     away_score: int = Form(...),
-    scorer_names_text: str | None = Form(None),
-    goal_types_text: str | None = Form(None),
-    assist_names_text: str | None = Form(None),
+    home_scorer_names_text: str | None = Form(None),
+    home_goal_types_text: str | None = Form(None),
+    home_assist_names_text: str | None = Form(None),
+    away_scorer_names_text: str | None = Form(None),
+    away_goal_types_text: str | None = Form(None),
+    away_assist_names_text: str | None = Form(None),
+    rejection_reason: str | None = Form(None),
     decision: str = Form(ApprovalStatus.APPROVED.value),
     db: Session = Depends(get_db),
 ):
     user = _require_super_admin(request, db)
     try:
         super_admin_id = _get_super_admin_id(user)
+        scorer_names_text = _combine_result_lines(home_scorer_names_text, away_scorer_names_text)
+        goal_types_text = _combine_result_lines(home_goal_types_text, away_goal_types_text)
+        assist_names_text = _combine_result_lines(home_assist_names_text, away_assist_names_text)
         verify_match_result(
             db,
             submission_id=submission_id,
@@ -2361,6 +2527,7 @@ def verify_result_route(
             scorer_names_text=scorer_names_text,
             goal_types_text=goal_types_text,
             assist_names_text=assist_names_text,
+            rejection_reason=rejection_reason,
             decision=decision,
         )
     except RegistrationError as exc:

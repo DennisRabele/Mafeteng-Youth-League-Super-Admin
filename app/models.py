@@ -529,6 +529,7 @@ class MatchResultSubmission(Base):
     status: Mapped[str] = mapped_column(String(30), default=ApprovalStatus.PENDING.value)
     home_score: Mapped[int | None] = mapped_column(Integer)
     away_score: Mapped[int | None] = mapped_column(Integer)
+    result_file_path: Mapped[str | None] = mapped_column(String(500))
     scorer_names_text: Mapped[str | None] = mapped_column(Text)
     goal_types_text: Mapped[str | None] = mapped_column(Text)
     assist_names_text: Mapped[str | None] = mapped_column(Text)
@@ -550,6 +551,7 @@ class ResultVerification(Base):
     verified_by_admin_id: Mapped[int] = mapped_column(ForeignKey("super_admins.admin_id"))
     verification_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     decision: Mapped[str] = mapped_column(String(30), nullable=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
 
     submission: Mapped[MatchResultSubmission] = relationship(back_populates="verification")
     verified_by: Mapped[SuperAdmin] = relationship(back_populates="result_verifications")

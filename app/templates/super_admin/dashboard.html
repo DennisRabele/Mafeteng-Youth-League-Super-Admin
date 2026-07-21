@@ -682,6 +682,7 @@
               <th>Status</th>
               <th>Scorers</th>
               <th>Assists</th>
+              <th>Review</th>
               <th>Verify</th>
             </tr>
           </thead>
@@ -693,6 +694,18 @@
             {% set submission_away_team = submission_fixture.away_team if submission_fixture and submission_fixture.away_team else None %}
             {% set submission_category = submission_fixture.category.category_name if submission_fixture and submission_fixture.category else 'uncategorized' %}
             {% set submitted_by_name = submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' %}
+            {% set reviewed_by_name = submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by and submission.verification.verified_by.user else '-' %}
+            {% set scorer_lines = submission.scorer_names_text.split('\n') if submission.scorer_names_text else [] %}
+            {% set goal_type_lines = submission.goal_types_text.split('\n') if submission.goal_types_text else [] %}
+            {% set assist_lines = submission.assist_names_text.split('\n') if submission.assist_names_text else [] %}
+            {% set home_goal_count = submission.home_score or 0 %}
+            {% set away_goal_count = submission.away_score or 0 %}
+            {% set home_scorers = scorer_lines[:home_goal_count] %}
+            {% set away_scorers = scorer_lines[home_goal_count:home_goal_count + away_goal_count] %}
+            {% set home_goal_types = goal_type_lines[:home_goal_count] %}
+            {% set away_goal_types = goal_type_lines[home_goal_count:home_goal_count + away_goal_count] %}
+            {% set home_assists = assist_lines[:home_goal_count] %}
+            {% set away_assists = assist_lines[home_goal_count:home_goal_count + away_goal_count] %}
             <tr data-row data-status="{{ submission.status }}" data-category="{{ submission_category }}">
               <td data-label="Fixture">{{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}</td>
               <td data-label="Submitted By">{{ submitted_by_name }}</td>
@@ -701,22 +714,45 @@
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
               <td data-label="Scorers">{{ submission.scorer_names_text or '-' }}</td>
               <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
+              <td data-label="Review">
+                {% if submission.verification and submission.verification.decision == 'rejected' %}
+                  Rejected by {{ reviewed_by_name }}: {{ submission.verification.rejection_reason or '-' }}
+                {% elif submission.verification %}
+                  Approved by {{ reviewed_by_name }}
+                {% else %}
+                  Pending review
+                {% endif %}
+              </td>
               <td data-label="Verify">
                 <form class="form-grid" method="post" action="/super-admin/results/{{ submission.submission_id }}/verify">
-                  <label>Score
+                  <div class="form-grid two">
+                  <label>Home score
                     <input name="home_score" type="number" value="{{ submission.home_score }}" required>
                   </label>
-                  <label>&nbsp;
+                  <label>Away score
                     <input name="away_score" type="number" value="{{ submission.away_score }}" required>
                   </label>
-                  <label>Scorers
-                    <textarea name="scorer_names_text">{{ submission.scorer_names_text or '' }}</textarea>
+                  </div>
+                  <label>Home scorers
+                    <textarea name="home_scorer_names_text">{{ home_scorers | join('\n') }}</textarea>
                   </label>
-                  <label>Goal Types
-                    <textarea name="goal_types_text">{{ submission.goal_types_text or '' }}</textarea>
+                  <label>Home goal types
+                    <textarea name="home_goal_types_text">{{ home_goal_types | join('\n') }}</textarea>
                   </label>
-                  <label>Assists
-                    <textarea name="assist_names_text">{{ submission.assist_names_text or '' }}</textarea>
+                  <label>Home assisters
+                    <textarea name="home_assist_names_text">{{ home_assists | join('\n') }}</textarea>
+                  </label>
+                  <label>Away scorers
+                    <textarea name="away_scorer_names_text">{{ away_scorers | join('\n') }}</textarea>
+                  </label>
+                  <label>Away goal types
+                    <textarea name="away_goal_types_text">{{ away_goal_types | join('\n') }}</textarea>
+                  </label>
+                  <label>Away assisters
+                    <textarea name="away_assist_names_text">{{ away_assists | join('\n') }}</textarea>
+                  </label>
+                  <label>Rejection reason
+                    <textarea name="rejection_reason" placeholder="Required when rejecting a result"></textarea>
                   </label>
                   <label>Decision
                     <select name="decision">
@@ -729,7 +765,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty">No result submissions yet.</td></tr>
+            <tr><td colspan="9" class="empty">No result submissions yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

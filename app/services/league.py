@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.services.email import send_notification_email
 from app.services.registration import RegistrationError
+from app.services.storage import delete_upload
 
 
 GOAL_TYPE_ALIASES = {
@@ -180,6 +181,31 @@ def notify_team_admin(db: Session, team_id: int, title: str, message: str, link:
     user_ids = _team_admin_user_ids(db, [team_id])
     if user_ids:
         broadcast_notifications(db, user_ids=user_ids, title=title, message=message, link=link)
+
+
+def purge_expired_result_files(db: Session) -> int:
+    if not (_has_table(db, "match_result_submissions") and _has_table(db, "result_verifications")):
+        return 0
+    cutoff = datetime.utcnow() - timedelta(days=2)
+    submissions = db.scalars(
+        select(MatchResultSubmission)
+        .join(ResultVerification, ResultVerification.submission_id == MatchResultSubmission.submission_id)
+        .options(selectinload(MatchResultSubmission.verification))
+        .where(
+            MatchResultSubmission.result_file_path.is_not(None),
+            ResultVerification.decision == ApprovalStatus.APPROVED.value,
+            ResultVerification.verification_date <= cutoff,
+        )
+    ).all()
+    deleted = 0
+    for submission in submissions:
+        if submission.result_file_path:
+            delete_upload(submission.result_file_path, "match-results")
+            submission.result_file_path = None
+            deleted += 1
+    if deleted:
+        db.commit()
+    return deleted
 
 
 def get_notifications_for_user(db: Session, user_id: int, *, limit: int = 20) -> list[Notification]:
@@ -443,6 +469,7 @@ def submit_match_result(
     fixture_id: int,
     home_score: int,
     away_score: int,
+    result_file_path: str | None = None,
     scorer_names_text: str | None,
     goal_types_text: str | None,
     assist_names_text: str | None,
@@ -498,6 +525,7 @@ def submit_match_result(
             submitted_by_team_admin_id=team_admin_id,
             home_score=home_score,
             away_score=away_score,
+            result_file_path=result_file_path,
             scorer_names_text=scorer_names_text,
             goal_types_text=goal_types_text,
             assist_names_text=assist_names_text,
@@ -505,16 +533,20 @@ def submit_match_result(
         )
         db.add(submission)
     else:
+        old_file_path = submission.result_file_path
         if submission.verification:
             db.delete(submission.verification)
         if submission.status != ApprovalStatus.PENDING.value:
             _clear_match_result_state(db, match)
         submission.home_score = home_score
         submission.away_score = away_score
+        submission.result_file_path = result_file_path or submission.result_file_path
         submission.scorer_names_text = scorer_names_text
         submission.goal_types_text = goal_types_text
         submission.assist_names_text = assist_names_text
         submission.status = ApprovalStatus.PENDING.value
+        if result_file_path and old_file_path and old_file_path != result_file_path:
+            delete_upload(old_file_path, "match-results")
     db.commit()
     db.refresh(submission)
     notify_super_admins(
@@ -581,6 +613,7 @@ def verify_match_result(
     scorer_names_text: str | None,
     goal_types_text: str | None,
     assist_names_text: str | None,
+    rejection_reason: str | None = None,
     decision: str = ApprovalStatus.APPROVED.value,
 ) -> MatchResultSubmission:
     submission = db.get(MatchResultSubmission, submission_id)
@@ -590,6 +623,9 @@ def verify_match_result(
     match = submission.match
     if not match or not match.fixture:
         raise RegistrationError("Linked match was not found.")
+    normalized_rejection_reason = (rejection_reason or "").strip()
+    if decision == ApprovalStatus.REJECTED.value and not normalized_rejection_reason:
+        raise RegistrationError("A rejection reason is required when rejecting a result.")
     _validate_match_result_payload(
         home_score=home_score,
         away_score=away_score,
@@ -611,12 +647,14 @@ def verify_match_result(
             submission_id=submission.submission_id,
             verified_by_admin_id=super_admin_id,
             decision=decision,
+            rejection_reason=normalized_rejection_reason or None,
         )
         db.add(verification)
     else:
         verification.verified_by_admin_id = super_admin_id
         verification.decision = decision
         verification.verification_date = datetime.utcnow()
+        verification.rejection_reason = normalized_rejection_reason or None
 
     if decision == ApprovalStatus.APPROVED.value:
         match.home_score = home_score
@@ -651,6 +689,21 @@ def verify_match_result(
             "Performances updated",
             f"Player performances were updated after {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name}.",
             "/super-admin#performances",
+        )
+    else:
+        rejection_note = normalized_rejection_reason or "No reason was provided."
+        notify_team_admins_for_teams(
+            db,
+            [match.fixture.home_team_id, match.fixture.away_team_id],
+            "Result rejected",
+            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} was rejected. Reason: {rejection_note} You can edit and resubmit the result.",
+            "/team-admin/dashboard#results",
+        )
+        notify_super_admins(
+            db,
+            "Result rejected",
+            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} was rejected by Super Admin ID {super_admin_id}.",
+            "/super-admin#results",
         )
 
     db.commit()
