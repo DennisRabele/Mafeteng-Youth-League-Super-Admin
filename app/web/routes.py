@@ -1,6 +1,4 @@
-import csv
 from datetime import date, datetime, timedelta
-import io
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -539,72 +537,6 @@ def _combine_result_lines(*chunks: str | None) -> str | None:
         normalized = chunk.replace("\r\n", "\n").replace("\r", "\n")
         lines.extend([line.strip() for line in normalized.split("\n") if line.strip()])
     return "\n".join(lines) if lines else None
-
-
-def _parse_uploaded_result_file(upload: UploadFile, *, home_score: int, away_score: int) -> tuple[str | None, str | None, str | None]:
-    raw_content = upload.file.read()
-    upload.file.seek(0)
-    text_content = raw_content.decode("utf-8-sig", errors="replace")
-    expected_goals = max(0, home_score + away_score)
-    if expected_goals == 0:
-        if text_content.strip():
-            raise RegistrationError("A 0-0 result should not include scorer rows in the upload file.")
-        return None, None, None
-
-    parsed_rows: list[dict[str, str]] = []
-    if (upload.filename or "").lower().endswith(".csv"):
-        reader = csv.DictReader(io.StringIO(text_content))
-        for row in reader:
-            parsed_rows.append({(key or "").strip().lower(): (value or "").strip() for key, value in row.items()})
-    else:
-        for raw_line in text_content.splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-            separator = "," if "," in line else "|" if "|" in line else ";"
-            parts = [part.strip() for part in line.split(separator)]
-            if len(parts) < 4:
-                raise RegistrationError(
-                    "Each result line must provide side, scorer, assist, and goal type."
-                )
-            parsed_rows.append(
-                {
-                    "side": parts[0],
-                    "scorer": parts[1],
-                    "assist": parts[2],
-                    "goal type": parts[3],
-                }
-            )
-
-    if len(parsed_rows) != expected_goals:
-        raise RegistrationError(f"Expected {expected_goals} goal rows in the uploaded result file.")
-
-    scorers: list[str] = []
-    goal_types: list[str] = []
-    assists: list[str] = []
-    home_rows = 0
-    away_rows = 0
-    for row in parsed_rows:
-        side = (row.get("side") or row.get("team") or row.get("half") or "").strip().lower()
-        if side in {"home", "h"}:
-            home_rows += 1
-        elif side in {"away", "a"}:
-            away_rows += 1
-        else:
-            raise RegistrationError("Each uploaded result row must mark the side as home or away.")
-        scorer = row.get("scorer") or row.get("scorer name") or row.get("goal scorer") or row.get("player")
-        assist = row.get("assist") or row.get("assister") or row.get("assist name") or row.get("goal assist") or ""
-        goal_type = row.get("goal type") or row.get("goal_type") or row.get("type") or "Open Play"
-        if not (scorer or "").strip():
-            raise RegistrationError("Each uploaded result row must include a scorer name.")
-        scorers.append((scorer or "").strip())
-        assists.append((assist or "").strip())
-        goal_types.append((goal_type or "").strip() or "Open Play")
-
-    if home_rows != home_score or away_rows != away_score:
-        raise RegistrationError("The upload file side counts must match the home and away scores.")
-
-    return "\n".join(scorers), "\n".join(goal_types), "\n".join(assists)
 
 
 def _csv_response(filename: str, rows: list[list[object]]) -> Response:
@@ -2456,11 +2388,6 @@ def upload_result_file(
             raise RegistrationError("Results can only be uploaded after the fixture has been played.")
         if team_admin.team_admin_id not in {fixture.home_team.team_admin_id, fixture.away_team.team_admin_id}:
             raise RegistrationError("You can only upload results for fixtures involving your teams.")
-        scorer_names_text, goal_types_text, assist_names_text = _parse_uploaded_result_file(
-            file,
-            home_score=home_score,
-            away_score=away_score,
-        )
         saved = _safe_upload(file, "match-results")
         submit_match_result(
             db,
@@ -2469,9 +2396,9 @@ def upload_result_file(
             home_score=home_score,
             away_score=away_score,
             result_file_path=saved,
-            scorer_names_text=scorer_names_text,
-            goal_types_text=goal_types_text,
-            assist_names_text=assist_names_text,
+            scorer_names_text=None,
+            goal_types_text=None,
+            assist_names_text=None,
         )
         try:
             from app.services.league import notify_super_admins

@@ -447,6 +447,9 @@ def _validate_match_result_payload(
     goal_types = _split_result_lines(goal_types_text)
     assists = _split_result_lines(assist_names_text)
 
+    if not any((scorers, goal_types, assists)):
+        return
+
     if total_goals == 0:
         if any(item for item in scorers + goal_types + assists):
             raise RegistrationError("A 0-0 result must not include scorer details.")
