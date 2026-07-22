@@ -683,6 +683,7 @@
               <th>Scorers</th>
               <th>Assists</th>
               <th>Review</th>
+              <th>File</th>
               <th>Verify</th>
             </tr>
           </thead>
@@ -723,6 +724,13 @@
                   Pending review
                 {% endif %}
               </td>
+              <td data-label="File">
+                {% if submission.result_file_path %}
+                  <a href="{{ submission.result_file_path }}" target="_blank" rel="noopener">Open uploaded file</a>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
               <td data-label="Verify">
                 <form class="form-grid" method="post" action="/super-admin/results/{{ submission.submission_id }}/verify">
                   <div class="form-grid two">
@@ -754,18 +762,18 @@
                   <label>Rejection reason
                     <textarea name="rejection_reason" placeholder="Required when rejecting a result"></textarea>
                   </label>
-                  <label>Decision
-                    <select name="decision">
-                      <option value="approved">Approve</option>
-                      <option value="rejected">Reject</option>
-                    </select>
-                  </label>
+                  <fieldset class="decision-fieldset">
+                    <legend>Decision</legend>
+                    <label><input type="radio" name="decision" value="approved" checked> Approve</label>
+                    <label><input type="radio" name="decision" value="rejected"> Reject</label>
+                    <small style="display:block; margin-top:0.35rem; color:#666;">Choose reject to send the result back with a reason.</small>
+                  </fieldset>
                   <button class="button button-primary small" type="submit">Verify</button>
                 </form>
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="9" class="empty">No result submissions yet.</td></tr>
+            <tr><td colspan="10" class="empty">No result submissions yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
