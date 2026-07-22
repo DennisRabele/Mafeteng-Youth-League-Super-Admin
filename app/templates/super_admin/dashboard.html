@@ -696,9 +696,9 @@
             {% set submission_category = submission_fixture.category.category_name if submission_fixture and submission_fixture.category else 'uncategorized' %}
             {% set submitted_by_name = submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' %}
             {% set reviewed_by_name = submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by and submission.verification.verified_by.user else '-' %}
-            {% set scorer_lines = submission.scorer_names_text.split('\n') if submission.scorer_names_text else [] %}
-            {% set goal_type_lines = submission.goal_types_text.split('\n') if submission.goal_types_text else [] %}
-            {% set assist_lines = submission.assist_names_text.split('\n') if submission.assist_names_text else [] %}
+            {% set scorer_lines = submission.scorer_names_text.replace(',', '\n').replace(';', '\n').split('\n') if submission.scorer_names_text else [] %}
+            {% set goal_type_lines = submission.goal_types_text.replace(',', '\n').replace(';', '\n').split('\n') if submission.goal_types_text else [] %}
+            {% set assist_lines = submission.assist_names_text.replace(',', '\n').replace(';', '\n').split('\n') if submission.assist_names_text else [] %}
             {% set home_goal_count = submission.home_score or 0 %}
             {% set away_goal_count = submission.away_score or 0 %}
             {% set home_scorers = scorer_lines[:home_goal_count] %}
@@ -762,6 +762,7 @@
                     <label>Home assisters
                       <textarea name="home_assist_names_text">{{ home_assists | join('\n') }}</textarea>
                     </label>
+                    <p class="section-copy">Separate each scorer, assister, and goal type with a comma or place one item per line.</p>
                     <label>Away scorers
                       <textarea name="away_scorer_names_text">{{ away_scorers | join('\n') }}</textarea>
                     </label>

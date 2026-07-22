@@ -49,10 +49,7 @@ def _split_items(value: str | None) -> list[str]:
 
 
 def _split_result_lines(value: str | None) -> list[str]:
-    if not value:
-        return []
-    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
-    return [item.strip() for item in normalized.split("\n")]
+    return _split_items(value)
 
 
 def _normalize_goal_type(value: str | None) -> str:
