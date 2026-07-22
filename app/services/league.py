@@ -566,7 +566,7 @@ def _find_player_for_fixture(db: Session, fixture: Fixture, player_name: str) ->
         return None
     return db.scalar(
         select(Player)
-        .options(selectinload(Player.team))
+        .options(selectinload(Player.team).selectinload(Team.category))
         .where(
             func.lower(Player.full_name) == normalized,
             Player.team_id.in_([fixture.home_team_id, fixture.away_team_id]),
@@ -807,15 +807,18 @@ def get_player_performances(
 ) -> dict[str, list[dict[str, object]]]:
     team_id_set = set(team_ids) if team_ids is not None else None
     query = (
-        select(MatchEvent)
-        .join(Match, Match.match_id == MatchEvent.match_id)
+        select(MatchResultSubmission)
+        .join(Match, Match.match_id == MatchResultSubmission.match_id)
         .join(Fixture, Fixture.fixture_id == Match.fixture_id)
         .options(
-            selectinload(MatchEvent.player).selectinload(Player.team).selectinload(Team.category),
-            selectinload(MatchEvent.player).selectinload(Player.original_team).selectinload(Team.category),
-            selectinload(MatchEvent.player).selectinload(Player.parent),
-            selectinload(MatchEvent.match).selectinload(Match.fixture).selectinload(Fixture.home_team),
-            selectinload(MatchEvent.match).selectinload(Match.fixture).selectinload(Fixture.away_team),
+            selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.home_team).selectinload(Team.category),
+            selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.away_team).selectinload(Team.category),
+            selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.category),
+        )
+        .join(ResultVerification, ResultVerification.submission_id == MatchResultSubmission.submission_id)
+        .where(
+            MatchResultSubmission.status == ApprovalStatus.APPROVED.value,
+            ResultVerification.decision == ApprovalStatus.APPROVED.value,
         )
     )
     if team_id_set is not None:
@@ -825,41 +828,65 @@ def get_player_performances(
                 Fixture.away_team_id.in_(list(team_id_set)),
             )
         )
-    events = db.scalars(query).all()
-
+    submissions = db.scalars(query).all()
     player_groups: dict[str, dict[str, object]] = {}
-    for event in events:
-        if not event.player or not event.player.team:
-            continue
-        identity_key = _player_identity_key(event.player)
+    def _record_player_event(player: Player | None, event_type: str) -> None:
+        if not player or not player.team:
+            return
+        identity_key = _player_identity_key(player)
         group = player_groups.setdefault(
             identity_key,
             {
                 "players": {},
-                "primary_player": event.player,
+                "primary_player": player,
                 "goals": 0,
                 "assists": 0,
                 "goal_types": defaultdict(int),
                 "category_totals": defaultdict(lambda: {"goals": 0, "assists": 0, "goal_types": defaultdict(int)}),
             },
         )
-        group["players"][event.player.player_id] = event.player
-        if event.player.player_id > group["primary_player"].player_id:
-            group["primary_player"] = event.player
+        group["players"][player.player_id] = player
+        if player.player_id > group["primary_player"].player_id:
+            group["primary_player"] = player
 
-        if not event.event_type.startswith("goal:") and event.event_type != "assist":
-            continue
-        category_name = event.player.team.category.category_name if event.player.team.category else ""
+        category_name = player.team.category.category_name if player.team.category else ""
         category_entry = group["category_totals"][category_name]
-        if event.event_type.startswith("goal:"):
+        if event_type.startswith("goal:"):
             group["goals"] += 1
-            goal_type = event.event_type.split(":", 1)[1]
+            goal_type = event_type.split(":", 1)[1]
             group["goal_types"][goal_type] += 1
             category_entry["goals"] += 1
             category_entry["goal_types"][goal_type] += 1
-        elif event.event_type == "assist":
+        elif event_type == "assist":
             group["assists"] += 1
             category_entry["assists"] += 1
+
+    for submission in submissions:
+        fixture = submission.match.fixture if submission.match and submission.match.fixture else None
+        if not fixture or not fixture.home_team or not fixture.away_team:
+            continue
+
+        scorers = _split_result_lines(submission.scorer_names_text)
+        goal_types = _split_result_lines(submission.goal_types_text)
+        assists = _split_result_lines(submission.assist_names_text)
+        home_goal_count = submission.home_score or 0
+        away_goal_count = submission.away_score or 0
+        total_goals = home_goal_count + away_goal_count
+        if len(assists) < total_goals:
+            assists.extend([""] * (total_goals - len(assists)))
+
+        for index, scorer_name in enumerate(scorers[:total_goals]):
+            player = _find_player_for_fixture(db, fixture, scorer_name)
+            if player:
+                goal_type = _normalize_goal_type(goal_types[index] if index < len(goal_types) else None)
+                _record_player_event(player, f"goal:{goal_type}")
+
+            if index < len(assists):
+                assister_name = assists[index]
+                if assister_name:
+                    assister = _find_player_for_fixture(db, fixture, assister_name)
+                    if assister:
+                        _record_player_event(assister, "assist")
 
     player_ids = [player.player_id for group in player_groups.values() for player in group["players"].values()]
     transfer_history: dict[int, list[PlayerTransferRequest]] = defaultdict(list)
