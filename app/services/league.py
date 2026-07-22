@@ -814,6 +814,11 @@ def get_player_performances(
             selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.home_team).selectinload(Team.category),
             selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.away_team).selectinload(Team.category),
             selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.category),
+            selectinload(MatchResultSubmission.match)
+            .selectinload(Match.match_events)
+            .selectinload(MatchEvent.player)
+            .selectinload(Player.team)
+            .selectinload(Team.category),
         )
         .join(ResultVerification, ResultVerification.submission_id == MatchResultSubmission.submission_id)
         .where(
@@ -826,10 +831,11 @@ def get_player_performances(
             or_(
                 Fixture.home_team_id.in_(list(team_id_set)),
                 Fixture.away_team_id.in_(list(team_id_set)),
-            )
         )
+    )
     submissions = db.scalars(query).all()
     player_groups: dict[str, dict[str, object]] = {}
+
     def _record_player_event(player: Player | None, event_type: str) -> None:
         if not player or not player.team:
             return
@@ -861,11 +867,7 @@ def get_player_performances(
             group["assists"] += 1
             category_entry["assists"] += 1
 
-    for submission in submissions:
-        fixture = submission.match.fixture if submission.match and submission.match.fixture else None
-        if not fixture or not fixture.home_team or not fixture.away_team:
-            continue
-
+    def _record_submission_text(submission: MatchResultSubmission) -> None:
         scorers = _split_result_lines(submission.scorer_names_text)
         goal_types = _split_result_lines(submission.goal_types_text)
         assists = _split_result_lines(submission.assist_names_text)
@@ -876,7 +878,7 @@ def get_player_performances(
             assists.extend([""] * (total_goals - len(assists)))
 
         for index, scorer_name in enumerate(scorers[:total_goals]):
-            player = _find_player_for_fixture(db, fixture, scorer_name)
+            player = _find_player_for_fixture(db, submission.match.fixture, scorer_name)
             if player:
                 goal_type = _normalize_goal_type(goal_types[index] if index < len(goal_types) else None)
                 _record_player_event(player, f"goal:{goal_type}")
@@ -884,23 +886,29 @@ def get_player_performances(
             if index < len(assists):
                 assister_name = assists[index]
                 if assister_name:
-                    assister = _find_player_for_fixture(db, fixture, assister_name)
+                    assister = _find_player_for_fixture(db, submission.match.fixture, assister_name)
                     if assister:
                         _record_player_event(assister, "assist")
 
-    player_ids = [player.player_id for group in player_groups.values() for player in group["players"].values()]
-    transfer_history: dict[int, list[PlayerTransferRequest]] = defaultdict(list)
-    if player_ids:
-        transfer_rows = db.scalars(
-            select(PlayerTransferRequest)
-            .options(
-                selectinload(PlayerTransferRequest.from_team),
-                selectinload(PlayerTransferRequest.to_team),
-            )
-            .where(PlayerTransferRequest.player_id.in_(player_ids))
-        ).all()
-        for transfer in transfer_rows:
-            transfer_history[transfer.player_id].append(transfer)
+    for submission in submissions:
+        fixture = submission.match.fixture if submission.match and submission.match.fixture else None
+        if not fixture or not fixture.home_team or not fixture.away_team:
+            continue
+
+        match = submission.match
+        match_events = list(match.match_events if match and match.match_events else [])
+        if match_events:
+            for event in match_events:
+                if not event.player or not event.player.team:
+                    continue
+                if event.event_type.startswith("goal:"):
+                    goal_type = event.event_type.split(":", 1)[1] if ":" in event.event_type else "Open Play"
+                    _record_player_event(event.player, f"goal:{_normalize_goal_type(goal_type)}")
+                elif event.event_type == "assist":
+                    _record_player_event(event.player, "assist")
+            continue
+
+        _record_submission_text(submission)
 
     def _format_goal_types(row: dict[str, object]) -> dict[str, int]:
         return dict(sorted(row["goal_types"].items(), key=lambda item: (-item[1], item[0])))
@@ -920,20 +928,11 @@ def get_player_performances(
         seen: set[str] = set()
 
         for player in sorted(row["players"].values(), key=lambda item: item.player_id):
-            sources = [
-                player.team.team_name if player.team else None,
-                player.original_team.team_name if player.original_team else None,
-            ]
-            for transfer in transfer_history.get(player.player_id, []):
-                sources.extend([
-                    transfer.from_team.team_name if transfer.from_team else None,
-                    transfer.to_team.team_name if transfer.to_team else None,
-                ])
-            for club_name in sources:
-                normalized = (club_name or "").strip()
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    clubs.append(normalized)
+            club_name = player.team.team_name if player.team else None
+            normalized = (club_name or "").strip()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                clubs.append(normalized)
         return clubs
 
     def _system_ids(row: dict[str, object]) -> list[str]:

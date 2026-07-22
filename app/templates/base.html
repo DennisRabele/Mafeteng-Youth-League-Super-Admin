@@ -35,11 +35,7 @@
             <button class="button button-outline" type="submit">Logout</button>
           </form>
         {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
-          {% if current_user.team_admin_profile and current_user.team_admin_profile.status == 'approved' %}
-            <a data-loading-trigger href="/team-admin/dashboard">Dashboard</a>
-            <a data-loading-trigger href="/team-admin/account">My Account</a>
-          {% else %}
-            <a data-loading-trigger href="/team-admin/account">My Account</a>
+          {% if current_user.team_admin_profile and current_user.team_admin_profile.status != 'approved' %}
             <a data-loading-trigger href="/register/team-admin?re_register=1">Re-register</a>
           {% endif %}
           <form data-loading-form method="post" action="/logout">
