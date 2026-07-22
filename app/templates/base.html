@@ -91,15 +91,15 @@
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="league-tables" data-dashboard-route="/team-admin/dashboard">League Tables</button>
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="performances" data-dashboard-route="/team-admin/dashboard">Performances</button>
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="notifications" data-dashboard-route="/team-admin/dashboard">Notifications</button>
-            <a data-loading-trigger class="drawer-link" href="/team-admin/account">My Account</a>
-            <a data-loading-trigger class="drawer-link" href="/team-admin/dashboard">Dashboard</a>
+            <form data-loading-form method="post" action="/logout">
+              <button class="drawer-link destructive" type="submit">Logout</button>
+            </form>
           {% else %}
-            <a data-loading-trigger class="drawer-link" href="/team-admin/account">My Account</a>
             <a data-loading-trigger class="drawer-link" href="/register/team-admin?re_register=1">Re-register</a>
+            <form data-loading-form method="post" action="/logout">
+              <button class="drawer-link destructive" type="submit">Logout</button>
+            </form>
           {% endif %}
-          <form data-loading-form method="post" action="/logout">
-            <button class="drawer-link destructive" type="submit">Logout</button>
-          </form>
         {% else %}
           <a data-loading-trigger class="drawer-link" href="/">Home</a>
           <a data-loading-trigger class="drawer-link" href="/login">Login</a>
