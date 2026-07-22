@@ -817,11 +817,6 @@ def get_player_performances(
             selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.home_team).selectinload(Team.category),
             selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.away_team).selectinload(Team.category),
             selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.category),
-            selectinload(MatchResultSubmission.match)
-            .selectinload(Match.match_events)
-            .selectinload(MatchEvent.player)
-            .selectinload(Player.team)
-            .selectinload(Team.category),
         )
         .join(ResultVerification, ResultVerification.submission_id == MatchResultSubmission.submission_id)
         .where(
@@ -871,6 +866,9 @@ def get_player_performances(
             category_entry["assists"] += 1
 
     def _record_submission_text(submission: MatchResultSubmission) -> None:
+        fixture = submission.match.fixture if submission.match and submission.match.fixture else None
+        if not fixture or not fixture.home_team or not fixture.away_team:
+            return
         scorers = _split_result_lines(submission.scorer_names_text)
         goal_types = _split_result_lines(submission.goal_types_text)
         assists = _split_result_lines(submission.assist_names_text)
@@ -894,23 +892,6 @@ def get_player_performances(
                         _record_player_event(assister, "assist")
 
     for submission in submissions:
-        fixture = submission.match.fixture if submission.match and submission.match.fixture else None
-        if not fixture or not fixture.home_team or not fixture.away_team:
-            continue
-
-        match = submission.match
-        match_events = list(match.match_events if match and match.match_events else [])
-        if match_events:
-            for event in match_events:
-                if not event.player or not event.player.team:
-                    continue
-                if event.event_type.startswith("goal:"):
-                    goal_type = event.event_type.split(":", 1)[1] if ":" in event.event_type else "Open Play"
-                    _record_player_event(event.player, f"goal:{_normalize_goal_type(goal_type)}")
-                elif event.event_type == "assist":
-                    _record_player_event(event.player, "assist")
-            continue
-
         _record_submission_text(submission)
 
     def _format_goal_types(row: dict[str, object]) -> dict[str, int]:
