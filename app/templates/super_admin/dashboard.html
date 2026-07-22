@@ -732,44 +732,57 @@
                 {% endif %}
               </td>
               <td data-label="Verify">
-                <form class="form-grid" method="post" action="/super-admin/results/{{ submission.submission_id }}/verify">
-                  <div class="form-grid two">
-                  <label>Home score
-                    <input name="home_score" type="number" value="{{ submission.home_score }}" required>
-                  </label>
-                  <label>Away score
-                    <input name="away_score" type="number" value="{{ submission.away_score }}" required>
-                  </label>
+                {% if submission.verification %}
+                  <div class="result-verification-summary">
+                    <strong>{{ submission.verification.decision|capitalize }}</strong>
+                    <p style="margin: 0.35rem 0 0;">
+                      {% if submission.verification.decision == 'rejected' %}
+                        Rejected by {{ reviewed_by_name }}: {{ submission.verification.rejection_reason or '-' }}
+                      {% else %}
+                        Approved by {{ reviewed_by_name }}
+                      {% endif %}
+                    </p>
                   </div>
-                  <label>Home scorers
-                    <textarea name="home_scorer_names_text">{{ home_scorers | join('\n') }}</textarea>
-                  </label>
-                  <label>Home goal types
-                    <textarea name="home_goal_types_text">{{ home_goal_types | join('\n') }}</textarea>
-                  </label>
-                  <label>Home assisters
-                    <textarea name="home_assist_names_text">{{ home_assists | join('\n') }}</textarea>
-                  </label>
-                  <label>Away scorers
-                    <textarea name="away_scorer_names_text">{{ away_scorers | join('\n') }}</textarea>
-                  </label>
-                  <label>Away goal types
-                    <textarea name="away_goal_types_text">{{ away_goal_types | join('\n') }}</textarea>
-                  </label>
-                  <label>Away assisters
-                    <textarea name="away_assist_names_text">{{ away_assists | join('\n') }}</textarea>
-                  </label>
-                  <label>Rejection reason
-                    <textarea name="rejection_reason" placeholder="Required when rejecting a result"></textarea>
-                  </label>
-                  <fieldset class="decision-fieldset">
-                    <legend>Decision</legend>
-                    <label><input type="radio" name="decision" value="approved" checked> Approve</label>
-                    <label><input type="radio" name="decision" value="rejected"> Reject</label>
-                    <small style="display:block; margin-top:0.35rem; color:#666;">Choose reject to send the result back with a reason.</small>
-                  </fieldset>
-                  <button class="button button-primary small" type="submit">Verify</button>
-                </form>
+                {% else %}
+                  <form class="form-grid" method="post" action="/super-admin/results/{{ submission.submission_id }}/verify">
+                    <div class="form-grid two">
+                    <label>Home score
+                      <input name="home_score" type="number" value="{{ submission.home_score }}" required>
+                    </label>
+                    <label>Away score
+                      <input name="away_score" type="number" value="{{ submission.away_score }}" required>
+                    </label>
+                    </div>
+                    <label>Home scorers
+                      <textarea name="home_scorer_names_text">{{ home_scorers | join('\n') }}</textarea>
+                    </label>
+                    <label>Home goal types
+                      <textarea name="home_goal_types_text">{{ home_goal_types | join('\n') }}</textarea>
+                    </label>
+                    <label>Home assisters
+                      <textarea name="home_assist_names_text">{{ home_assists | join('\n') }}</textarea>
+                    </label>
+                    <label>Away scorers
+                      <textarea name="away_scorer_names_text">{{ away_scorers | join('\n') }}</textarea>
+                    </label>
+                    <label>Away goal types
+                      <textarea name="away_goal_types_text">{{ away_goal_types | join('\n') }}</textarea>
+                    </label>
+                    <label>Away assisters
+                      <textarea name="away_assist_names_text">{{ away_assists | join('\n') }}</textarea>
+                    </label>
+                    <label>Rejection reason
+                      <textarea name="rejection_reason" placeholder="Required when rejecting a result"></textarea>
+                    </label>
+                    <fieldset class="decision-fieldset">
+                      <legend>Decision</legend>
+                      <label><input type="radio" name="decision" value="approved" checked> Approve</label>
+                      <label><input type="radio" name="decision" value="rejected"> Reject</label>
+                      <small style="display:block; margin-top:0.35rem; color:#666;">Choose reject to send the result back with a reason.</small>
+                    </fieldset>
+                    <button class="button button-primary small" type="submit">Verify</button>
+                  </form>
+                {% endif %}
               </td>
             </tr>
             {% else %}

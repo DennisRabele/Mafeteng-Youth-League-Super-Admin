@@ -441,13 +441,14 @@ def _validate_match_result_payload(
     scorer_names_text: str | None,
     goal_types_text: str | None,
     assist_names_text: str | None,
+    require_result_details: bool = False,
 ) -> None:
     total_goals = max(0, home_score + away_score)
     scorers = _split_result_lines(scorer_names_text)
     goal_types = _split_result_lines(goal_types_text)
     assists = _split_result_lines(assist_names_text)
 
-    if not any((scorers, goal_types, assists)):
+    if not require_result_details and not any((scorers, goal_types, assists)):
         return
 
     if total_goals == 0:
@@ -490,6 +491,7 @@ def submit_match_result(
         scorer_names_text=scorer_names_text,
         goal_types_text=goal_types_text,
         assist_names_text=assist_names_text,
+        require_result_details=False,
     )
 
     match = fixture.match or Match(fixture_id=fixture.fixture_id, match_date=fixture.fixture_date, status="scheduled")
@@ -635,6 +637,7 @@ def verify_match_result(
         scorer_names_text=scorer_names_text,
         goal_types_text=goal_types_text,
         assist_names_text=assist_names_text,
+        require_result_details=decision == ApprovalStatus.APPROVED.value,
     )
 
     submission.home_score = home_score
