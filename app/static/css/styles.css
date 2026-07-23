@@ -1527,6 +1527,20 @@ body[data-app-mode="team_admin"] .transfer-list article small {
   align-self: flex-start;
 }
 
+.fixture-download-note {
+  background: #fff3f3;
+  border-left: 4px solid #d10000;
+  color: #8f0000;
+  line-height: 1.45;
+  margin-top: 0.5rem;
+  padding: 0.85rem 1rem;
+}
+
+.fixture-download-note strong {
+  color: #b00000;
+  font-weight: 900;
+}
+
 .fixture-card--compact .fixture-card__status,
 .fixture-card--compact .fixture-card__actions {
   grid-column: 1 / -1;

@@ -20,6 +20,10 @@
       padding: 28px;
     }
 
+    .export-page[data-export-kind="fixtures"] .export-shell {
+      padding-top: 18px;
+    }
+
     .export-header {
       background: linear-gradient(135deg, #050505, #111111 58%, #171717);
       border: 1px solid rgba(255, 196, 0, 0.2);
@@ -65,6 +69,10 @@
       display: grid;
       gap: 16px;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+
+    .export-page[data-export-kind="fixtures"] .export-grid {
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
     }
 
     .export-card {
@@ -208,6 +216,119 @@
       color: #c8c8c8;
     }
 
+    .export-page[data-export-kind="fixtures"] .fixture-card {
+      align-items: stretch;
+      gap: 10px;
+      grid-template-columns: 88px 78px minmax(0, 1.55fr) minmax(112px, 0.92fr);
+      padding: 12px;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-card__date {
+      min-height: 92px;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-card__time {
+      gap: 1px;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-card__time strong {
+      font-size: 15px;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-card__fixture {
+      gap: 6px;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-matchup {
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-team {
+      flex: 1 1 0;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-team span:last-child {
+      font-size: 14px;
+      line-height: 1.12;
+      white-space: normal;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-vs {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-card__venue {
+      align-self: center;
+      gap: 2px;
+      justify-self: end;
+      text-align: right;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-card__venue strong {
+      font-size: 12px;
+      line-height: 1.12;
+    }
+
+    .export-page[data-export-kind="fixtures"] .fixture-card__venue span {
+      font-size: 10px;
+    }
+
+    @media (max-width: 620px) {
+      .export-page[data-export-kind="fixtures"] .export-shell {
+        padding: 18px;
+      }
+
+      .export-page[data-export-kind="fixtures"] .export-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .export-page[data-export-kind="fixtures"] .fixture-card {
+        grid-template-columns: 54px minmax(0, 1fr);
+        gap: 8px 10px;
+      }
+
+      .export-page[data-export-kind="fixtures"] .fixture-card__date {
+        grid-column: 1 / 2;
+        min-height: 72px;
+      }
+
+      .export-page[data-export-kind="fixtures"] .fixture-card__time {
+        grid-column: 2 / -1;
+        align-items: flex-start;
+        text-align: left;
+      }
+
+      .export-page[data-export-kind="fixtures"] .fixture-card__fixture {
+        grid-column: 1 / -1;
+      }
+
+      .export-page[data-export-kind="fixtures"] .fixture-matchup {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .export-page[data-export-kind="fixtures"] .fixture-team {
+        width: 100%;
+      }
+
+      .export-page[data-export-kind="fixtures"] .fixture-team span:last-child {
+        font-size: 13px;
+      }
+
+      .export-page[data-export-kind="fixtures"] .fixture-card__venue {
+        grid-column: 1 / -1;
+        justify-self: start;
+        text-align: left;
+      }
+    }
+
     @media print {
       body.export-page {
         background: #fff;
@@ -230,26 +351,28 @@
     }
   </style>
 </head>
-<body class="export-page">
+<body class="export-page" data-export-kind="{{ export_kind }}">
   <div class="export-actions" data-html2canvas-ignore="true">
     <button class="button button-success small" type="button" data-export-download>Download PNG</button>
     <span data-export-status>Preparing PNG...</span>
   </div>
 
   <div class="export-shell" data-export-root>
-    <header class="export-header">
-      <div class="export-note">League Export</div>
-      <h1>{{ title }}</h1>
-      <p>{{ subtitle }}</p>
-      {% if fixture_filters and export_kind != 'fixtures' %}
-        <div class="export-summary">
-          <div class="metric"><span>Category</span><strong>{{ fixture_filters.category }}</strong></div>
-          <div class="metric"><span>Bucket</span><strong>{{ fixture_filters.bucket }}</strong></div>
-          <div class="metric"><span>From</span><strong>{{ fixture_filters.date_from or '-' }}</strong></div>
-          <div class="metric"><span>To</span><strong>{{ fixture_filters.date_to or '-' }}</strong></div>
-        </div>
-      {% endif %}
-    </header>
+    {% if export_kind != 'fixtures' %}
+      <header class="export-header">
+        <div class="export-note">League Export</div>
+        <h1>{{ title }}</h1>
+        <p>{{ subtitle }}</p>
+        {% if fixture_filters %}
+          <div class="export-summary">
+            <div class="metric"><span>Category</span><strong>{{ fixture_filters.category }}</strong></div>
+            <div class="metric"><span>Bucket</span><strong>{{ fixture_filters.bucket }}</strong></div>
+            <div class="metric"><span>From</span><strong>{{ fixture_filters.date_from or '-' }}</strong></div>
+            <div class="metric"><span>To</span><strong>{{ fixture_filters.date_to or '-' }}</strong></div>
+          </div>
+        {% endif %}
+      </header>
+    {% endif %}
 
     {% if export_kind == 'fixtures' %}
       <section class="export-section">
