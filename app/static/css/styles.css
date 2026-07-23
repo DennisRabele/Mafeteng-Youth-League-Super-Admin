@@ -1528,16 +1528,19 @@ body[data-app-mode="team_admin"] .transfer-list article small {
 }
 
 .fixture-download-note {
-  background: #fff3f3;
-  border-left: 4px solid #d10000;
-  color: #8f0000;
-  line-height: 1.45;
+  background: #ffe8e8;
+  border: 1px solid #d10000;
+  border-left: 6px solid #b00000;
+  color: #a00000;
+  font-weight: 900;
+  line-height: 1.5;
   margin-top: 0.5rem;
   padding: 0.85rem 1rem;
+  text-shadow: none;
 }
 
 .fixture-download-note strong {
-  color: #b00000;
+  color: #7f0000;
   font-weight: 900;
 }
 
