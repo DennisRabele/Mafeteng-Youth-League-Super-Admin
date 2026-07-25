@@ -104,7 +104,6 @@ def _ensure_schema_columns() -> None:
         "rejection_reason": "ALTER TABLE players ADD COLUMN rejection_reason TEXT",
         "approved_by_super_admin_id": "ALTER TABLE players ADD COLUMN approved_by_super_admin_id INTEGER REFERENCES super_admins(admin_id)",
         "approved_at": "ALTER TABLE players ADD COLUMN approved_at TIMESTAMP",
-        "registration_expires_at": "ALTER TABLE players ADD COLUMN registration_expires_at TIMESTAMP",
         "registration_reminder_sent_at": "ALTER TABLE players ADD COLUMN registration_reminder_sent_at TIMESTAMP",
         "is_on_loan": "ALTER TABLE players ADD COLUMN is_on_loan BOOLEAN DEFAULT FALSE NOT NULL",
         "original_team_id": "ALTER TABLE players ADD COLUMN original_team_id INTEGER REFERENCES teams(team_id)",
@@ -179,12 +178,50 @@ def _ensure_schema_columns() -> None:
                 if column_name not in result_columns:
                     connection.execute(text(statement))
 
+    if inspector.has_table("player_statistics"):
+        player_stat_columns = {column["name"] for column in inspector.get_columns("player_statistics")}
+        missing_player_stat_columns = {
+            "fixture_id": "ALTER TABLE player_statistics ADD COLUMN fixture_id INTEGER REFERENCES fixtures(fixture_id)",
+            "match_id": "ALTER TABLE player_statistics ADD COLUMN match_id INTEGER REFERENCES matches(match_id)",
+            "submission_id": "ALTER TABLE player_statistics ADD COLUMN submission_id INTEGER REFERENCES match_result_submissions(submission_id)",
+            "player_id": "ALTER TABLE player_statistics ADD COLUMN player_id INTEGER REFERENCES players(player_id)",
+            "team_id": "ALTER TABLE player_statistics ADD COLUMN team_id INTEGER REFERENCES teams(team_id)",
+            "category_id": "ALTER TABLE player_statistics ADD COLUMN category_id INTEGER REFERENCES categories(category_id)",
+            "team_code": "ALTER TABLE player_statistics ADD COLUMN team_code VARCHAR(50)",
+            "club_name": "ALTER TABLE player_statistics ADD COLUMN club_name VARCHAR(150) DEFAULT '' NOT NULL",
+            "category_name": "ALTER TABLE player_statistics ADD COLUMN category_name VARCHAR(80)",
+            "stat_type": "ALTER TABLE player_statistics ADD COLUMN stat_type VARCHAR(30) DEFAULT 'goal' NOT NULL",
+            "goal_type": "ALTER TABLE player_statistics ADD COLUMN goal_type VARCHAR(80)",
+            "created_at": "ALTER TABLE player_statistics ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL",
+        }
+        with engine.begin() as connection:
+            for column_name, statement in missing_player_stat_columns.items():
+                if column_name not in player_stat_columns:
+                    connection.execute(text(statement))
+
+    if inspector.has_table("match_day_squads"):
+        squad_columns = {column["name"] for column in inspector.get_columns("match_day_squads")}
+        missing_squad_columns = {
+            "fixture_id": "ALTER TABLE match_day_squads ADD COLUMN fixture_id INTEGER REFERENCES fixtures(fixture_id)",
+            "fixture_date_snapshot": "ALTER TABLE match_day_squads ADD COLUMN fixture_date_snapshot TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL",
+            "venue_snapshot": "ALTER TABLE match_day_squads ADD COLUMN venue_snapshot VARCHAR(150) DEFAULT '' NOT NULL",
+            "home_team_name_snapshot": "ALTER TABLE match_day_squads ADD COLUMN home_team_name_snapshot VARCHAR(150) DEFAULT '' NOT NULL",
+            "home_team_logo_snapshot": "ALTER TABLE match_day_squads ADD COLUMN home_team_logo_snapshot VARCHAR(500)",
+            "away_team_name_snapshot": "ALTER TABLE match_day_squads ADD COLUMN away_team_name_snapshot VARCHAR(150) DEFAULT '' NOT NULL",
+            "away_team_logo_snapshot": "ALTER TABLE match_day_squads ADD COLUMN away_team_logo_snapshot VARCHAR(500)",
+        }
+        with engine.begin() as connection:
+            for column_name, statement in missing_squad_columns.items():
+                if column_name not in squad_columns:
+                    connection.execute(text(statement))
+
     if inspector.has_table("result_verifications"):
         verification_columns = {
             column["name"] for column in inspector.get_columns("result_verifications")
         }
         missing_verification_columns = {
             "rejection_reason": "ALTER TABLE result_verifications ADD COLUMN rejection_reason TEXT",
+            "verified_by_system": "ALTER TABLE result_verifications ADD COLUMN verified_by_system BOOLEAN DEFAULT TRUE NOT NULL",
         }
         with engine.begin() as connection:
             for column_name, statement in missing_verification_columns.items():

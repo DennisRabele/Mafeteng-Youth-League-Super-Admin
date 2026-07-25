@@ -279,6 +279,410 @@
       font-size: 10px;
     }
 
+    .export-page[data-export-kind="match_day_squad"] .export-shell {
+      background: #f3f3f3;
+      color: #111;
+      max-width: 1360px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .export-header,
+    .export-page[data-export-kind="match_day_squad"] .export-actions {
+      display: none;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet {
+      background: #f3f3f3;
+      color: #111;
+      display: grid;
+      gap: 16px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__banner {
+      align-items: stretch;
+      background: linear-gradient(90deg, #050505 0%, #050505 41%, #ffc400 41%, #ffc400 100%);
+      color: #fff;
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) minmax(260px, 1.2fr) minmax(190px, 0.85fr);
+      min-height: 128px;
+      overflow: hidden;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand,
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__title,
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__season {
+      align-items: center;
+      display: flex;
+      padding: 22px 24px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand {
+      gap: 16px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand .squad-sheet__league-logo {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 10px;
+      display: inline-flex;
+      height: 128px;
+      justify-content: center;
+      overflow: hidden;
+      width: 128px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand .squad-sheet__league-logo img {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      height: 100%;
+      max-height: none;
+      max-width: none;
+      object-fit: contain;
+      padding: 0;
+      width: 100%;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team .fixture-logo-frame {
+      height: 96px;
+      width: 96px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand-text {
+      display: grid;
+      gap: 2px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand-text strong {
+      font-size: 18px;
+      line-height: 0.96;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand-text span {
+      color: #ffd84d;
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 0.96;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__title {
+      justify-content: center;
+      text-align: center;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__title h1 {
+      color: #fff;
+      font-size: 36px;
+      line-height: 0.95;
+      margin: 0;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__title h1 strong {
+      color: #ffc400;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__season {
+      justify-content: flex-end;
+      gap: 14px;
+      color: #050505;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__season strong {
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__season span {
+      display: block;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__section-title {
+      align-items: center;
+      background: #ffc400;
+      border-radius: 4px;
+      color: #050505;
+      display: inline-flex;
+      font-size: 14px;
+      font-weight: 900;
+      justify-content: center;
+      letter-spacing: 0.02em;
+      min-width: 254px;
+      padding: 8px 18px;
+      text-transform: uppercase;
+      transform: translateY(8px);
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture {
+      background: #fff;
+      border: 1px solid #888;
+      border-radius: 6px;
+      display: grid;
+      gap: 0;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-top {
+      align-items: center;
+      border-bottom: 1px solid #b6b6b6;
+      display: grid;
+      gap: 16px;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      padding: 22px 24px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team {
+      align-items: center;
+      display: flex;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team--away {
+      justify-content: flex-end;
+      text-align: right;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team h2 {
+      font-size: 26px;
+      line-height: 1;
+      margin: 6px 0 0;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team .fixture-logo-frame {
+      flex: 0 0 88px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team .fixture-logo {
+      object-fit: contain;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team--home {
+      justify-content: flex-start;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team--away {
+      justify-content: flex-end;
+      text-align: right;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team-row {
+      align-items: center;
+      display: flex;
+      gap: 12px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team-row .fixture-logo-frame {
+      flex: 0 0 96px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team-row strong {
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 1.05;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-ribbon {
+      align-items: center;
+      background: #050505;
+      color: #ffc400;
+      display: flex;
+      font-size: 28px;
+      font-weight: 900;
+      justify-content: center;
+      min-height: 74px;
+      min-width: 250px;
+      padding: 0 18px;
+      text-transform: uppercase;
+      transform: skewX(-18deg);
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-ribbon span {
+      transform: skewX(18deg);
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta-item {
+      align-items: center;
+      border-right: 1px solid #b6b6b6;
+      display: grid;
+      gap: 0;
+      grid-template-columns: 1fr;
+      min-height: 96px;
+      padding: 16px 18px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta-item:last-child {
+      border-right: 0;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta-item strong {
+      display: block;
+      font-size: 16px;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta-item span {
+      color: #111;
+      display: block;
+      font-size: 15px;
+      margin-top: 2px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__tables {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table {
+      background: #fff;
+      border: 1px solid #888;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table thead th {
+      background: #050505;
+      color: #fff;
+      font-size: 13px;
+      padding: 10px 12px;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table tbody tr:nth-child(odd) td {
+      background: #fff;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table tbody tr:nth-child(even) td {
+      background: #f7f7f7;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table td {
+      border-top: 1px solid #b6b6b6;
+      color: #111 !important;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 12px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table td:first-child,
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table th:first-child {
+      background: #ffc400;
+      color: #050505;
+      font-weight: 900;
+      text-align: center;
+      width: 56px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table td:last-child,
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table th:last-child {
+      text-align: center;
+      width: 100px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table td:nth-child(2),
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table th:nth-child(2) {
+      width: 40%;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__notes {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: 1.3fr 0.9fr;
+      margin-top: 6px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__notes-block {
+      min-height: 98px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__notes-label {
+      font-size: 13px;
+      font-weight: 900;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__line {
+      border-bottom: 1px solid #888;
+      height: 22px;
+      margin-bottom: 14px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__footer {
+      align-items: flex-end;
+      display: flex;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__footer strong {
+      font-size: 18px;
+      font-style: italic;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__footer .footer-icons {
+      align-items: center;
+      display: flex;
+      gap: 12px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__footer .footer-brand {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__footer .footer-brand b {
+      color: #ffc400;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__subtitle {
+      color: #444;
+      font-size: 12px;
+      margin-top: -6px;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__league-heading {
+      align-items: center;
+      background: #050505;
+      color: #fff;
+      display: flex;
+      gap: 16px;
+      padding: 20px 24px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__league-heading .fixture-logo-frame {
+      flex: 0 0 84px;
+      height: 84px;
+      width: 84px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__league-heading h2 {
+      color: #fff;
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 0.95;
+      margin: 0;
+      text-transform: uppercase;
+    }
+
     @media (max-width: 620px) {
       .export-page[data-export-kind="fixtures"] .export-shell {
         padding: 18px;
@@ -326,6 +730,51 @@
         grid-column: 1 / -1;
         justify-self: start;
         text-align: left;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-export-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-export-meta {
+        text-align: left;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__teams {
+        grid-template-columns: 1fr;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__vs {
+        text-align: center;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__banner {
+        grid-template-columns: 1fr;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand {
+        justify-content: center;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__title h1 {
+        font-size: 28px;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__season {
+        justify-content: flex-start;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-top,
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta,
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__tables,
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__notes {
+        grid-template-columns: 1fr;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-ribbon {
+        min-width: 0;
+        width: 100%;
       }
     }
 
@@ -423,6 +872,149 @@
           {% endfor %}
         </div>
       </section>
+    {% elif export_kind == 'match_day_squad' %}
+      <section class="export-section">
+        {% set members = match_day_squad.members | sort(attribute='jersey_number') %}
+        {% set midpoint = (members | length + 1) // 2 %}
+        {% set home_members = members[:midpoint] %}
+        {% set away_members = members[midpoint:] %}
+        <article class="squad-sheet">
+          <div class="squad-sheet__banner">
+            <div class="squad-sheet__brand">
+              <span class="squad-sheet__league-logo">
+                <img class="fixture-logo" src="/static/images/logo.jpg" alt="Mafeteng Youth Development League">
+              </span>
+              <div class="squad-sheet__brand-text">
+                <strong>MAFETENG YOUTH DEVELOPMENT LEAGUE</strong>
+              </div>
+            </div>
+            <div class="squad-sheet__title">
+              <h1>MATCHDAY<br><strong>SQUAD FORM</strong></h1>
+            </div>
+            <div class="squad-sheet__season">
+              <div>
+                <strong>League Season</strong>
+                <span>{{ season_name or match_day_squad.category_name_snapshot }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:center;">
+            <div class="squad-sheet__section-title">Fixture Details</div>
+          </div>
+
+          <div class="squad-sheet__fixture">
+            <div class="squad-sheet__fixture-top">
+              <div class="squad-sheet__fixture-team squad-sheet__fixture-team--home">
+                <div>
+                  <div class="squad-sheet__subtitle">Home Team</div>
+                  <div class="squad-sheet__fixture-team-row">
+                    {% if match_day_squad.home_team_logo_snapshot %}
+                      <span class="fixture-logo-frame"><img class="fixture-logo" src="{{ match_day_squad.home_team_logo_snapshot }}" alt="{{ match_day_squad.home_team_name_snapshot }}"></span>
+                    {% else %}
+                      <span class="fixture-logo fallback fixture-logo-frame">{{ match_day_squad.home_team_name_snapshot[:1] }}</span>
+                    {% endif %}
+                    <strong>{{ match_day_squad.home_team_name_snapshot }}</strong>
+                  </div>
+                </div>
+              </div>
+              <div class="squad-sheet__fixture-ribbon"><span>VS</span></div>
+              <div class="squad-sheet__fixture-team squad-sheet__fixture-team--away">
+                <div>
+                  <div class="squad-sheet__subtitle">Away Team</div>
+                  <div class="squad-sheet__fixture-team-row" style="justify-content:flex-end;">
+                    {% if match_day_squad.away_team_logo_snapshot %}
+                      <span class="fixture-logo-frame"><img class="fixture-logo" src="{{ match_day_squad.away_team_logo_snapshot }}" alt="{{ match_day_squad.away_team_name_snapshot }}"></span>
+                    {% else %}
+                      <span class="fixture-logo fallback fixture-logo-frame">{{ match_day_squad.away_team_name_snapshot[:1] }}</span>
+                    {% endif %}
+                    <strong>{{ match_day_squad.away_team_name_snapshot }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="squad-sheet__fixture-meta">
+              <div class="squad-sheet__fixture-meta-item">
+                <div><strong>Venue</strong><span>{{ match_day_squad.venue_snapshot }}</span></div>
+              </div>
+              <div class="squad-sheet__fixture-meta-item">
+                <div><strong>Date</strong><span>{{ match_day_squad.fixture_date_snapshot.strftime('%d %b %Y') }}</span></div>
+              </div>
+              <div class="squad-sheet__fixture-meta-item">
+                <div><strong>Time</strong><span>{{ match_day_squad.fixture_date_snapshot.strftime('%H:%M') }}</span></div>
+              </div>
+              <div class="squad-sheet__fixture-meta-item">
+                <div><strong>Generated By</strong><span>{{ match_day_squad.generated_by.user.full_name if match_day_squad.generated_by and match_day_squad.generated_by.user else 'Team Admin' }}</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="squad-sheet__tables">
+            <table class="squad-sheet__table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Player Name</th>
+                  <th>Player ID</th>
+                  <th>Jersey Number</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for member in home_members %}
+                  <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ member.player_name_snapshot }}</td>
+                    <td>{{ member.player_code_snapshot or '-' }}</td>
+                    <td>{{ member.jersey_number }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <table class="squad-sheet__table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Player Name</th>
+                  <th>Player ID</th>
+                  <th>Jersey Number</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for member in away_members %}
+                  <tr>
+                    <td>{{ loop.index + midpoint }}</td>
+                    <td>{{ member.player_name_snapshot }}</td>
+                    <td>{{ member.player_code_snapshot or '-' }}</td>
+                    <td>{{ member.jersey_number }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="squad-sheet__notes">
+            <div class="squad-sheet__notes-block">
+              <div class="squad-sheet__notes-label">Notes / Additional Information:</div>
+              <div class="squad-sheet__line"></div>
+              <div class="squad-sheet__line"></div>
+              <div class="squad-sheet__line"></div>
+            </div>
+            <div class="squad-sheet__notes-block">
+              <div class="squad-sheet__notes-label">Team Coach Signature:</div>
+              <div class="squad-sheet__line"></div>
+              <div class="squad-sheet__notes-label" style="margin-top: 10px;">Date:</div>
+              <div class="squad-sheet__line"></div>
+            </div>
+          </div>
+
+          <div class="squad-sheet__footer">
+            <strong>Develop <span style="color:#ffc400;">Today</span>, Lead <span style="color:#ffc400;">Tomorrow</span>.</strong>
+            <div class="footer-icons">
+              <span class="footer-brand">Mafeteng <b>Youth</b> League</span>
+            </div>
+          </div>
+        </article>
+      </section>
     {% elif export_kind == 'results' %}
       <section class="export-section">
         <div class="export-grid">
@@ -503,17 +1095,17 @@
           <div class="export-empty">No league tables available yet.</div>
         {% endfor %}
       </section>
-    {% elif export_kind == 'performances' %}
+    {% elif export_kind == 'player_statistics' %}
       <section class="export-stack">
         <div class="export-section">
           <h2>Player Overview</h2>
           <div class="export-grid">
-            {% for row in player_performances.players %}
+            {% for row in player_statistics.players %}
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
                     <h2 class="export-card__title">{{ row.player.full_name }}</h2>
-                    <div class="export-card__meta">{{ row.team.team_name }} · {{ row.category_name }}</div>
+                    <div class="export-card__meta">{{ row.team.team_name }} Â· {{ row.category_name }}</div>
                   </div>
                   <span class="status approved">{{ row.goals }} goals</span>
                 </div>
@@ -532,7 +1124,7 @@
         <div class="export-section">
           <h2>Top Scorers</h2>
           <div class="export-grid">
-            {% for row in player_performances.scorers %}
+            {% for row in player_statistics.scorers %}
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
@@ -555,7 +1147,7 @@
         <div class="export-section">
           <h2>Top Assisters</h2>
           <div class="export-grid">
-            {% for row in player_performances.assisters %}
+            {% for row in player_statistics.assisters %}
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
@@ -646,3 +1238,4 @@
   </script>
 </body>
 </html>
+

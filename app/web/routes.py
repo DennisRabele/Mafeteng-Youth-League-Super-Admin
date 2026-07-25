@@ -1,7 +1,9 @@
 from datetime import date, datetime, timedelta
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse, Response
@@ -33,18 +35,21 @@ from app.models import (
     UserRole,
 )
 from app.services.league import (
-    delete_all_notifications,
-    delete_notification,
     create_fixture,
     get_league_tables,
     get_notifications_for_user,
-    get_player_performances,
+    get_match_day_squad,
+    get_team_admin_match_day_squads,
+    get_player_statistics,
     mark_notification_read,
     postpone_fixture,
+    purge_expired_match_day_squads,
     purge_expired_result_files,
+    create_match_day_squad,
+    delete_match_day_squad,
+    delete_match_day_squads,
     submit_match_result,
     update_fixture,
-    verify_match_result,
 )
 from app.services.registration import (
     RegistrationError,
@@ -61,6 +66,8 @@ from app.services.registration import (
     issue_email_verification_code,
     issue_login_code,
     issue_password_recovery_code,
+    process_player_registration_lifecycle,
+    get_player_registration_expiry_date,
     register_player,
     register_team,
     register_transferred_player,
@@ -74,14 +81,20 @@ from app.services.registration import (
     request_player_transfer,
     respond_to_transfer,
     restore_expired_loans,
-    process_player_registration_lifecycle,
     reset_password,
     unregister_transferred_player,
     age_on,
-    _player_registration_expiry_date,
     verify_email_code,
     verify_login_code,
     verify_password_recovery_code,
+)
+from app.services.team_access import (
+    load_team_admin_approved_team_ids,
+    load_team_admin_approved_teams,
+    load_team_admin_primary_team,
+    load_team_admin_owned_approved_teams,
+    load_team_admin_teams,
+    team_admin_has_access_to_team,
 )
 from app.services.email import (
     EmailDeliveryError,
@@ -106,6 +119,10 @@ def _render(request: Request, template: str, context: dict):
     context.setdefault("current_user", None)
     context.setdefault("message", None)
     context.setdefault("error", None)
+    if template in {"code_verification.html", "team_admin/action_result.html"}:
+        context.setdefault("hide_public_auth_nav", True)
+    else:
+        context.setdefault("hide_public_auth_nav", False)
     context.setdefault("app_name", settings.app_name)
     context.setdefault("app_mode", app_mode)
     context.setdefault("assets", assets)
@@ -173,6 +190,33 @@ def _redirect(location: str) -> RedirectResponse:
     return RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
 
 
+def _team_admin_dashboard_redirect(
+    *,
+    section: str,
+    notice: str,
+    notice_kind: str = "success",
+) -> RedirectResponse:
+    query = urlencode(
+        {
+            "notice": notice,
+            "notice_kind": notice_kind,
+        }
+    )
+    return _redirect(f"/team-admin/dashboard?{query}#{section}")
+
+
+def _decorate_player_registration_details(players: list[Player], db: Session) -> None:
+    today = date.today()
+    reminder_cutoff = today + timedelta(days=30)
+    for player in players:
+        expiry_date = get_player_registration_expiry_date(db, player)
+        player.registration_expiration_date = expiry_date
+        player.registration_is_expired = bool(expiry_date and expiry_date <= today)
+        player.registration_requires_renewal = bool(
+            expiry_date and today < expiry_date <= reminder_cutoff
+        )
+
+
 def _destination_for_user(user: User) -> str:
     if user.role == UserRole.SUPER_ADMIN.value:
         return "/super-admin"
@@ -202,6 +246,7 @@ def _render_code_screen(
                 "submit_label": "Continue",
                 "message": message,
                 "error": error,
+                "hide_public_auth_nav": True,
             },
         )
         response.set_cookie(
@@ -223,6 +268,7 @@ def _render_code_screen(
                 "submit_label": "Verify Code",
                 "message": message,
                 "error": error,
+                "hide_public_auth_nav": True,
             },
         )
         response.set_cookie(
@@ -243,6 +289,7 @@ def _render_code_screen(
             "submit_label": "Continue",
             "message": message,
             "error": error,
+            "hide_public_auth_nav": True,
         },
     )
     response.set_cookie(
@@ -481,24 +528,6 @@ def _filter_fixtures_for_dashboard(
     return filtered
 
 
-def _decorate_player_registration_fields(db: Session, players: list[Player]) -> None:
-    for player in players:
-        player.calculated_age = age_on(player.dob)
-        if player.status == ApprovalStatus.APPROVED.value:
-            expiry_date = _player_registration_expiry_date(db, player)
-            player.registration_expiration_date = expiry_date
-            player.registration_period = player.registration_period or 0
-            if expiry_date:
-                player.registration_expires_at = datetime.combine(expiry_date, datetime.min.time())
-                player.registration_days_remaining = max(0, (expiry_date - date.today()).days)
-            else:
-                player.registration_expires_at = None
-                player.registration_days_remaining = None
-        else:
-            player.registration_expiration_date = None
-            player.registration_days_remaining = None
-
-
 def _load_result_submissions(
     db: Session,
     *,
@@ -537,34 +566,6 @@ def _combine_result_lines(*chunks: str | None) -> str | None:
         normalized = chunk.replace("\r\n", "\n").replace("\r", "\n")
         lines.extend([line.strip() for line in normalized.split("\n") if line.strip()])
     return "\n".join(lines) if lines else None
-
-
-def _csv_response(filename: str, rows: list[list[object]]) -> Response:
-    output = io.StringIO()
-    writer = csv.writer(output)
-    for row in rows:
-        writer.writerow(row)
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-def _filter_result_submissions_by_category(
-    submissions: list[MatchResultSubmission],
-    category_name: str = "all",
-) -> list[MatchResultSubmission]:
-    if category_name == "all":
-        return submissions
-    return [
-        submission
-        for submission in submissions
-        if submission.match
-        and submission.match.fixture
-        and submission.match.fixture.category
-        and submission.match.fixture.category.category_name == category_name
-    ]
 
 
 @router.get("/")
@@ -880,7 +881,7 @@ def team_admin_registration_form(
     resolved_is_first = is_first == "true" if is_first else None
     if re_register and current_user and current_user.team_admin_profile:
         team_admin = current_user.team_admin_profile
-        assigned_team = team_admin.assigned_team
+        assigned_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
         form_data = {
             "full_name": current_user.full_name,
             "team_name": team_admin.requested_team_name,
@@ -1000,6 +1001,22 @@ def team_admin_registration(
         )
 
     if is_first_registration:
+        if normalized_team_code:
+            return _render(
+                request,
+                "team_admin_register.html",
+                {
+                    "error": "Team code is not required for the first team admin registration.",
+                    "is_first": True,
+                    "form_data": {
+                        "full_name": full_name,
+                        "team_name": team_name,
+                        "national_id": national_id,
+                        "phone": phone,
+                        "email": email,
+                    },
+                },
+            )
         if not normalized_team_name:
             return _render(
                 request,
@@ -1019,11 +1036,11 @@ def team_admin_registration(
     else:
         if not normalized_team_code and (not team_id or not team_id.strip()):
             return _render(
-                request,
-                "team_admin_register.html",
-                {
-                    "error": "Team code is required for additional team admin registrations.",
-                    "is_first": False,
+            request,
+            "team_admin_register.html",
+            {
+                "error": "Team code is required for additional team admin registrations.",
+                "is_first": False,
                     "form_data": {
                         "full_name": full_name,
                         "team_name": team_name,
@@ -1062,7 +1079,7 @@ def team_admin_registration(
         team_admin = create_team_admin_registration(
             db,
             full_name=full_name,
-            team_name=normalized_team_name or None,
+            team_name=normalized_team_name if is_first_registration else None,
             national_id=national_id,
             phone=phone,
             email=email,
@@ -1370,7 +1387,6 @@ def super_admin_dashboard(
     db: Session = Depends(get_db),
 ):
     user = _require_super_admin(request, db)
-    process_player_registration_lifecycle(db)
 
     all_team_admins = db.scalars(
         select(TeamAdmin)
@@ -1409,8 +1425,6 @@ def super_admin_dashboard(
         .where(Player.status != "transferred")
         .order_by(Player.player_id.desc())
     ).all()
-    _decorate_player_registration_fields(db, all_players)
-    approved_players = [player for player in all_players if player.status == ApprovalStatus.APPROVED.value]
     
     # Load approver user info for players
     for p in all_players:
@@ -1496,9 +1510,12 @@ def super_admin_dashboard(
         date_to=fixture_date_to,
     )
     result_submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
+    verified_result_submissions = [
+        submission for submission in result_submissions if submission.status == ApprovalStatus.APPROVED.value
+    ]
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
-    player_performances = _safe_dashboard_value(
-        lambda: get_player_performances(db),
+    player_statistics = _safe_dashboard_value(
+        lambda: get_player_statistics(db),
         {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
@@ -1523,7 +1540,7 @@ def super_admin_dashboard(
         "renewals": len(all_renewals),
         "transfers": len(all_transfers),
         "fixtures": len(fixtures),
-        "results": len(result_submissions),
+        "results": len(verified_result_submissions),
         "notifications": unread_notifications,
         "pending": pending_count,
     }
@@ -1537,22 +1554,21 @@ def super_admin_dashboard(
             "all_team_admins": all_team_admins,
             "all_teams": all_teams,
             "all_players": all_players,
-            "approved_players": approved_players,
             "all_renewals": all_renewals,
             "all_transfers": all_transfers,
             "teams_list": teams_list,
             "approved_fixture_teams": approved_fixture_teams,
+            "categories": categories,
+            "fixtures": fixtures,
             "fixture_filters": {
                 "category": fixture_category,
                 "bucket": fixture_bucket,
                 "date_from": fixture_date_from or "",
                 "date_to": fixture_date_to or "",
             },
-            "categories": categories,
-            "fixtures": fixtures,
-            "result_submissions": result_submissions,
+            "result_submissions": verified_result_submissions,
             "league_tables": league_tables,
-            "player_performances": player_performances,
+        "player_statistics": player_statistics,
             "notifications": notifications,
             "unread_notifications": unread_notifications,
         },
@@ -1579,8 +1595,6 @@ def approve_team_admin_route(
             "message": f"Team Admin approved. {team_admin.user.full_name} can now log into the Team Admin app with the password they created.",
             "generated_code": team_admin.admin_code,
             "credential_email": team_admin.user.email,
-            "decision_label": "Approved By",
-            "decision_actor": user.full_name,
         },
     )
 
@@ -1592,20 +1606,12 @@ def reject_team_admin_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = _require_super_admin(request, db)
+    _require_super_admin(request, db)
     try:
         reject_team_admin(db, team_admin_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Team Admin rejected by {user.full_name}. The registration record was permanently deleted.",
-            "decision_label": "Rejected By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.post("/super-admin/teams/{team_id}/approve")
@@ -1616,15 +1622,7 @@ def approve_team_route(team_id: int, request: Request, db: Session = Depends(get
         approve_team(db, team_id, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Team approved by {user.full_name}.",
-            "decision_label": "Approved By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.post("/super-admin/teams/{team_id}/reject")
@@ -1634,20 +1632,12 @@ def reject_team_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = _require_super_admin(request, db)
+    _require_super_admin(request, db)
     try:
         reject_team(db, team_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Team rejected by {user.full_name}. The registration record was permanently deleted.",
-            "decision_label": "Rejected By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.post("/super-admin/players/{player_id}/approve")
@@ -1658,15 +1648,7 @@ def approve_player_route(player_id: int, request: Request, db: Session = Depends
         approve_player(db, player_id, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Player approved by {user.full_name}.",
-            "decision_label": "Approved By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.post("/super-admin/players/{player_id}/reject")
@@ -1676,20 +1658,12 @@ def reject_player_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = _require_super_admin(request, db)
+    _require_super_admin(request, db)
     try:
         reject_player(db, player_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Player rejected by {user.full_name}. The registration record was permanently deleted.",
-            "decision_label": "Rejected By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.post("/super-admin/renewals/{registration_id}/approve")
@@ -1700,15 +1674,7 @@ def approve_renewal_route(registration_id: int, request: Request, db: Session = 
         approve_renewal(db, registration_id, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Renewal approved by {user.full_name}.",
-            "decision_label": "Approved By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.post("/super-admin/renewals/{registration_id}/reject")
@@ -1718,20 +1684,12 @@ def reject_renewal_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = _require_super_admin(request, db)
+    _require_super_admin(request, db)
     try:
         reject_renewal(db, registration_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Renewal rejected by {user.full_name}.",
-            "decision_label": "Rejected By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.post("/super-admin/transfers/{registration_id}/approve")
@@ -1742,15 +1700,7 @@ def approve_transfer_route(registration_id: int, request: Request, db: Session =
         approve_transfer_registration(db, registration_id, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Transfer registration approved by {user.full_name}.",
-            "decision_label": "Approved By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.post("/super-admin/transfers/{registration_id}/reject")
@@ -1760,20 +1710,12 @@ def reject_transfer_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = _require_super_admin(request, db)
+    _require_super_admin(request, db)
     try:
         reject_transfer_registration(db, registration_id, rejection_reason)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Transfer registration rejected by {user.full_name}.",
-            "decision_label": "Rejected By",
-            "decision_actor": user.full_name,
-        },
-    )
+    return _redirect("/super-admin")
 
 
 @router.get("/team-admin/welcome")
@@ -1792,21 +1734,15 @@ def team_admin_welcome(request: Request, db: Session = Depends(get_db)):
 @router.get("/team-admin/account")
 def team_admin_account(request: Request, db: Session = Depends(get_db)):
     team_admin = _require_team_admin_account(request, db)
-    approved_team = db.scalar(
-        select(Team)
-        .options(selectinload(Team.category))
-        .where(
-            Team.team_admin_id == team_admin.team_admin_id,
-            Team.status == ApprovalStatus.APPROVED.value,
-        )
-        .order_by(Team.team_id.desc())
-    )
+    approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
+    approved_team = approved_teams[0] if approved_teams else None
     return _render(
         request,
         "team_admin/account.html",
         {
             "current_user": team_admin.user,
             "team_admin": team_admin,
+            "approved_teams": approved_teams,
             "approved_team": approved_team,
         },
     )
@@ -1819,40 +1755,77 @@ def team_admin_dashboard(
     fixture_bucket: str = "all",
     fixture_date_from: str | None = None,
     fixture_date_to: str | None = None,
+    notice: str | None = None,
+    notice_kind: str | None = None,
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
     restore_expired_loans(db)
     process_player_registration_lifecycle(db)
+    purge_expired_match_day_squads(db)
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
-    teams = db.scalars(
-        select(Team)
-        .options(selectinload(Team.category))
-        .where(Team.team_admin_id == team_admin.team_admin_id)
-        .order_by(Team.team_id.desc())
-    ).all()
-    approved_teams = [
-        team for team in teams if team.status == ApprovalStatus.APPROVED.value
-    ]
+    teams = load_team_admin_teams(db, team_admin.team_admin_id)
+    approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
+    owned_approved_teams = load_team_admin_owned_approved_teams(db, team_admin.team_admin_id)
     approved_team = approved_teams[0] if approved_teams else None
-    own_team_ids = [team.team_id for team in teams]
+    approved_team_ids = [team.team_id for team in approved_teams]
+    can_register_clubs = bool(owned_approved_teams) or not approved_teams
     players = db.scalars(
         select(Player)
-        .options(selectinload(Player.team))
+        .options(selectinload(Player.team).selectinload(Team.category))
         .join(Team, Player.team_id == Team.team_id)
-        .where(Team.team_admin_id == team_admin.team_admin_id)
+        .where(Team.team_id.in_(approved_team_ids))
         .where(Player.status != "transferred")
         .order_by(Player.player_id.desc())
     ).all()
-    _decorate_player_registration_fields(db, players)
+    _decorate_player_registration_details(players, db)
     approved_players = [
         player for player in players if player.status == ApprovalStatus.APPROVED.value
     ]
+    _decorate_player_registration_details(approved_players, db)
+    match_day_players_data = [
+        {
+            "player_id": player.player_id,
+            "full_name": player.full_name,
+            "player_code": player.player_code or f"PLAYER-{player.player_id}",
+            "age_group": player.age_group or "-",
+            "team_id": player.team.team_id if player.team else None,
+            "team_name": player.team.team_name if player.team else "-",
+            "category_name": player.team.category.category_name if player.team and player.team.category else "-",
+        }
+        for player in approved_players
+    ]
+    match_day_fixtures_data = [
+        {
+            "fixture_id": fixture.fixture_id,
+            "category_id": fixture.category_id,
+            "category_name": fixture.category.category_name if fixture.category else "-",
+            "fixture_date": fixture.fixture_date.strftime("%Y-%m-%d %H:%M"),
+            "dashboard_date_day": fixture.dashboard_date_day,
+            "dashboard_date_month": fixture.dashboard_date_month,
+            "dashboard_date_year": fixture.dashboard_date_year,
+            "dashboard_time": fixture.dashboard_time,
+            "dashboard_day_name": fixture.dashboard_day_name,
+            "venue": fixture.venue,
+            "home_team": {
+                "team_id": fixture.home_team.team_id if fixture.home_team else None,
+                "team_name": fixture.home_team.team_name if fixture.home_team else "-",
+                "logo": fixture.home_team.logo if fixture.home_team else None,
+            },
+            "away_team": {
+                "team_id": fixture.away_team.team_id if fixture.away_team else None,
+                "team_name": fixture.away_team.team_name if fixture.away_team else "-",
+                "logo": fixture.away_team.logo if fixture.away_team else None,
+            },
+        }
+        for fixture in _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=approved_team_ids), [])
+    ]
+    match_day_squads = get_team_admin_match_day_squads(db, approved_team_ids)
     renewal_requests = db.scalars(
         select(PlayerRegistrationRequest)
         .where(
             PlayerRegistrationRequest.registration_type == "renewal",
-            PlayerRegistrationRequest.team_id.in_(own_team_ids),
+            PlayerRegistrationRequest.team_id.in_(approved_team_ids),
         )
         .options(
             selectinload(PlayerRegistrationRequest.player).selectinload(Player.team),
@@ -1860,15 +1833,16 @@ def team_admin_dashboard(
         )
         .order_by(PlayerRegistrationRequest.registration_id.desc())
     ).all()
+    for renewal in renewal_requests:
+        renewal.registration_label = f"{renewal.registration_period} Year(s)"
     transfer_target_teams = db.scalars(
         select(Team)
         .options(selectinload(Team.category))
-        .where(
-            Team.team_admin_id != team_admin.team_admin_id,
-            Team.status == ApprovalStatus.APPROVED.value,
-        )
+        .where(Team.status == ApprovalStatus.APPROVED.value)
         .order_by(Team.team_name)
     ).all()
+    if approved_team_ids:
+        transfer_target_teams = [team for team in transfer_target_teams if team.team_id not in approved_team_ids]
     all_teams = db.scalars(
         select(Team)
         .options(selectinload(Team.category))
@@ -1896,8 +1870,8 @@ def team_admin_dashboard(
         .where(
             PlayerTransferRequest.requested_by_team_admin_id != team_admin.team_admin_id,
             or_(
-                PlayerTransferRequest.from_team_id.in_(own_team_ids),
-                PlayerTransferRequest.to_team_id.in_(own_team_ids),
+                PlayerTransferRequest.from_team_id.in_(approved_team_ids),
+                PlayerTransferRequest.to_team_id.in_(approved_team_ids),
             ),
         )
         .order_by(PlayerTransferRequest.transfer_id.desc())
@@ -1912,7 +1886,7 @@ def team_admin_dashboard(
             selectinload(PlayerTransferRequest.to_team),
         )
         .where(
-            PlayerTransferRequest.to_team_id.in_(own_team_ids),
+            PlayerTransferRequest.to_team_id.in_(approved_team_ids),
             PlayerTransferRequest.status == ApprovalStatus.APPROVED.value,
             PlayerTransferRequest.completed_at.is_(None),
         )
@@ -1928,7 +1902,7 @@ def team_admin_dashboard(
             selectinload(PlayerTransferRequest.to_team),
         )
         .where(
-            PlayerTransferRequest.from_team_id.in_(own_team_ids),
+            PlayerTransferRequest.from_team_id.in_(approved_team_ids),
             PlayerTransferRequest.status == ApprovalStatus.APPROVED.value,
             PlayerTransferRequest.completed_at.is_(None),
         )
@@ -1949,7 +1923,7 @@ def team_admin_dashboard(
         if fixture.home_team
         and fixture.away_team
         and fixture.fixture_date <= datetime.utcnow()
-        and (fixture.home_team_id in own_team_ids or fixture.away_team_id in own_team_ids)
+        and (fixture.home_team_id in approved_team_ids or fixture.away_team_id in approved_team_ids)
     ]
     filtered_fixtures = _filter_fixtures_for_dashboard(
         fixtures,
@@ -1959,7 +1933,7 @@ def team_admin_dashboard(
         date_to=fixture_date_to,
     )
     result_submissions = _safe_dashboard_value(
-        lambda: _load_result_submissions(db, team_ids=own_team_ids),
+        lambda: _load_result_submissions(db, team_ids=approved_team_ids),
         [],
     )
     latest_result_by_fixture: dict[int, MatchResultSubmission] = {}
@@ -1977,8 +1951,8 @@ def team_admin_dashboard(
             else None
         )
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
-    player_performances = _safe_dashboard_value(
-        lambda: get_player_performances(db, team_ids=own_team_ids),
+    player_statistics = _safe_dashboard_value(
+        lambda: get_player_statistics(db, team_ids=approved_team_ids),
         {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
@@ -1993,12 +1967,20 @@ def team_admin_dashboard(
         {
             "current_user": team_admin.user,
             "team_admin": team_admin,
+            "dashboard_notice": notice,
+            "dashboard_notice_kind": notice_kind or "success",
+            "now": datetime.utcnow(),
             "categories": categories,
             "teams": teams,
             "approved_teams": approved_teams,
             "approved_team": approved_team,
+            "approved_team_ids": approved_team_ids,
+            "can_register_clubs": can_register_clubs,
             "players": players,
             "approved_players": approved_players,
+            "match_day_players_data": match_day_players_data,
+            "match_day_fixtures_data": match_day_fixtures_data,
+            "match_day_squads": match_day_squads,
             "renewal_requests": renewal_requests,
             "transfer_target_teams": transfer_target_teams,
             "all_teams": all_teams,
@@ -2009,6 +1991,7 @@ def team_admin_dashboard(
             "approved_transfers_for_unregistration": approved_transfers_for_unregistration,
             "transfer_status": TransferStatus,
             "fixtures": fixtures,
+            "played_fixtures": played_fixtures,
             "filtered_fixtures": filtered_fixtures,
             "fixture_filters": {
                 "category": fixture_category,
@@ -2018,7 +2001,7 @@ def team_admin_dashboard(
             },
             "result_submissions": result_submissions,
             "league_tables": league_tables,
-            "player_performances": player_performances,
+            "player_statistics": player_statistics,
             "notifications": notifications,
             "unread_notifications": unread_notifications,
         },
@@ -2035,7 +2018,8 @@ def export_team_admin_fixtures(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=team_ids), [])
     fixtures = _filter_fixtures_for_dashboard(
         fixtures,
         category_name=fixture_category,
@@ -2062,17 +2046,112 @@ def export_team_admin_fixtures(
     )
 
 
+@router.post("/team-admin/match-day-squads")
+def create_team_admin_match_day_squad(
+    request: Request,
+    fixture_id: int = Form(...),
+    squad_team_id: int = Form(...),
+    player_ids: list[int] = Form(...),
+    jersey_numbers: list[int] = Form(...),
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    if squad_team_id not in approved_team_ids:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Select one of your approved clubs before generating a squad."},
+        )
+    try:
+        squad = create_match_day_squad(
+            db,
+            fixture_id=fixture_id,
+            team_id=squad_team_id,
+            generated_by_team_admin_id=team_admin.team_admin_id,
+            player_ids=player_ids,
+            jersey_numbers=jersey_numbers,
+        )
+    except RegistrationError as exc:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": str(exc)},
+        )
+    return _redirect(f"/team-admin/dashboard/match-day-squads/{squad.squad_id}/export")
+
+
+@router.get("/team-admin/dashboard/match-day-squads/{squad_id}/export")
+def export_team_admin_match_day_squad(
+    request: Request,
+    squad_id: int,
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    purge_expired_match_day_squads(db)
+    squad = get_match_day_squad(db, squad_id)
+    if not squad or squad.team_id not in approved_team_ids:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match day squad not found.")
+    if not squad.downloaded_at:
+        squad.downloaded_at = datetime.utcnow()
+        db.commit()
+        db.refresh(squad)
+    filename = f"match_day_squad_{squad.team_name_snapshot}_{squad.generated_at.strftime('%Y%m%d_%H%M')}.png".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Match Day Squad",
+            "subtitle": "Match day squads are automatically deleted 24 hours after generation, whether they are downloaded or not.",
+            "export_kind": "match_day_squad",
+            "season_name": settings.default_season_name,
+            "match_day_squad": squad,
+        },
+    )
+
+
+@router.post("/team-admin/dashboard/match-day-squads/{squad_id}/delete")
+def delete_team_admin_match_day_squad(
+    request: Request,
+    squad_id: int,
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    try:
+        delete_match_day_squad(db, squad_id, team_ids=approved_team_ids)
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    return _redirect("/team-admin/dashboard?dashboard_section=match-day-squads")
+
+
+@router.post("/team-admin/dashboard/match-day-squads/delete-all")
+def delete_all_team_admin_match_day_squads(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    try:
+        delete_match_day_squads(db, team_ids=approved_team_ids)
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    return _redirect("/team-admin/dashboard?dashboard_section=match-day-squads")
+
+
 @router.get("/team-admin/dashboard/league-tables/export")
+@router.get("/team-admin/league-tables/export")
 def export_team_admin_league_tables(
     request: Request,
     category: str = "all",
     db: Session = Depends(get_db),
 ):
-    team_admin = _require_team_admin(request, db)
+    _require_team_admin(request, db)
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     if category != "all":
         league_tables = {category: league_tables.get(category, [])}
-    filename = f"league_tables_{category}.png".replace(" ", "_")
+    filename = f"team_admin_league_tables_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2085,39 +2164,6 @@ def export_team_admin_league_tables(
     )
 
 
-@router.get("/team-admin/dashboard/performances/export")
-def export_team_admin_performances(
-    request: Request,
-    metric: str = "all",
-    category: str = "all",
-    db: Session = Depends(get_db),
-):
-    team_admin = _require_team_admin(request, db)
-    team_ids = [
-        team.team_id
-        for team in db.scalars(
-            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
-        ).all()
-    ]
-    performances = _safe_dashboard_value(lambda: get_player_performances(db, team_ids=team_ids), {"players": [], "scorers": [], "assisters": []})
-    metric_key = {"all": "players", "goals": "scorers", "assists": "assisters"}.get(metric, "players")
-    performances[metric_key] = [
-        row for row in performances.get(metric_key, [])
-        if category == "all" or row["category_name"] == category
-    ]
-    filename = f"performances_{metric}_{category}.png".replace(" ", "_")
-    return _render_downloadable_cards(
-        "exports/cards.html",
-        filename=filename,
-        context={
-            "title": "Player Performances Cards Export",
-            "subtitle": "Downloaded performance cards rendered with the same dashboard design.",
-            "export_kind": "performances",
-            "player_performances": performances,
-        },
-    )
-
-
 @router.get("/team-admin/dashboard/results/export")
 def export_team_admin_results(
     request: Request,
@@ -2125,15 +2171,10 @@ def export_team_admin_results(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    team_ids = [
-        team.team_id
-        for team in db.scalars(
-            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
-        ).all()
-    ]
+    team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     submissions = _safe_dashboard_value(lambda: _load_result_submissions(db, team_ids=team_ids), [])
     submissions = _filter_result_submissions_by_category(submissions, category)
-    filename = f"results_{category}.png".replace(" ", "_")
+    filename = f"team_admin_results_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2142,6 +2183,100 @@ def export_team_admin_results(
             "subtitle": "Downloaded result cards rendered with the same dashboard design.",
             "export_kind": "results",
             "result_submissions": submissions,
+        },
+    )
+
+
+@router.get("/team-admin/dashboard/player-statistics/export")
+def export_team_admin_player_statistics(
+    request: Request,
+    metric: str = "all",
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    statistics = _safe_dashboard_value(
+        lambda: get_player_statistics(db, team_ids=team_ids),
+        {"players": [], "scorers": [], "assisters": []},
+    )
+    for key in ("scorers", "assisters"):
+        statistics[key] = [
+            row for row in statistics.get(key, [])
+            if category == "all" or row["category_name"] == category
+        ]
+    if metric == "goals":
+        statistics["assisters"] = []
+    elif metric == "assists":
+        statistics["scorers"] = []
+    filename = f"team_admin_player_statistics_{metric}_{category}.png".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Player Statistics Cards Export",
+            "subtitle": "Downloaded player statistics cards rendered with the same dashboard design.",
+            "export_kind": "player_statistics",
+            "player_statistics": statistics,
+        },
+    )
+
+
+@router.get("/super-admin/fixtures/export")
+def export_super_admin_fixtures(
+    request: Request,
+    fixture_category: str = "all",
+    fixture_bucket: str = "all",
+    fixture_date_from: str | None = None,
+    fixture_date_to: str | None = None,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    fixtures = _filter_fixtures_for_dashboard(
+        fixtures,
+        category_name=fixture_category,
+        bucket=fixture_bucket,
+        date_from=fixture_date_from,
+        date_to=fixture_date_to,
+    )
+    filename = f"super_admin_fixtures_{fixture_category}_{fixture_bucket}.png".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Fixtures Cards Export",
+            "subtitle": "Downloaded fixture cards rendered with the same dashboard design.",
+            "export_kind": "fixtures",
+            "fixtures": fixtures,
+            "fixture_filters": {
+                "category": fixture_category,
+                "bucket": fixture_bucket,
+                "date_from": fixture_date_from or "",
+                "date_to": fixture_date_to or "",
+            },
+        },
+    )
+
+
+@router.get("/super-admin/results/export")
+def export_super_admin_results(
+    request: Request,
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    result_submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
+    result_submissions = _filter_result_submissions_by_category(result_submissions, category)
+    filename = f"super_admin_results_{category}.png".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Results Cards Export",
+            "subtitle": "Downloaded result cards rendered with the same dashboard design.",
+            "export_kind": "results",
+            "result_submissions": result_submissions,
         },
     )
 
@@ -2156,7 +2291,7 @@ def export_super_admin_league_tables(
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     if category != "all":
         league_tables = {category: league_tables.get(category, [])}
-    filename = f"league_tables_{category}.png".replace(" ", "_")
+    filename = f"super_admin_league_tables_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2165,6 +2300,40 @@ def export_super_admin_league_tables(
             "subtitle": "Downloaded league table cards rendered with the same dashboard design.",
             "export_kind": "league_tables",
             "league_tables": league_tables,
+        },
+    )
+
+
+@router.get("/super-admin/player-statistics/export")
+def export_super_admin_player_statistics(
+    request: Request,
+    metric: str = "all",
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    player_statistics = _safe_dashboard_value(
+        lambda: get_player_statistics(db),
+        {"players": [], "scorers": [], "assisters": []},
+    )
+    for key in ("scorers", "assisters"):
+        player_statistics[key] = [
+            row for row in player_statistics.get(key, [])
+            if category == "all" or row["category_name"] == category
+        ]
+    if metric == "goals":
+        player_statistics["assisters"] = []
+    elif metric == "assists":
+        player_statistics["scorers"] = []
+    filename = f"super_admin_player_statistics_{metric}_{category}.png".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Player Statistics Cards Export",
+            "subtitle": "Downloaded player statistics cards rendered with the same dashboard design.",
+            "export_kind": "player_statistics",
+            "player_statistics": player_statistics,
         },
     )
 
@@ -2249,101 +2418,15 @@ def postpone_fixture_route(
     return _redirect("/super-admin#fixtures")
 
 
-@router.get("/super-admin/fixtures/export")
-def export_super_admin_fixtures(
-    request: Request,
-    fixture_category: str = "all",
-    fixture_bucket: str = "all",
-    fixture_date_from: str | None = None,
-    fixture_date_to: str | None = None,
-    db: Session = Depends(get_db),
-):
-    _require_super_admin(request, db)
-    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
-    fixtures = _filter_fixtures_for_dashboard(
-        fixtures,
-        category_name=fixture_category,
-        bucket=fixture_bucket,
-        date_from=fixture_date_from,
-        date_to=fixture_date_to,
-    )
-    filename = f"fixtures_{fixture_category}_{fixture_bucket}.png".replace(" ", "_")
-    return _render_downloadable_cards(
-        "exports/cards.html",
-        filename=filename,
-        context={
-            "title": "Fixtures Cards Export",
-            "subtitle": "Downloaded fixture cards rendered with the same dashboard design.",
-            "export_kind": "fixtures",
-            "fixtures": fixtures,
-            "fixture_filters": {
-                "category": fixture_category,
-                "bucket": fixture_bucket,
-                "date_from": fixture_date_from or "",
-                "date_to": fixture_date_to or "",
-            },
-        },
-    )
-
-
-@router.get("/super-admin/results/export")
-def export_super_admin_results(
-    request: Request,
-    category: str = "all",
-    db: Session = Depends(get_db),
-):
-    _require_super_admin(request, db)
-    submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
-    submissions = _filter_result_submissions_by_category(submissions, category)
-    filename = f"results_{category}.png".replace(" ", "_")
-    return _render_downloadable_cards(
-        "exports/cards.html",
-        filename=filename,
-        context={
-            "title": "Results Cards Export",
-            "subtitle": "Downloaded result cards rendered with the same dashboard design.",
-            "export_kind": "results",
-            "result_submissions": submissions,
-        },
-    )
-
-
-@router.get("/super-admin/performances/export")
-def export_super_admin_performances(
-    request: Request,
-    metric: str = "all",
-    category: str = "all",
-    db: Session = Depends(get_db),
-):
-    _require_super_admin(request, db)
-    performances = _safe_dashboard_value(lambda: get_player_performances(db), {"players": [], "scorers": [], "assisters": []})
-    metric_key = {"all": "players", "goals": "scorers", "assists": "assisters"}.get(metric, "players")
-    performances[metric_key] = [
-        row for row in performances.get(metric_key, [])
-        if category == "all" or row["category_name"] == category
-    ]
-    filename = f"performances_{metric}_{category}.png".replace(" ", "_")
-    return _render_downloadable_cards(
-        "exports/cards.html",
-        filename=filename,
-        context={
-            "title": "Player Performances Cards Export",
-            "subtitle": "Downloaded performance cards rendered with the same dashboard design.",
-            "export_kind": "performances",
-            "player_performances": performances,
-        },
-    )
-
-
 @router.post("/team-admin/results")
 def submit_result_route(
     request: Request,
     fixture_id: int = Form(...),
     home_score: int = Form(...),
     away_score: int = Form(...),
-    scorer_names_text: str | None = Form(None),
-    goal_types_text: str | None = Form(None),
-    assist_names_text: str | None = Form(None),
+    scorer_player_ids: list[str] = Form([]),
+    goal_types: list[str] = Form([]),
+    assist_player_ids: list[str] = Form([]),
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
@@ -2354,112 +2437,86 @@ def submit_result_route(
             fixture_id=fixture_id,
             home_score=home_score,
             away_score=away_score,
-            scorer_names_text=scorer_names_text,
-            goal_types_text=goal_types_text,
-            assist_names_text=assist_names_text,
+            scorer_player_ids=scorer_player_ids,
+            goal_types=goal_types,
+            assist_player_ids=assist_player_ids,
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
     return _redirect("/team-admin/dashboard#results")
 
 
-@router.post("/team-admin/results/upload")
-def upload_result_file(
-    request: Request,
-    fixture_id: int = Form(...),
-    home_score: int = Form(...),
-    away_score: int = Form(...),
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-):
-    team_admin = _require_team_admin(request, db)
-    saved = None
-    try:
-        fixture = db.get(Fixture, fixture_id)
-        if not fixture:
-            raise RegistrationError("Fixture was not found.")
-        try:
-            from app.services.league import _fixture_allows_result_submission
-
-            allows = _fixture_allows_result_submission(fixture)
-        except Exception:
-            allows = fixture.fixture_date <= datetime.utcnow()
-        if not allows:
-            raise RegistrationError("Results can only be uploaded after the fixture has been played.")
-        if team_admin.team_admin_id not in {fixture.home_team.team_admin_id, fixture.away_team.team_admin_id}:
-            raise RegistrationError("You can only upload results for fixtures involving your teams.")
-        saved = _safe_upload(file, "match-results")
-        submit_match_result(
-            db,
-            team_admin_id=team_admin.team_admin_id,
-            fixture_id=fixture_id,
-            home_score=home_score,
-            away_score=away_score,
-            result_file_path=saved,
-            scorer_names_text=None,
-            goal_types_text=None,
-            assist_names_text=None,
+def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, object]:
+    fixture = db.scalar(
+        select(Fixture)
+        .options(
+            selectinload(Fixture.category),
+            selectinload(Fixture.home_team),
+            selectinload(Fixture.away_team),
         )
-        try:
-            from app.services.league import notify_super_admins
+        .where(Fixture.fixture_id == fixture_id)
+    )
+    if not fixture or not fixture.category or not fixture.home_team or not fixture.away_team:
+        raise RegistrationError("Fixture was not found.")
 
-            notify_super_admins(
-                db,
-                "Match results file uploaded",
-                f"A match results file was uploaded for {fixture.home_team.team_name} vs {fixture.away_team.team_name}.",
-                "/super-admin#results",
+    category_name = (fixture.category.category_name or "").strip()
+    if not category_name:
+        raise RegistrationError("Fixture category was not found.")
+
+    category_age_group_match = re.search(r"\bU\d{2}\b", category_name, re.IGNORECASE)
+    category_age_group = (
+        category_age_group_match.group(0).upper()
+        if category_age_group_match
+        else category_name.strip().upper()
+    )
+
+    def _load_team_players(team_id: int) -> list[dict[str, object]]:
+        players = db.scalars(
+            select(Player)
+            .options(selectinload(Player.team))
+            .where(
+                Player.team_id == team_id,
+                Player.status == ApprovalStatus.APPROVED.value,
+                Player.is_on_loan.is_(False),
+                or_(
+                    func.upper(func.trim(Player.age_group)) == category_age_group,
+                    func.upper(func.trim(Player.age_group)).like(f"%{category_age_group}%"),
+                ),
             )
-        except Exception:
-            pass
-    except RegistrationError as exc:
-        if saved:
-            delete_upload(saved, "match-results")
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
-    except Exception:
-        if saved:
-            delete_upload(saved, "match-results")
-        logger.exception("Result file upload failed")
-        return _render(request, "team_admin/action_result.html", {"error": "Result file upload failed. Please try again."})
-    return _redirect("/team-admin/dashboard#results")
+            .order_by(Player.full_name.asc(), Player.player_id.asc())
+        ).all()
+        return [
+            {
+                "player_id": player.player_id,
+                "player_name": player.full_name,
+                "age_group": player.age_group,
+            }
+            for player in players
+        ]
+
+    return {
+        "fixture_id": fixture.fixture_id,
+        "category_name": category_name,
+        "home_team": {
+            "team_id": fixture.home_team.team_id,
+            "team_name": fixture.home_team.team_name,
+        },
+        "away_team": {
+            "team_id": fixture.away_team.team_id,
+            "team_name": fixture.away_team.team_name,
+        },
+        "home_players": _load_team_players(fixture.home_team_id),
+        "away_players": _load_team_players(fixture.away_team_id),
+    }
 
 
-@router.post("/super-admin/results/{submission_id}/verify")
-def verify_result_route(
-    submission_id: int,
-    request: Request,
-    home_score: int = Form(...),
-    away_score: int = Form(...),
-    home_scorer_names_text: str | None = Form(None),
-    home_goal_types_text: str | None = Form(None),
-    home_assist_names_text: str | None = Form(None),
-    away_scorer_names_text: str | None = Form(None),
-    away_goal_types_text: str | None = Form(None),
-    away_assist_names_text: str | None = Form(None),
-    rejection_reason: str | None = Form(None),
-    decision: str = Form(ApprovalStatus.APPROVED.value),
-    db: Session = Depends(get_db),
-):
-    user = _require_super_admin(request, db)
+@router.get("/api/team-admin/result-players")
+def team_admin_result_players(request: Request, fixture_id: int, db: Session = Depends(get_db)):
+    _require_team_admin(request, db)
     try:
-        super_admin_id = _get_super_admin_id(user)
-        scorer_names_text = _combine_result_lines(home_scorer_names_text, away_scorer_names_text)
-        goal_types_text = _combine_result_lines(home_goal_types_text, away_goal_types_text)
-        assist_names_text = _combine_result_lines(home_assist_names_text, away_assist_names_text)
-        verify_match_result(
-            db,
-            submission_id=submission_id,
-            super_admin_id=super_admin_id,
-            home_score=home_score,
-            away_score=away_score,
-            scorer_names_text=scorer_names_text,
-            goal_types_text=goal_types_text,
-            assist_names_text=assist_names_text,
-            rejection_reason=rejection_reason,
-            decision=decision,
-        )
+        return _load_result_fixture_players(db, fixture_id)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin#results")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post("/notifications/{notification_id}/read")
@@ -2471,35 +2528,6 @@ def mark_notification_read_route(
     user = _require_user(request, db)
     try:
         mark_notification_read(db, notification_id, user.user_id)
-    except RegistrationError as exc:
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
-    destination = _destination_for_user(user)
-    return _redirect(f"{destination}#notifications")
-
-
-@router.post("/notifications/{notification_id}/delete")
-def delete_notification_route(
-    notification_id: int,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    user = _require_user(request, db)
-    try:
-        delete_notification(db, notification_id, user.user_id)
-    except RegistrationError as exc:
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
-    destination = _destination_for_user(user)
-    return _redirect(f"{destination}#notifications")
-
-
-@router.post("/notifications/delete-all")
-def delete_all_notifications_route(
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    user = _require_user(request, db)
-    try:
-        delete_all_notifications(db, user.user_id)
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
     destination = _destination_for_user(user)
@@ -2520,65 +2548,70 @@ def create_team_route(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    is_first_team_registration = not db.scalar(
-        select(Team.team_id).where(Team.team_admin_id == team_admin.team_admin_id, Team.status == ApprovalStatus.APPROVED.value)
-    )
+    approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
+    owned_approved_teams = load_team_admin_owned_approved_teams(db, team_admin.team_admin_id)
+    is_first_team_registration = not approved_teams
+    if not is_first_team_registration and not owned_approved_teams:
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice="Only the default team admin can register clubs. Colleague admins can manage players, fixtures, results, and player statistics.",
+            notice_kind="error",
+        )
     normalized_team_name = (team_name or "").strip()
-    normalized_team_code = (team_code or "").strip()
 
-    if is_first_team_registration and not normalized_team_name:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Team name is required for the first team registration."},
+    if not normalized_team_name:
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice="Team name is required for team registration.",
+            notice_kind="error",
         )
     if is_first_team_registration and normalized_team_name:
         expected_team_name = team_admin.requested_team_name.strip()
         if expected_team_name.casefold() != normalized_team_name.casefold():
-            return _render(
-                request,
-                "team_admin/action_result.html",
-                {"error": "Team name must exactly match the team name used in your Team Admin registration."},
+            return _team_admin_dashboard_redirect(
+                section="team-form",
+                notice="Team name must exactly match the team name used in your Team Admin registration.",
+                notice_kind="error",
             )
-    if not is_first_team_registration and not normalized_team_code:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Team code is required for additional team registrations."},
-        )
     try:
         logo_path = _safe_upload(logo, "team-logos")
-        register_team(
+        registered_team = register_team(
             db,
             team_admin_id=team_admin.team_admin_id,
-            team_name=normalized_team_name or None,
+            team_name=normalized_team_name,
             category_id=category_id,
             contact_information=contact_information,
             team_address=team_address,
             training_ground=training_ground,
             home_ground=home_ground,
             logo=logo_path,
-            team_code=normalized_team_code or None,
         )
         _announce_submission(
             db,
             recipient_email=team_admin.user.email,
             title="Team registration submitted",
-            message=f"Your team {team_name} has been submitted and is awaiting approval.",
+            message=f"Your team {registered_team.team_name} has been submitted and is awaiting approval.",
             link="/team-admin/account",
             super_admin_title="Team registration submitted",
-            super_admin_message=f"{team_name} was submitted for approval.",
+            super_admin_message=f"{registered_team.team_name} was submitted for approval.",
             super_admin_link="/super-admin#teams",
         )
     except RegistrationError as exc:
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
-    except Exception:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Team registration could not be completed right now. Please try again."},
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice=str(exc),
+            notice_kind="error",
         )
-    return _redirect("/team-admin/dashboard")
+    except Exception:
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice="Team registration could not be completed right now. Please try again.",
+            notice_kind="error",
+        )
+    return _team_admin_dashboard_redirect(
+        section="team-form",
+        notice=f"Team registration for {registered_team.team_name} was submitted successfully and is now pending approval.",
+    )
 
 
 @router.post("/team-admin/players")
@@ -2611,51 +2644,51 @@ def create_player_route(
     
     team_admin = _require_team_admin(request, db)
     team = db.get(Team, team_id)
-    if not team or team.team_admin_id != team_admin.team_admin_id:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "You can only register players for your own approved teams."},
+    if not team or not team_admin_has_access_to_team(db, team_admin.team_admin_id, team.team_id):
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="You can only register players for your own approved teams.",
+            notice_kind="error",
         )
     
     # Validate full_name - only letters and spaces
     if not re.match(r"^[A-Za-z\s'\-]+$", full_name.strip()):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Player full name can only contain letters and spaces."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Player full name can only contain letters and spaces.",
+            notice_kind="error",
         )
     
     # Validate parent_name - only letters and spaces
     if not re.match(r"^[A-Za-z\s'\-]+$", parent_name.strip()):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Parent/Guardian name can only contain letters and spaces."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Parent/Guardian name can only contain letters and spaces.",
+            notice_kind="error",
         )
     
     # Validate nationality - only letters and spaces
     if not re.match(r"^[A-Za-z\s'\-]+$", nationality.strip()):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Nationality can only contain letters and spaces."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Nationality can only contain letters and spaces.",
+            notice_kind="error",
         )
     
     # Validate parent_contact - only numbers and symbols (+, -, space)
     if not re.match(r"^[0-9+\-\s]+$", parent_contact.strip()):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Parent contact can only contain numbers, +, -, or spaces."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Parent contact can only contain numbers, +, -, or spaces.",
+            notice_kind="error",
         )
     try:
         dob_value = datetime.strptime(dob.strip(), "%Y-%m-%d").date()
     except (ValueError, TypeError):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Date of birth must be entered in YYYY-MM-DD format."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Date of birth must be entered in YYYY-MM-DD format.",
+            notice_kind="error",
         )
     try:
         photo_path = _safe_upload(passport_photo, "player-photos")
@@ -2665,10 +2698,10 @@ def create_player_route(
             # Fallback to player_agreement_form if parent_consent_picture not provided
             agreement_form_path = _safe_upload(player_agreement_form, "player-agreements")
         if not agreement_form_path:
-            return _render(
-                request,
-                "team_admin/action_result.html",
-                {"error": "PARENT/GUARDIAN CONSENT FORM NOT UPLOADED."},
+            return _team_admin_dashboard_redirect(
+                section="player-form",
+                notice="Parent/Guardian consent form was not uploaded.",
+                notice_kind="error",
             )
         documents: list[tuple[str, str]] = []
 
@@ -2719,15 +2752,22 @@ def create_player_route(
             super_admin_link="/super-admin#players",
         )
     except RegistrationError as exc:
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice=str(exc),
+            notice_kind="error",
+        )
     except Exception:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Player registration could not be completed right now. Please try again."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Player registration could not be completed right now. Please try again.",
+            notice_kind="error",
         )
 
-    return _redirect("/team-admin/dashboard")
+    return _team_admin_dashboard_redirect(
+        section="player-form",
+        notice=f"Player registration for {full_name} was submitted successfully and is now pending approval.",
+    )
 
 
 @router.post("/team-admin/players/renewals")
@@ -2779,22 +2819,21 @@ def renew_player_route(
             super_admin_link="/super-admin#renewals",
         )
     except RegistrationError as exc:
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+        return _team_admin_dashboard_redirect(
+            section="my-players",
+            notice=str(exc),
+            notice_kind="error",
+        )
     except Exception:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Renewal registration could not be completed right now. Please try again."},
+        return _team_admin_dashboard_redirect(
+            section="my-players",
+            notice="Renewal registration could not be completed right now. Please try again.",
+            notice_kind="error",
         )
     player_name = renewal_request.player.full_name if renewal_request.player else f"player #{renewal_request.player_id}"
-    return _render(
-        request,
-        "team_admin/action_result.html",
-        {
-            "message": (
-                f"Renewal registration for {player_name} was submitted successfully and is now pending approval."
-            )
-        },
+    return _team_admin_dashboard_redirect(
+        section="my-players",
+        notice=f"Renewal registration for {player_name} was submitted successfully and is now pending approval.",
     )
 
 
@@ -2896,21 +2935,18 @@ def request_player_route(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     
     # Get the requesting team (to_team)
     if to_team_id:
         to_team = db.scalar(
             select(Team)
             .where(Team.team_id == to_team_id)
-            .where(Team.team_admin_id == team_admin.team_admin_id)
+            .where(Team.team_id.in_(approved_team_ids))
             .where(Team.status == ApprovalStatus.APPROVED.value)
         )
     else:
-        to_team = db.scalar(
-            select(Team)
-            .where(Team.team_admin_id == team_admin.team_admin_id)
-            .where(Team.status == ApprovalStatus.APPROVED.value)
-        )
+        to_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
     
     if not to_team:
         return _render(

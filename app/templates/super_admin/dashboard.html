@@ -11,6 +11,7 @@
     <button class="side-button" type="button" data-section-target="transfers">Transfers</button>
     <button class="side-button" type="button" data-section-target="fixtures">Fixtures</button>
     <button class="side-button" type="button" data-section-target="results">Results</button>
+    <button class="side-button" type="button" data-section-target="player-statistics">Player Statistics</button>
     <button class="side-button" type="button" data-section-target="league-tables">League tables</button>
     <button class="side-button" type="button" data-section-target="notifications">Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</button>
   </aside>
@@ -36,6 +37,7 @@
       <button class="switch-button" type="button" data-section-target="transfers">Transfers</button>
       <button class="switch-button" type="button" data-section-target="fixtures">Fixtures</button>
       <button class="switch-button" type="button" data-section-target="results">Results</button>
+      <button class="switch-button" type="button" data-section-target="player-statistics">Player Statistics</button>
       <button class="switch-button" type="button" data-section-target="league-tables">League tables</button>
       <button class="switch-button" type="button" data-section-target="notifications">Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</button>
     </div>
@@ -209,18 +211,18 @@
           <button class="button button-muted small" type="button" onclick="filterSuperAdminTable('players', 'pending')" data-filter="pending">Pending</button>
         </div>
         <div style="display: flex; gap: 0.5rem;">
-          <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; color: #666;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
             Team:
-            <select id="team-filter" onchange="filterPlayersByTeam()" style="font-size: 0.85rem; font-weight: 600;">
+            <select id="team-filter" onchange="filterPlayersByTeam()">
               <option value="">All Teams</option>
               {% for team in teams_list %}
                 <option value="{{ team.team_id }}">{{ team.team_name }}</option>
               {% endfor %}
             </select>
           </label>
-          <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; color: #666;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
             Category:
-            <select id="category-filter" onchange="filterPlayersByCategory()" style="font-size: 0.85rem; font-weight: 600;">
+            <select id="category-filter" onchange="filterPlayersByCategory()">
               <option value="">All Categories</option>
               <option value="U13">U13</option>
               <option value="U15">U15</option>
@@ -237,8 +239,6 @@
             <tr>
               <th>Player</th>
               <th>Player ID</th>
-              <th>Registration Period</th>
-              <th>Expires On</th>
               <th>Photo</th>
               <th>Team</th>
               <th>Gender</th>
@@ -256,8 +256,6 @@
             <tr data-row data-status="{{ player.status }}" data-team="{{ player.team.team_id }}" data-category="{{ player.age_group }}">
               <td>{{ player.full_name }}</td>
               <td>{{ player.player_code or 'Pending' }}</td>
-              <td>{{ player.registration_period }} Year(s)</td>
-              <td>{{ player.registration_expiration_date.strftime('%Y-%m-%d') if player.registration_expiration_date else '-' }}</td>
               <td>
                 {% if player.photo_path %}
                   <img class="thumb" src="{{ player.photo_path }}" alt="{{ player.full_name }}">
@@ -301,7 +299,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="14" class="empty">No player registrations.</td></tr>
+            <tr><td colspan="12" class="empty">No player registrations.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -486,9 +484,9 @@
           <h2>Fixtures</h2>
           <p class="section-copy">Create, publish and reschedule fixtures for approved clubs only.</p>
         </div>
-        <div class="panel-heading-actions">
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
           <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
-          <button class="button button-success small" type="button" onclick="window.location='/super-admin/fixtures/export?fixture_category=' + encodeURIComponent(document.getElementById('fixture-category-filter').value || 'all') + '&fixture_bucket=' + encodeURIComponent(document.getElementById('fixtures-board').dataset.fixtureBucket || 'all') + '&fixture_date_from=' + encodeURIComponent(document.getElementById('fixture-date-from').value || '') + '&fixture_date_to=' + encodeURIComponent(document.getElementById('fixture-date-to').value || '')">Download Cards</button>
+          <a class="button button-success small" href="/super-admin/fixtures/export">Download Cards</a>
         </div>
       </div>
 
@@ -537,6 +535,7 @@
       </details>
 
       <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/super-admin#fixtures">
+        <input type="hidden" name="dashboard_section" value="fixtures">
         <label class="filter-select">All Competitions
           <select name="fixture_category" id="fixture-category-filter" onchange="this.form.submit()">
             <option value="all" {% if fixture_filters.category == 'all' %}selected{% endif %}>All Competitions</option>
@@ -552,6 +551,7 @@
           <input name="fixture_date_to" id="fixture-date-to" type="date" value="{{ fixture_filters.date_to }}" onchange="this.form.submit()">
         </label>
         <button class="button button-primary" type="submit" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Filter</button>
+        <button class="button button-success" type="submit" formaction="/super-admin/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download Cards</button>
       </form>
 
       <div class="dashboard-chip-row fixture-tabs">
@@ -566,7 +566,7 @@
         {% set fixture_category = fixture.category.category_name if fixture.category else 'uncategorized' %}
         {% set fixture_home_team = fixture.home_team if fixture.home_team else None %}
         {% set fixture_away_team = fixture.away_team if fixture.away_team else None %}
-        <article class="fixture-card fixture-card--compact" data-fixture-card data-category="{{ fixture_category }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+        <article class="fixture-card" data-fixture-card data-category="{{ fixture_category }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
             <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
             <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
@@ -578,7 +578,7 @@
           </div>
           <div class="fixture-card__fixture">
             <div class="fixture-matchup">
-              <div class="fixture-team">
+            <div class="fixture-team">
                 {% if fixture_home_team and fixture_home_team.logo %}
                   <span class="fixture-logo-frame">
                     <img class="fixture-logo" src="{{ fixture_home_team.logo }}" alt="{{ fixture_home_team.team_name }}">
@@ -599,6 +599,10 @@
                 {% endif %}
                 <span>{{ fixture_away_team.team_name if fixture_away_team else 'Unknown team' }}</span>
               </div>
+            </div>
+            <div class="fixture-meta">
+              <span class="fixture-badge">{{ fixture_category }}</span>
+              <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
             </div>
           </div>
           <div class="fixture-card__venue">
@@ -647,7 +651,7 @@
 
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
       <div class="panel-heading">
-        <h2>Results</h2>
+        <h2>System Verified Results</h2>
         <div class="panel-heading-actions">
           <button class="button button-success small" type="button" onclick="window.location='/super-admin/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
         </div>
@@ -675,14 +679,12 @@
             <tr>
               <th>Fixture</th>
               <th>Submitted By</th>
-              <th>Verified By</th>
               <th>Score</th>
               <th>Status</th>
               <th>Scorers</th>
               <th>Assists</th>
               <th>Review</th>
               <th>File</th>
-              <th>Verify</th>
             </tr>
           </thead>
           <tbody>
@@ -693,33 +695,20 @@
             {% set submission_away_team = submission_fixture.away_team if submission_fixture and submission_fixture.away_team else None %}
             {% set submission_category = submission_fixture.category.category_name if submission_fixture and submission_fixture.category else 'uncategorized' %}
             {% set submitted_by_name = submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' %}
-            {% set reviewed_by_name = submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by and submission.verification.verified_by.user else '-' %}
-            {% set scorer_lines = submission.scorer_names_text.replace(',', '\n').replace(';', '\n').split('\n') if submission.scorer_names_text else [] %}
-            {% set goal_type_lines = submission.goal_types_text.replace(',', '\n').replace(';', '\n').split('\n') if submission.goal_types_text else [] %}
-            {% set assist_lines = submission.assist_names_text.replace(',', '\n').replace(';', '\n').split('\n') if submission.assist_names_text else [] %}
-            {% set home_goal_count = submission.home_score or 0 %}
-            {% set away_goal_count = submission.away_score or 0 %}
-            {% set home_scorers = scorer_lines[:home_goal_count] %}
-            {% set away_scorers = scorer_lines[home_goal_count:home_goal_count + away_goal_count] %}
-            {% set home_goal_types = goal_type_lines[:home_goal_count] %}
-            {% set away_goal_types = goal_type_lines[home_goal_count:home_goal_count + away_goal_count] %}
-            {% set home_assists = assist_lines[:home_goal_count] %}
-            {% set away_assists = assist_lines[home_goal_count:home_goal_count + away_goal_count] %}
             <tr data-row data-status="{{ submission.status }}" data-category="{{ submission_category }}">
               <td data-label="Fixture">{{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}</td>
               <td data-label="Submitted By">{{ submitted_by_name }}</td>
-              <td data-label="Verified By">{{ submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by else '-' }}</td>
               <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
               <td data-label="Scorers">{{ submission.scorer_names_text or '-' }}</td>
               <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
               <td data-label="Review">
                 {% if submission.verification and submission.verification.decision == 'rejected' %}
-                  Rejected by {{ reviewed_by_name }}: {{ submission.verification.rejection_reason or '-' }}
+                  Rejected by System: {{ submission.verification.rejection_reason or '-' }}
                 {% elif submission.verification %}
-                  Approved by {{ reviewed_by_name }}
+                  Verified by {% if submission.verification.verified_by_system %}System{% else %}{{ submission.verification.verified_by.user.full_name if submission.verification.verified_by and submission.verification.verified_by.user else '-' }}{% endif %}
                 {% else %}
-                  Pending review
+                  Waiting for matching submission
                 {% endif %}
               </td>
               <td data-label="File">
@@ -729,63 +718,9 @@
                   -
                 {% endif %}
               </td>
-              <td data-label="Verify">
-                {% if submission.verification %}
-                  <div class="result-verification-summary">
-                    <strong>{{ submission.verification.decision|capitalize }}</strong>
-                    <p style="margin: 0.35rem 0 0;">
-                      {% if submission.verification.decision == 'rejected' %}
-                        Rejected by {{ reviewed_by_name }}: {{ submission.verification.rejection_reason or '-' }}
-                      {% else %}
-                        Approved by {{ reviewed_by_name }}
-                      {% endif %}
-                    </p>
-                  </div>
-                {% else %}
-                  <form class="form-grid" method="post" action="/super-admin/results/{{ submission.submission_id }}/verify">
-                    <div class="form-grid two">
-                    <label>Home score
-                      <input name="home_score" type="number" value="{{ submission.home_score }}" required>
-                    </label>
-                    <label>Away score
-                      <input name="away_score" type="number" value="{{ submission.away_score }}" required>
-                    </label>
-                    </div>
-                    <label>Home scorers
-                      <textarea name="home_scorer_names_text">{{ home_scorers | join('\n') }}</textarea>
-                    </label>
-                    <label>Home goal types
-                      <textarea name="home_goal_types_text">{{ home_goal_types | join('\n') }}</textarea>
-                    </label>
-                    <label>Home assisters
-                      <textarea name="home_assist_names_text">{{ home_assists | join('\n') }}</textarea>
-                    </label>
-                    <p class="section-copy">Separate each scorer, assister, and goal type with a comma or place one item per line.</p>
-                    <label>Away scorers
-                      <textarea name="away_scorer_names_text">{{ away_scorers | join('\n') }}</textarea>
-                    </label>
-                    <label>Away goal types
-                      <textarea name="away_goal_types_text">{{ away_goal_types | join('\n') }}</textarea>
-                    </label>
-                    <label>Away assisters
-                      <textarea name="away_assist_names_text">{{ away_assists | join('\n') }}</textarea>
-                    </label>
-                    <label>Rejection reason
-                      <textarea name="rejection_reason" placeholder="Required when rejecting a result"></textarea>
-                    </label>
-                    <fieldset class="decision-fieldset">
-                      <legend>Decision</legend>
-                      <label><input type="radio" name="decision" value="approved" checked> Approve</label>
-                      <label><input type="radio" name="decision" value="rejected"> Reject</label>
-                      <small style="display:block; margin-top:0.35rem; color:#666;">Choose reject to send the result back with a reason.</small>
-                    </fieldset>
-                    <button class="button button-primary small" type="submit">Verify</button>
-                  </form>
-                {% endif %}
-              </td>
             </tr>
             {% else %}
-            <tr><td colspan="10" class="empty">No result submissions yet.</td></tr>
+            <tr><td colspan="8" class="empty">No result submissions yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -860,33 +795,81 @@
             </div>
           </div>
         </div>
-      {% else %}
+    {% else %}
         <p class="empty">No league tables available yet.</p>
       {% endfor %}
     </section>
+
+    <section class="panel dashboard-section" id="player-statistics" data-dashboard-section="player-statistics" hidden>
+      <div class="panel-heading">
+        <h2>Player Statistics</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-success small" type="button" onclick="window.location='/super-admin/player-statistics/export?category=' + encodeURIComponent(document.getElementById('player-statistics-category').value || 'all')">Download Cards</button>
+        </div>
+      </div>
+      <div class="dashboard-chip-row">
+        <label class="filter-select">Category
+          <select id="player-statistics-category" data-dashboard-category-filter="player-statistics" onchange="filterDashboardPanels('player-statistics', this.value, event)">
+            <option value="all">All Categories</option>
+            {% for category in categories %}
+              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+        <div class="table-scroll-x">
+        <table class="responsive-card-table">
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Club</th>
+              <th>Category</th>
+              <th>Goals</th>
+              <th>Assists</th>
+              <th>Goal Types</th>
+              <th>Clubs Played For</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in player_statistics.players %}
+            <tr data-row data-category="{{ row.category_name }}">
+              <td data-label="Player">{{ row.player.full_name }}</td>
+              <td data-label="Club">{{ row.team.team_name if row.team else '-' }}</td>
+              <td data-label="Category">{{ row.category_name or '-' }}</td>
+              <td data-label="Goals">{{ row.goals }}</td>
+              <td data-label="Assists">{{ row.assists }}</td>
+              <td data-label="Goal Types">
+                {% if row.goal_types %}
+                  {{ row.goal_types | tojson }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td data-label="Clubs Played For">
+                {% if row.clubs_played_for %}
+                  {{ row.clubs_played_for | join(', ') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty">No player statistics yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
     <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden>
       <div class="panel-heading">
-        <div>
-          <h2>Notifications{% if unread_notifications %} <span class="status approved">{{ unread_notifications }} new</span>{% endif %}</h2>
-          <p class="section-copy">Manage updates, mark them as read, or clear the feed when you are done.</p>
-        </div>
-        <form method="post" action="/notifications/delete-all">
-          <button class="button button-muted small" type="submit">Delete All</button>
-        </form>
+        <h2>Notifications{% if unread_notifications %} <span class="status approved">{{ unread_notifications }} new</span>{% endif %}</h2>
       </div>
       <div class="notification-list">
         {% for notification in notifications %}
           <article class="panel" style="margin-bottom: 1rem; border-left: 4px solid {% if notification.is_read %}#ccc{% else %}#2d6cdf{% endif %};">
-            <div class="notification-card-actions">
-              {% if not notification.is_read %}
-                <form method="post" action="/notifications/{{ notification.notification_id }}/read">
-                  <button class="button button-primary small" type="submit">Mark read</button>
-                </form>
-              {% endif %}
-              <form method="post" action="/notifications/{{ notification.notification_id }}/delete">
-                <button class="button button-muted small notification-delete-button" type="submit" aria-label="Delete notification">&times;</button>
-              </form>
-            </div>
             {% if notification.link %}
               <a class="notification-card-link" href="{{ notification.link }}">
                 <h3 style="margin-top: 0;">{{ notification.title }}</h3>
@@ -897,6 +880,11 @@
               <h3 style="margin-top: 0;">{{ notification.title }}</h3>
               <p>{{ notification.message }}</p>
               <small>{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+            {% endif %}
+            {% if not notification.is_read %}
+              <form method="post" action="/notifications/{{ notification.notification_id }}/read" style="margin-top: 0.75rem;">
+                <button class="button button-primary small" type="submit">Mark read</button>
+              </form>
             {% endif %}
           </article>
         {% else %}
@@ -1014,16 +1002,13 @@
       row.style.display = show ? '' : 'none';
     });
   }
-  
-  function filterPlayersByCategory() {
-    filterPlayersByTeam();
-  }
 
   syncFixtureTeamFilters();
   filterSuperAdminFixtures();
-  filterDashboardMetric('performances', 'all-players');
+
+  function filterPlayersByCategory() {
+    filterPlayersByTeam();
+  }
 </script>
 
 {% endblock %}
-
-

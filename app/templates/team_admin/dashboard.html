@@ -8,7 +8,9 @@
     <button class="side-button" type="button" data-section-target="my-teams">MY clubs</button>
     <button class="side-button" type="button" data-section-target="my-players">My Players</button>
     <button class="side-button" type="button" data-section-target="fixtures">Fixtures</button>
+    <button class="side-button" type="button" data-section-target="match-day-squads">Match Day Squad</button>
     <button class="side-button" type="button" data-section-target="results">Results</button>
+    <button class="side-button" type="button" data-section-target="player-statistics">Player Statistics</button>
     <button class="side-button" type="button" data-section-target="league-tables">League tables</button>
     <button class="side-button" type="button" data-section-target="notifications">Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</button>
     <button class="side-button" type="button" data-section-target="my-account">My Account</button>
@@ -21,15 +23,16 @@
       <p class="page-context" data-team-admin-workspace hidden>Registration Workspace</p>
     </div>
 
+    {% if dashboard_notice %}
+      <p class="alert dashboard-notice {% if dashboard_notice_kind == 'error' %}error{% else %}success{% endif %}" data-dashboard-notice style="margin-bottom: 1.5rem;">
+        {{ dashboard_notice }}
+      </p>
+    {% endif %}
+
     {% if team_admin.status != 'approved' %}
       <div class="alert alert-warning" style="margin-bottom: 1.5rem; padding: 1rem; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; color: #333;">
         <strong>Approval Pending</strong><br>
         Your Team Admin account is currently pending approval. Once approved, you'll have full access to all features. Please review your account details and check your email for updates.
-      </div>
-    {% elif not team_admin.assigned_team %}
-      <div class="alert alert-info" style="margin-bottom: 1.5rem; padding: 1rem; background-color: #e7f1ff; border: 1px solid #8bb9ff; border-radius: 4px; color: #234;">
-        <strong>Team Code Needed</strong><br>
-        If your team was already registered by another Team Admin, ask a colleague for the team code before submitting the team registration form.
       </div>
     {% endif %}
 
@@ -37,44 +40,53 @@
       <div class="panel-heading">
         <h2>Team Registration</h2>
       </div>
-      <form class="form-grid two" method="post" action="/team-admin/teams" enctype="multipart/form-data">
+      {% if can_register_clubs %}
         {% if approved_teams %}
-          <label>Team Code
-            <input name="team_code" required placeholder="Enter the team code from a colleague">
-            <small style="display:block; margin-top:0.35rem; color:#666;">Use the team code from a colleague Team Admin if this team was already registered.</small>
-          </label>
+          <div class="alert" style="background:#fff2e8; border-color:#c26a00; margin-bottom: 1rem;">
+            This team admin already has approved clubs. Register another club using the team name only. The team code will be generated after approval and shown in <strong>My Account</strong>.
+          </div>
         {% else %}
-          <label>Team Name
-            <input name="team_name" value="{{ team_admin.requested_team_name }}" required pattern="[A-Za-z0-9\s]+" title="Team name must contain only letters, numbers, and spaces">
-            <small style="display:block; margin-top:0.35rem; color:#666;">Use the exact team name from your Team Admin registration.</small>
-          </label>
+          <div class="alert" style="background:#eef5ff; border-color:#2d6cdf; margin-bottom: 1rem;">
+            This is the first team registration. Enter the team name now. The Team Code will be generated after approval and shown in <strong>My Account</strong>.
+          </div>
         {% endif %}
-        <label>Category
-          <select name="category_id" required>
-            {% for category in categories %}
-              <option value="{{ category.category_id }}">{{ category.category_name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Contact Information
-          <input name="contact_information" required>
-        </label>
-        <label>Team Address
-          <input name="team_address" required>
-        </label>
-        <label>Training Grounds
-          <input name="training_ground" required>
-        </label>
-        <label>Home Grounds
-          <input name="home_ground" required>
-        </label>
-        <label>Team Logo
-          <input name="logo" type="file" accept="image/*" required>
-        </label>
-        <div class="form-actions wide">
-          <button class="button button-primary" type="submit">Submit Team Registration</button>
+        <form class="form-grid two" method="post" action="/team-admin/teams" enctype="multipart/form-data">
+          <label>Team Name
+            <input name="team_name" value="{{ team_admin.requested_team_name if not approved_teams else '' }}" required pattern="[A-Za-z0-9\s]+" title="Team name must contain only letters, numbers, and spaces" placeholder="{% if approved_teams %}Enter the new club name{% else %}Use the exact team name from your Team Admin registration{% endif %}">
+            <small style="display:block; margin-top:0.35rem; color:#666;">{% if approved_teams %}Enter the club name for this registration. The team code is generated after approval.{% else %}Use the exact team name from your Team Admin registration.{% endif %}</small>
+          </label>
+          <label>Category
+            <select name="category_id" required>
+              {% for category in categories %}
+                <option value="{{ category.category_id }}">{{ category.category_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Contact Information
+            <input name="contact_information" required>
+          </label>
+          <label>Team Address
+            <input name="team_address" required>
+          </label>
+          <label>Training Grounds
+            <input name="training_ground" required>
+          </label>
+          <label>Home Grounds
+            <input name="home_ground" required>
+          </label>
+          <label>Team Logo
+            <input name="logo" type="file" accept="image/*" required>
+          </label>
+          <div class="form-actions wide">
+            <button class="button button-primary" type="submit">Submit Team Registration</button>
+          </div>
+        </form>
+
+      {% else %}
+        <div class="alert" style="background:#f5f5f5; border-color:#9e9e9e; margin-bottom: 1rem;">
+          Club registration is reserved for the default team admin who created the club record. Colleague admins can manage players, fixtures, results, and player statistics for the approved team only.
         </div>
-      </form>
+      {% endif %}
     </section>
 
     <section class="dashboard-section" id="player-form" data-dashboard-section="player-form" hidden>
@@ -1146,6 +1158,18 @@
             }
           }
 
+          const dashboardNotice = document.querySelector('[data-dashboard-notice]');
+
+          function dismissDashboardNotice() {
+            if (!dashboardNotice || dashboardNotice.classList.contains('is-fading')) {
+              return;
+            }
+            dashboardNotice.classList.add('is-fading');
+            window.setTimeout(() => {
+              dashboardNotice.hidden = true;
+            }, 220);
+          }
+
           function applyMyPlayersFilters() {
             const section = document.getElementById('my-players');
             if (!section) {
@@ -1192,7 +1216,7 @@
               }
             });
           }
-          
+
           function filterMyPlayersTeam(teamId) {
             const section = document.getElementById('my-players');
             if (!section) {
@@ -1201,7 +1225,7 @@
             section.dataset.teamFilter = teamId;
             applyMyPlayersFilters();
           }
-
+          
           function filterPlayers(status) {
             const section = document.getElementById('my-players');
             if (!section) {
@@ -1214,6 +1238,9 @@
           document.addEventListener('DOMContentLoaded', handlePlayerNameInput);
           document.addEventListener('DOMContentLoaded', applyMyPlayersFilters);
           document.addEventListener('DOMContentLoaded', () => {
+            if (dashboardNotice) {
+              window.setTimeout(dismissDashboardNotice, 5000);
+            }
             const filterSelect = document.querySelector('[data-dashboard-category-filter="league-tables"]');
             if (filterSelect && window.filterDashboardPanels) {
               window.filterDashboardPanels('league-tables', filterSelect.value, null);
@@ -1258,7 +1285,7 @@
           </div>
         </div>
       {% endif %}
-      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <button class="button button-primary small" type="button" onclick="filterTeams('all')" data-filter="all">All</button>
         <button class="button button-muted small" type="button" onclick="filterTeams('approved')" data-filter="approved">Approved</button>
         <button class="button button-muted small" type="button" onclick="filterTeams('rejected')" data-filter="rejected">Rejected</button>
@@ -1313,7 +1340,7 @@
       <div class="panel-heading">
         <h2>My Players</h2>
       </div>
-      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <button class="button button-primary small" type="button" onclick="filterPlayers('all')" data-filter="all">All</button>
         <button class="button button-muted small" type="button" onclick="filterPlayers('approved')" data-filter="approved">Approved</button>
         <button class="button button-muted small" type="button" onclick="filterPlayers('rejected')" data-filter="rejected">Rejected</button>
@@ -1328,22 +1355,36 @@
       <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
         <table>
           <thead>
-            <tr><th>Player</th><th>Player ID</th><th>Registration Period</th><th>Expires On</th><th>Team</th><th>Age Group</th><th>Status</th><th>Reason</th></tr>
+            <tr><th>Player</th><th>Player ID</th><th>Team</th><th>Age Group</th><th>Registration</th><th>Status</th><th>Reason</th></tr>
           </thead>
           <tbody>
             {% for player in players %}
             <tr data-row data-status="{{ player.status }}" data-team="{{ player.team.team_id }}" class="{% if player.is_on_loan %}player-on-loan{% endif %}">
               <td>{{ player.full_name }}{% if player.is_on_loan %}<span class="loan-marker">On Loan</span>{% endif %}</td>
               <td>{{ player.player_code or '-' }}</td>
-              <td>{{ player.registration_period }} Year(s)</td>
-              <td>{{ player.registration_expiration_date.strftime('%Y-%m-%d') if player.registration_expiration_date else '-' }}</td>
               <td>{{ player.team.team_name }}</td>
               <td>{{ player.age_group or 'Not eligible' }}</td>
-              <td><span class="status {{ player.status }}">{{ player.status }}</span>{% if player.is_on_loan and player.loan_end_date %}<br><small>Returns {{ player.loan_end_date }}</small>{% endif %}</td>
+              <td>
+                <strong>{{ player.registration_period }} Year(s)</strong>
+                {% if player.registration_expiration_date %}
+                  <br><small>Expires {{ player.registration_expiration_date }}</small>
+                {% endif %}
+                {% if player.registration_requires_renewal or player.registration_is_expired %}
+                  <br><small style="color:#b26a00;">Renewal registration suggested</small>
+                {% endif %}
+              </td>
+              <td>
+                {% if player.registration_is_expired %}
+                  <span class="status rejected">ineligible</span>
+                {% else %}
+                  <span class="status {{ player.status }}">{{ player.status }}</span>
+                {% endif %}
+                {% if player.is_on_loan and player.loan_end_date %}<br><small>Returns {{ player.loan_end_date }}</small>{% endif %}
+              </td>
               <td>{% if player.status == 'rejected' %}{{ player.rejection_reason or '-' }}{% else %}-{% endif %}</td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty">No players submitted yet.</td></tr>
+            <tr><td colspan="7" class="empty">No players submitted yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -1395,6 +1436,7 @@
       </div>
 
       <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/team-admin/dashboard#fixtures">
+        <input type="hidden" name="dashboard_section" value="fixtures">
         <label class="filter-select">All Competitions
           <select name="fixture_category" id="fixture-category-filter" onchange="this.form.submit()">
             <option value="all" {% if fixture_filters.category == 'all' %}selected{% endif %}>All Competitions</option>
@@ -1434,35 +1476,24 @@
           <div class="fixture-card__time">
             <strong>{{ fixture.dashboard_time }}</strong>
             <span>{{ fixture.dashboard_day_name }}</span>
+            <span class="fixture-card__venue-inline">{{ fixture.venue }}</span>
           </div>
           <div class="fixture-card__fixture">
             <div class="fixture-matchup">
-              <div class="fixture-team">
-                {% if fixture_home_team and fixture_home_team.logo %}
-                  <span class="fixture-logo-frame">
-                    <img class="fixture-logo" src="{{ fixture_home_team.logo }}" alt="{{ fixture_home_team.team_name }}">
-                  </span>
-                {% else %}
-                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture_home_team.team_name[:1] if fixture_home_team else '?' }}</span>
-                {% endif %}
-                <span>{{ fixture_home_team.team_name if fixture_home_team else 'Unknown team' }}</span>
-              </div>
+              <span class="fixture-team-name">{{ fixture_home_team.team_name if fixture_home_team else 'Unknown team' }}</span>
               <span class="fixture-vs">VS</span>
-              <div class="fixture-team">
-                {% if fixture_away_team and fixture_away_team.logo %}
-                  <span class="fixture-logo-frame">
-                    <img class="fixture-logo" src="{{ fixture_away_team.logo }}" alt="{{ fixture_away_team.team_name }}">
-                  </span>
-                {% else %}
-                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture_away_team.team_name[:1] if fixture_away_team else '?' }}</span>
-                {% endif %}
-                <span>{{ fixture_away_team.team_name if fixture_away_team else 'Unknown team' }}</span>
-              </div>
+              <span class="fixture-team-name">{{ fixture_away_team.team_name if fixture_away_team else 'Unknown team' }}</span>
             </div>
           </div>
-          <div class="fixture-card__venue">
-            <strong>{{ fixture.venue }}</strong>
-            <span>Venue</span>
+          <div class="fixture-card__status">
+            <span class="status {{ fixture.status }}">{{ fixture.status }}</span>
+            <small>Published by {% if fixture.dashboard_created_by != '-' %}{{ fixture.dashboard_created_by }}{% else %}System{% endif %}</small>
+          </div>
+          <div class="fixture-card__actions">
+            <div class="fixture-readonly">
+              <span class="status approved">Text only</span>
+              <small>Team admins see a text-only fixture view here. Download the fixture card for the enhanced version.</small>
+            </div>
           </div>
         </article>
         {% else %}
@@ -1471,9 +1502,285 @@
       </div>
     </section>
 
+    <section class="panel dashboard-section" id="match-day-squads" data-dashboard-section="match-day-squads" hidden>
+      <div class="panel-heading">
+        <div>
+          <h2>Match Day Squad</h2>
+          <p class="section-copy"><strong>Select a fixture first. The squad sheet will lock to that match and only allow eligible players from the correct team category.</strong></p>
+        </div>
+      </div>
+      <div class="alert" style="background:#fff2cc; border-color:#d9a300; color:#111; margin-bottom: 1rem;">
+        Match day squads are automatically deleted 24 hours after they are generated, even if they are never downloaded.
+      </div>
+
+      {% if approved_teams and match_day_fixtures_data %}
+        <form class="match-day-squad-form" method="post" action="/team-admin/match-day-squads" data-match-day-squad-form>
+          <div class="form-grid two">
+            <label>Fixture
+              <select name="fixture_id" id="match-day-fixture-select" required>
+                <option value="">Select fixture</option>
+                {% for fixture in match_day_fixtures_data %}
+                  <option value="{{ fixture.fixture_id }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Squad Team
+              <select name="squad_team_id" id="match-day-team-select" required disabled>
+                <option value="">Select fixture first</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="squad-builder">
+            <div class="squad-builder__head">
+              <h3>Add Player</h3>
+              <span class="section-copy">Added players move into the squad list and cannot be selected again until removed.</span>
+            </div>
+            <div class="form-grid three">
+              <label>Player Name
+                <select id="match-day-player-select" disabled>
+                  <option value="">Select fixture and team first</option>
+                </select>
+              </label>
+              <label>Jersey Number
+                <input id="match-day-jersey-input" type="number" min="1" max="99" disabled required>
+              </label>
+              <div class="form-actions wide" style="align-self:end;">
+                <button class="button button-primary" type="button" data-add-player disabled>Add to List</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="matchday-squad-sheet">
+            <div class="matchday-squad-sheet__head">
+              <span>Player</span>
+              <span>Player ID</span>
+              <span>Age</span>
+              <span>Jersey #</span>
+              <span>Action</span>
+            </div>
+            <div class="matchday-squad-list" data-squad-list>
+              <div class="matchday-squad-empty">No players added yet.</div>
+            </div>
+          </div>
+
+          <div class="form-actions wide">
+            <button class="button button-success" type="submit">Generate Match Day Squad</button>
+          </div>
+        </form>
+
+        <script type="application/json" id="match-day-fixture-data">{{ match_day_fixtures_data | tojson }}</script>
+        <script type="application/json" id="match-day-player-data">{{ match_day_players_data | tojson }}</script>
+        <script type="application/json" id="match-day-approved-team-ids">{{ approved_team_ids | tojson }}</script>
+        <script>
+          (function () {
+            const form = document.querySelector("[data-match-day-squad-form]");
+            if (!form) {
+              return;
+            }
+            const fixtureSelect = document.getElementById("match-day-fixture-select");
+            const teamSelect = document.getElementById("match-day-team-select");
+            const playerSelect = document.getElementById("match-day-player-select");
+            const jerseyInput = document.getElementById("match-day-jersey-input");
+            const addButton = document.querySelector("[data-add-player]");
+            const squadList = document.querySelector("[data-squad-list]");
+            const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
+            const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
+            const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
+            const selectedPlayerIds = new Set();
+            let activeFixture = null;
+            let activeTeamId = "";
+
+            const clearSquadList = () => {
+              selectedPlayerIds.clear();
+              squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+            };
+
+            const updateEmptyState = () => {
+              if (!squadList.querySelector("[data-squad-row]")) {
+                squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+              }
+            };
+
+            const updateAddButtonState = () => {
+              const canAdd = Boolean(
+                activeFixture &&
+                teamSelect.value &&
+                playerSelect.value &&
+                jerseyInput.value.trim()
+              );
+              addButton.disabled = !canAdd;
+            };
+
+            const populateTeamSelect = () => {
+              teamSelect.innerHTML = '<option value="">Select a team</option>';
+              teamSelect.disabled = true;
+              activeTeamId = "";
+              playerSelect.disabled = true;
+              addButton.disabled = true;
+              jerseyInput.disabled = true;
+              playerSelect.innerHTML = '<option value="">Select fixture and team first</option>';
+              if (!activeFixture) {
+                return;
+              }
+              const teams = [activeFixture.home_team, activeFixture.away_team]
+                .filter((team) => team && approvedTeamIds.has(String(team.team_id)));
+              teams.forEach((team) => {
+                const option = document.createElement("option");
+                option.value = team.team_id;
+                option.textContent = team.team_name;
+                teamSelect.appendChild(option);
+              });
+              teamSelect.disabled = teams.length === 0;
+              if (teams.length === 1) {
+                teamSelect.value = String(teams[0].team_id);
+                activeTeamId = teamSelect.value;
+              }
+              jerseyInput.value = "";
+              refreshPlayerSelect();
+            };
+
+            const refreshPlayerSelect = () => {
+              playerSelect.innerHTML = '<option value="">Select player</option>';
+              const selectedFixture = activeFixture;
+              const selectedTeamId = teamSelect.value;
+              const eligiblePlayers = playerData.filter((player) => {
+                return selectedFixture && selectedTeamId && String(player.team_id) === String(selectedTeamId) && !selectedPlayerIds.has(String(player.player_id));
+              });
+              eligiblePlayers.forEach((player) => {
+                const option = document.createElement("option");
+                option.value = player.player_id;
+                option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group})`;
+                option.dataset.playerCode = player.player_code;
+                option.dataset.ageGroup = player.age_group;
+                option.dataset.teamName = player.team_name;
+                playerSelect.appendChild(option);
+              });
+              const enabled = Boolean(selectedFixture && selectedTeamId);
+              playerSelect.disabled = !enabled;
+              jerseyInput.disabled = !enabled;
+              updateAddButtonState();
+            };
+
+            const addPlayerRow = () => {
+              const playerId = playerSelect.value;
+              const selectedOption = playerSelect.selectedOptions[0];
+              const jerseyNumber = jerseyInput.value.trim();
+              const jerseyValue = Number(jerseyNumber);
+              if (!playerId || !selectedOption || !Number.isInteger(jerseyValue) || jerseyValue < 1 || jerseyValue > 99) {
+                return;
+              }
+              if (selectedPlayerIds.has(playerId)) {
+                return;
+              }
+              const playerName = selectedOption.textContent;
+              const playerCode = selectedOption.dataset.playerCode || "";
+              const ageGroup = selectedOption.dataset.ageGroup || "";
+              if (squadList.querySelector(".matchday-squad-empty")) {
+                squadList.innerHTML = "";
+              }
+              const row = document.createElement("div");
+              row.className = "matchday-squad-row";
+              row.dataset.squadRow = "true";
+              row.dataset.playerId = playerId;
+              row.innerHTML = `
+                <span class="matchday-squad-cell matchday-squad-cell--name">${playerName}</span>
+                <span class="matchday-squad-cell">${playerCode}</span>
+                <span class="matchday-squad-cell">${ageGroup}</span>
+                <label class="matchday-squad-cell matchday-squad-cell--jersey">
+                  <input name="jersey_numbers" type="number" min="1" max="99" value="${jerseyValue}" required>
+                </label>
+                <div class="matchday-squad-cell matchday-squad-cell--action">
+                  <button class="button button-muted small" type="button">Remove</button>
+                  <input type="hidden" name="player_ids" value="${playerId}">
+                </div>
+              `;
+              row.querySelector("button")?.addEventListener("click", () => {
+                selectedPlayerIds.delete(playerId);
+                row.remove();
+                updateEmptyState();
+                refreshPlayerSelect();
+              });
+              squadList.appendChild(row);
+              selectedPlayerIds.add(playerId);
+              playerSelect.value = "";
+              jerseyInput.value = "";
+              refreshPlayerSelect();
+            };
+
+            fixtureSelect.addEventListener("change", () => {
+              activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
+              clearSquadList();
+              populateTeamSelect();
+            });
+
+            teamSelect.addEventListener("change", () => {
+              activeTeamId = teamSelect.value;
+              clearSquadList();
+              refreshPlayerSelect();
+            });
+
+            addButton.addEventListener("click", addPlayerRow);
+            playerSelect.addEventListener("change", () => {
+              jerseyInput.focus();
+              updateAddButtonState();
+            });
+            jerseyInput.addEventListener("input", updateAddButtonState);
+            jerseyInput.addEventListener("change", updateAddButtonState);
+
+            form.addEventListener("submit", (event) => {
+              if (!activeFixture || !teamSelect.value) {
+                event.preventDefault();
+                return;
+              }
+              if (!squadList.querySelector("[data-squad-row]")) {
+                event.preventDefault();
+                return;
+              }
+            });
+          })();
+        </script>
+
+        {% if match_day_squads %}
+          <div class="panel-heading" style="margin-top: 2rem;">
+            <h3>Recent Match Day Squads</h3>
+            <div class="panel-heading-actions">
+              <form method="post" action="/team-admin/dashboard/match-day-squads/delete-all" onsubmit="return confirm('Delete all match day squads?');">
+                <button class="button button-danger small" type="submit">Delete All</button>
+              </form>
+            </div>
+          </div>
+          <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+            <table>
+              <thead>
+                <tr><th>Fixture</th><th>Team</th><th>Generated</th><th>Download</th></tr>
+              </thead>
+              <tbody>
+                {% for squad in match_day_squads %}
+                  <tr>
+                    <td>{{ squad.home_team_name_snapshot }} vs {{ squad.away_team_name_snapshot }} - {{ squad.venue_snapshot }}</td>
+                    <td>{{ squad.team_name_snapshot }} - {{ squad.category_name_snapshot }}</td>
+                    <td>{{ squad.generated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td style="display:flex; gap:8px; flex-wrap:wrap;">
+                      <a class="button button-primary small" href="/team-admin/dashboard/match-day-squads/{{ squad.squad_id }}/export">Download Squad Card</a>
+                      <form method="post" action="/team-admin/dashboard/match-day-squads/{{ squad.squad_id }}/delete" onsubmit="return confirm('Delete this match day squad?');">
+                        <button class="button button-danger small" type="submit">Delete</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="empty">You need an approved club and a fixture involving that club before a match day squad can be generated.</p>
+      {% endif %}
+    </section>
+
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
       <div class="panel-heading">
-        <h2>Result Submissions</h2>
+        <h2>System Verified Results</h2>
         <div class="panel-heading-actions">
           <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
         </div>
@@ -1491,21 +1798,24 @@
       <div class="dashboard-chip-row">
         <button class="dashboard-chip active" type="button" data-filter-chip data-filter-value="all" onclick="filterDashboardRows('results', 'all', event)">All</button>
         <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="pending" onclick="filterDashboardRows('results', 'pending', event)">Pending</button>
-        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="approved" onclick="filterDashboardRows('results', 'approved', event)">Approved</button>
-        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="rejected" onclick="filterDashboardRows('results', 'rejected', event)">Rejected</button>
+        <button class="dashboard-chip" type="button" data-filter-chip data-filter-value="approved" onclick="filterDashboardRows('results', 'approved', event)">Verified</button>
       </div>
       <div class="panel result-entry-panel" style="margin-bottom: 1.5rem;">
         <div class="panel-heading">
-          <h2>Upload Match Result</h2>
+          <h2>Enter Match Result</h2>
         </div>
         {% if played_fixtures %}
-        <form class="form-grid result-upload-form" method="post" action="/team-admin/results/upload" enctype="multipart/form-data" data-result-form>
+        <form class="form-grid result-upload-form" method="post" action="/team-admin/results" data-result-form data-approved-team-ids="{{ approved_team_ids | tojson }}" data-result-api="/api/team-admin/result-players">
           <label class="result-field result-field--full">Played fixture
             <select id="result-fixture-select" name="fixture_id" required>
               <option value="">Select a played fixture</option>
               {% for fixture in played_fixtures %}
                 <option
                   value="{{ fixture.fixture_id }}"
+                  data-home-team-id="{{ fixture.home_team.team_id }}"
+                  data-away-team-id="{{ fixture.away_team.team_id }}"
+                  data-home-team-name="{{ fixture.home_team.team_name }}"
+                  data-away-team-name="{{ fixture.away_team.team_name }}"
                   data-home-score="{{ fixture.latest_result_submission.home_score if fixture.latest_result_submission else '' }}"
                   data-away-score="{{ fixture.latest_result_submission.away_score if fixture.latest_result_submission else '' }}"
                   data-result-status="{{ fixture.latest_result_status or '' }}"
@@ -1514,6 +1824,14 @@
               {% endfor %}
             </select>
           </label>
+          <div class="result-summary-grid">
+            <label>Home team
+              <input id="result-home-team" type="text" readonly placeholder="Select a fixture">
+            </label>
+            <label>Away team
+              <input id="result-away-team" type="text" readonly placeholder="Select a fixture">
+            </label>
+          </div>
           <div class="form-grid two">
             <label>Home score
               <input id="result-home-score" name="home_score" type="number" min="0" inputmode="numeric" required>
@@ -1522,15 +1840,43 @@
               <input id="result-away-score" name="away_score" type="number" min="0" inputmode="numeric" required>
             </label>
           </div>
-          <label class="result-field result-field--full">Scorers and assisters file
-            <input id="result-upload-file" name="file" type="file" accept=".txt,.csv,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" required>
-            <p class="section-copy">Upload the match file as written. Super Admin will review the submission and enter or correct the scorer details during verification.</p>
-          </label>
           <div class="alert" data-result-status-note hidden style="margin: 0 0 0.5rem 0;"></div>
+          <div class="result-goal-block">
+            <div class="result-goal-block__head">
+              <h3>Goals and Assists</h3>
+              <p class="section-copy">Add one row per goal for your club. Assists are optional, but the number of scorer rows must match your team score.</p>
+            </div>
+            <div class="result-goal-rows" data-result-goal-rows>
+              <div class="fixture-empty">Choose a fixture and enter your team's score to generate the goal rows.</div>
+            </div>
+          </div>
           <div class="form-actions wide">
-            <button class="button button-success" type="submit">Upload Scorers and Assisters</button>
+            <button class="button button-success" type="submit">Submit Result</button>
           </div>
         </form>
+        <template id="result-goal-row-template">
+          <div class="result-goal-row" data-goal-row>
+            <div class="result-goal-row__title"></div>
+            <label>Scorer
+              <select name="scorer_player_ids" required></select>
+            </label>
+            <label>Assister
+              <select name="assist_player_ids">
+                <option value="">No assist</option>
+              </select>
+            </label>
+            <label>Goal type
+              <select name="goal_types" required>
+                <option value="Penalty">Penalty</option>
+                <option value="Free Kick">Free Kick</option>
+                <option value="Corner Kick">Corner Kick</option>
+                <option value="From Kickoff">From Kickoff</option>
+                <option value="Header">Header</option>
+                <option value="Tap In">Tap In</option>
+              </select>
+            </label>
+          </div>
+        </template>
         {% else %}
           <p class="empty">No played fixtures are available yet. Results can only be entered after kick-off.</p>
         {% endif %}
@@ -1558,7 +1904,7 @@
             {% set submission_away_team = submission_fixture.away_team if submission_fixture and submission_fixture.away_team else None %}
             {% set submission_category = submission_fixture.category.category_name if submission_fixture and submission_fixture.category else 'uncategorized' %}
             {% set submitted_by_name = submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' %}
-            {% set reviewed_by_name = submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by and submission.verification.verified_by.user else '-' %}
+            {% set reviewed_by_name = submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by and submission.verification.verified_by.user else 'System' %}
             <tr data-row data-status="{{ submission.status }}" data-category="{{ submission_category }}">
               <td data-label="Fixture">{{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}</td>
               <td data-label="Set By">{{ submitted_by_name }}</td>
@@ -1571,14 +1917,14 @@
                 {% if submission.verification and submission.verification.decision == 'rejected' %}
                   Rejected by {{ reviewed_by_name }}: {{ submission.verification.rejection_reason or '-' }}
                 {% elif submission.verification %}
-                  Approved by {{ reviewed_by_name }}
+                  Verified by {% if submission.verification.verified_by_system %}System{% else %}{{ reviewed_by_name }}{% endif %}
                 {% else %}
-                  Pending review
+                  Waiting for the other team admin
                 {% endif %}
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty">No submissions yet.</td></tr>
+            <tr><td colspan="8" class="empty">No results yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -1653,10 +1999,75 @@
             </div>
           </div>
         </div>
-      {% else %}
+    {% else %}
         <p class="empty">No league tables available yet.</p>
       {% endfor %}
-    </section>`r`n    <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden
+    </section>
+
+    <section class="panel dashboard-section" id="player-statistics" data-dashboard-section="player-statistics" hidden>
+      <div class="panel-heading">
+        <h2>Player Statistics</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/player-statistics/export?category=' + encodeURIComponent(document.getElementById('player-statistics-category').value || 'all')">Download Cards</button>
+        </div>
+      </div>
+      <div class="dashboard-chip-row">
+        <label class="filter-select">Category
+          <select id="player-statistics-category" data-dashboard-category-filter="player-statistics" onchange="filterDashboardPanels('player-statistics', this.value, event)">
+            <option value="all">All Categories</option>
+            {% for category in categories %}
+              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+        <div class="table-scroll-x">
+        <table class="responsive-card-table">
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Club</th>
+              <th>Category</th>
+              <th>Goals</th>
+              <th>Assists</th>
+              <th>Goal Types</th>
+              <th>Clubs Played For</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in player_statistics.players %}
+            <tr data-row data-category="{{ row.category_name }}">
+              <td data-label="Player">{{ row.player.full_name }}</td>
+              <td data-label="Club">{{ row.team.team_name if row.team else '-' }}</td>
+              <td data-label="Category">{{ row.category_name or '-' }}</td>
+              <td data-label="Goals">{{ row.goals }}</td>
+              <td data-label="Assists">{{ row.assists }}</td>
+              <td data-label="Goal Types">
+                {% if row.goal_types %}
+                  {{ row.goal_types | tojson }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td data-label="Clubs Played For">
+                {% if row.clubs_played_for %}
+                  {{ row.clubs_played_for | join(', ') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty">No player statistics yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden>
       <div class="panel-heading">
         <h2>Notifications{% if unread_notifications %} <span class="status approved">{{ unread_notifications }} new</span>{% endif %}</h2>
       </div>
@@ -1705,17 +2116,224 @@
           <div><dt>National ID</dt><dd>{{ team_admin.national_id }}</dd></div>
           <div><dt>Team Name</dt><dd>{{ team_admin.requested_team_name }}</dd></div>
           <div><dt>Team Admin ID</dt><dd>{{ team_admin.admin_code or 'Pending approval' }}</dd></div>
-          {% if team_admin.assigned_team and team_admin.assigned_team.team_code %}
-            <div><dt>Team Code</dt><dd>{{ team_admin.assigned_team.team_code }}</dd></div>
+          {% if approved_teams %}
+            <div style="grid-column: 1 / -1;">
+              <dt style="margin-bottom: 0.5rem;">Club Access</dt>
+              <div style="display: grid; gap: 0.75rem;">
+                {% for team in approved_teams %}
+                  <article class="panel" style="padding: 1rem;">
+                    <strong>{{ team.team_name }}</strong>
+                    <div style="margin-top: 0.4rem; color: #666;">{{ team.category.category_name if team.category else 'Uncategorized' }}</div>
+                    <div style="margin-top: 0.4rem;"><span class="muted">Team Code:</span> {{ team.team_code or 'Pending code' }}</div>
+                  </article>
+                {% endfor %}
+              </div>
+            </div>
           {% elif team_admin.status == 'approved' %}
-            <div><dt>Team Code</dt><dd>Ask a colleague team admin for the team code</dd></div>
+            <div><dt>Team Code</dt><dd>Team code will appear after the club approval is linked to a team record.</dd></div>
           {% endif %}
           <div><dt>Status</dt><dd><span class="status {{ team_admin.status }}">{{ team_admin.status }}</span></dd></div>
-          <div><dt>Explanation</dt><dd>{{ team_admin.rejection_reason or '-' }}</dd></div>
+          {% if team_admin.status == 'rejected' %}
+            <div><dt>Explanation</dt><dd>{{ team_admin.rejection_reason or '-' }}</dd></div>
+          {% endif %}
         </dl>
       </div>
     </section>
   </div>
 </section>
+<script>
+  (function () {
+    const form = document.querySelector('[data-result-form]');
+    if (!form) {
+      return;
+    }
+
+    const fixtureSelect = document.getElementById('result-fixture-select');
+    const homeTeamInput = document.getElementById('result-home-team');
+    const awayTeamInput = document.getElementById('result-away-team');
+    const homeScoreInput = document.getElementById('result-home-score');
+    const awayScoreInput = document.getElementById('result-away-score');
+    const goalRows = document.querySelector('[data-result-goal-rows]');
+    const goalRowTemplate = document.getElementById('result-goal-row-template');
+    const statusNote = document.querySelector('[data-result-status-note]');
+    const approvedTeamIds = new Set(JSON.parse(form.dataset.approvedTeamIds || '[]').map((value) => String(value)));
+    const playerCache = new Map();
+    let fixturePlayers = null;
+    let currentSubmittingTeamId = null;
+
+    const goalTypes = ['Penalty', 'Free Kick', 'Corner Kick', 'From Kickoff', 'Header', 'Tap In'];
+
+    const showEmptyState = (message) => {
+      goalRows.innerHTML = `<div class="fixture-empty">${message}</div>`;
+    };
+
+    const updateStatusNote = (option) => {
+      if (!statusNote) {
+        return;
+      }
+      const status = option?.dataset.resultStatus || '';
+      const rejectionReason = option?.dataset.rejectionReason || '';
+      if (!status) {
+        statusNote.hidden = true;
+        statusNote.textContent = '';
+        return;
+      }
+      statusNote.hidden = false;
+      if (status === 'approved') {
+        statusNote.textContent = 'This fixture is already system verified. Any matching resubmission will stay verified.';
+      } else if (status === 'pending') {
+        statusNote.textContent = 'A result has already been saved for this fixture. The other team admin must submit the matching scoreline.';
+      } else if (status === 'rejected') {
+        statusNote.textContent = rejectionReason ? `A previous submission was rejected: ${rejectionReason}` : 'A previous submission was rejected.';
+      } else {
+        statusNote.textContent = `Fixture status: ${status}`;
+      }
+    };
+
+    const getSelectedFixtureOption = () => fixtureSelect.selectedOptions[0] || null;
+
+    const getSubmittingTeamId = (option) => {
+      if (!option) {
+        return null;
+      }
+      const homeTeamId = String(option.dataset.homeTeamId || '');
+      const awayTeamId = String(option.dataset.awayTeamId || '');
+      if (approvedTeamIds.has(homeTeamId)) {
+        return homeTeamId;
+      }
+      if (approvedTeamIds.has(awayTeamId)) {
+        return awayTeamId;
+      }
+      return null;
+    };
+
+    const buildPlayerOptions = (players, selectedValue = '', includePlaceholder = true) => {
+      const options = includePlaceholder ? ['<option value="">Select player</option>'] : [];
+      players.forEach((player) => {
+        const suffix = player.player_code ? ` (${player.player_code})` : '';
+        options.push(`<option value="${player.player_id}"${String(player.player_id) === String(selectedValue) ? ' selected' : ''}>${player.full_name}${suffix}</option>`);
+      });
+      return options.join('');
+    };
+
+    const populateRows = () => {
+      const option = getSelectedFixtureOption();
+      const homeScore = Number(homeScoreInput.value || 0);
+      const awayScore = Number(awayScoreInput.value || 0);
+      const submittingTeamId = getSubmittingTeamId(option);
+      currentSubmittingTeamId = submittingTeamId;
+
+      homeTeamInput.value = option?.dataset.homeTeamName || '';
+      awayTeamInput.value = option?.dataset.awayTeamName || '';
+      updateStatusNote(option);
+
+      if (!option) {
+        fixturePlayers = null;
+        showEmptyState('Choose a fixture and enter your team score to generate the goal rows.');
+        return;
+      }
+
+      const expectedCount = String(submittingTeamId) === String(option.dataset.homeTeamId) ? homeScore : awayScore;
+      if (!expectedCount && expectedCount !== 0) {
+        showEmptyState('Enter your team score to generate goal rows.');
+        return;
+      }
+
+      if (expectedCount === 0) {
+        showEmptyState('No goals were scored for this team.');
+        return;
+      }
+
+      if (!fixturePlayers) {
+        showEmptyState('Loading approved players for this fixture...');
+        return;
+      }
+
+      const players = String(submittingTeamId) === String(option.dataset.homeTeamId)
+        ? fixturePlayers.home_players || []
+        : fixturePlayers.away_players || [];
+
+      if (!players.length) {
+        showEmptyState('No approved players were found for this team.');
+        return;
+      }
+
+      goalRows.innerHTML = '';
+      const oldRows = Array.from(goalRows.querySelectorAll('[data-goal-row]'));
+      for (let index = 0; index < expectedCount; index += 1) {
+        const currentRow = oldRows[index];
+        const currentScorer = currentRow?.querySelector('select[name="scorer_player_ids"]')?.value || '';
+        const currentAssist = currentRow?.querySelector('select[name="assist_player_ids"]')?.value || '';
+        const currentGoalType = currentRow?.querySelector('select[name="goal_types"]')?.value || goalTypes[0];
+        const row = goalRowTemplate.content.firstElementChild.cloneNode(true);
+        row.querySelector('.result-goal-row__title').textContent = `Goal ${index + 1}`;
+        const scorerSelect = row.querySelector('select[name="scorer_player_ids"]');
+        const assistSelect = row.querySelector('select[name="assist_player_ids"]');
+        const goalTypeSelect = row.querySelector('select[name="goal_types"]');
+        scorerSelect.innerHTML = buildPlayerOptions(players, currentScorer);
+        assistSelect.innerHTML = `<option value="">No assist</option>${buildPlayerOptions(players, currentAssist, false)}`;
+        goalTypeSelect.innerHTML = goalTypes.map((goalType) => `<option value="${goalType}"${goalType === currentGoalType ? ' selected' : ''}>${goalType}</option>`).join('');
+        goalRows.appendChild(row);
+      }
+    };
+
+    const fetchPlayersForFixture = async (fixtureId) => {
+      if (!fixtureId) {
+        fixturePlayers = null;
+        populateRows();
+        return;
+      }
+      if (playerCache.has(fixtureId)) {
+        fixturePlayers = playerCache.get(fixtureId);
+        populateRows();
+        return;
+      }
+      showEmptyState('Loading approved players for this fixture...');
+      const response = await fetch(`${form.dataset.resultApi}?fixture_id=${encodeURIComponent(fixtureId)}`);
+      if (!response.ok) {
+        fixturePlayers = null;
+        showEmptyState('Approved players could not be loaded for this fixture.');
+        return;
+      }
+      fixturePlayers = await response.json();
+      playerCache.set(fixtureId, fixturePlayers);
+      populateRows();
+    };
+
+    fixtureSelect.addEventListener('change', async () => {
+      const option = getSelectedFixtureOption();
+      homeScoreInput.value = option?.dataset.homeScore || '';
+      awayScoreInput.value = option?.dataset.awayScore || '';
+      fixturePlayers = null;
+      showEmptyState('Loading approved players for this fixture...');
+      await fetchPlayersForFixture(fixtureSelect.value);
+    });
+
+    homeScoreInput.addEventListener('input', populateRows);
+    awayScoreInput.addEventListener('input', populateRows);
+    homeScoreInput.addEventListener('change', populateRows);
+    awayScoreInput.addEventListener('change', populateRows);
+
+    form.addEventListener('submit', (event) => {
+      const option = getSelectedFixtureOption();
+      const submittingTeamId = getSubmittingTeamId(option);
+      const expectedCount = String(submittingTeamId) === String(option?.dataset.homeTeamId || '') ? Number(homeScoreInput.value || 0) : Number(awayScoreInput.value || 0);
+      if (!fixtureSelect.value || (expectedCount > 0 && !goalRows.querySelector('[data-goal-row]'))) {
+        event.preventDefault();
+      }
+    });
+
+    const initialOption = getSelectedFixtureOption();
+    if (initialOption) {
+      homeScoreInput.value = initialOption.dataset.homeScore || '';
+      awayScoreInput.value = initialOption.dataset.awayScore || '';
+      updateStatusNote(initialOption);
+      fetchPlayersForFixture(fixtureSelect.value);
+    } else {
+      showEmptyState('Choose a fixture and enter your team score to generate the goal rows.');
+    }
+  })();
+</script>
 {% endblock %}
+
 

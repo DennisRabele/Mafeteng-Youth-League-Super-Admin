@@ -16,6 +16,8 @@ from app.models import (
     Match,
     MatchEvent,
     MatchResultSubmission,
+    MatchDaySquad,
+    MatchDaySquadMember,
     Notification,
     Season,
     Player,
@@ -205,10 +207,220 @@ def purge_expired_result_files(db: Session) -> int:
     return deleted
 
 
+def purge_expired_match_day_squads(db: Session) -> int:
+    if not _has_table(db, "match_day_squads"):
+        return 0
+    cutoff = datetime.utcnow()
+    squads = db.scalars(
+        select(MatchDaySquad).where(
+            MatchDaySquad.expires_at.is_not(None),
+            MatchDaySquad.expires_at <= cutoff,
+        )
+    ).all()
+    deleted = 0
+    for squad in squads:
+        db.delete(squad)
+        deleted += 1
+    if deleted:
+        db.commit()
+    return deleted
+
+
+def delete_match_day_squad(
+    db: Session,
+    squad_id: int,
+    *,
+    team_ids: Iterable[int] | None = None,
+) -> None:
+    if not _has_table(db, "match_day_squads"):
+        raise RegistrationError("Match day squads are not available yet.")
+    query = select(MatchDaySquad).where(MatchDaySquad.squad_id == squad_id)
+    if team_ids is not None:
+        query = query.where(MatchDaySquad.team_id.in_(list(team_ids)))
+    squad = db.scalar(query)
+    if not squad:
+        raise RegistrationError("Match day squad was not found.")
+    db.delete(squad)
+    db.commit()
+
+
+def delete_match_day_squads(
+    db: Session,
+    *,
+    team_ids: Iterable[int] | None = None,
+) -> int:
+    if not _has_table(db, "match_day_squads"):
+        raise RegistrationError("Match day squads are not available yet.")
+    query = select(MatchDaySquad)
+    if team_ids is not None:
+        query = query.where(MatchDaySquad.team_id.in_(list(team_ids)))
+    squads = db.scalars(query).all()
+    deleted = 0
+    for squad in squads:
+        db.delete(squad)
+        deleted += 1
+    if deleted:
+        db.commit()
+    return deleted
+
+
+def _category_age_group(category_name: str | None) -> str | None:
+    if not category_name:
+        return None
+    match = re.search(r"\bU\d{2}\b", category_name, re.IGNORECASE)
+    return match.group(0).upper() if match else None
+
+
+def create_match_day_squad(
+    db: Session,
+    *,
+    fixture_id: int,
+    team_id: int,
+    generated_by_team_admin_id: int,
+    player_ids: list[int],
+    jersey_numbers: list[int],
+) -> MatchDaySquad:
+    if not _has_table(db, "match_day_squads"):
+        raise RegistrationError("Match day squads are not available yet.")
+    fixture = db.scalar(
+        select(Fixture)
+        .options(
+            selectinload(Fixture.category),
+            selectinload(Fixture.home_team).selectinload(Team.category),
+            selectinload(Fixture.away_team).selectinload(Team.category),
+        )
+        .where(Fixture.fixture_id == fixture_id)
+    )
+    if not fixture or not fixture.category or not fixture.home_team or not fixture.away_team:
+        raise RegistrationError("Selected fixture could not be found.")
+    team = db.scalar(
+        select(Team)
+        .options(selectinload(Team.category), selectinload(Team.players))
+        .where(
+            Team.team_id == team_id,
+            Team.status == ApprovalStatus.APPROVED.value,
+        )
+    )
+    if not team or not team.category:
+        raise RegistrationError("Selected team does not exist or is not approved.")
+    if team.team_id not in {fixture.home_team_id, fixture.away_team_id}:
+        raise RegistrationError("Selected team is not part of the chosen fixture.")
+    if team.category_id != fixture.category_id:
+        raise RegistrationError("Selected team does not match the fixture category.")
+
+    category_age_group = _category_age_group(team.category.category_name)
+    if not category_age_group:
+        raise RegistrationError("Selected team category is not eligible for match day squads.")
+
+    if not player_ids:
+        raise RegistrationError("Select at least one player for the squad.")
+    if len(player_ids) != len(jersey_numbers):
+        raise RegistrationError("Each selected player must have a jersey number.")
+    if len(set(player_ids)) != len(player_ids):
+        raise RegistrationError("Each player can only appear once in the squad.")
+    if len(set(jersey_numbers)) != len(jersey_numbers):
+        raise RegistrationError("Each jersey number must be unique.")
+
+    players = db.scalars(
+        select(Player)
+        .options(selectinload(Player.team).selectinload(Team.category))
+        .where(Player.player_id.in_(player_ids))
+    ).all()
+    player_map = {player.player_id: player for player in players}
+    if len(player_map) != len(player_ids):
+        raise RegistrationError("One or more selected players could not be found.")
+
+    eligible_players: list[Player] = []
+    for player_id in player_ids:
+        player = player_map[player_id]
+        if player.status != ApprovalStatus.APPROVED.value:
+            raise RegistrationError(f"{player.full_name} is not approved for selection.")
+        if not player.team or player.team.team_id != team.team_id:
+            raise RegistrationError(f"{player.full_name} does not belong to the selected team.")
+        if (player.age_group or "").strip().upper() != category_age_group:
+            raise RegistrationError(
+                f"{player.full_name} is registered in {player.age_group or 'another category'} and cannot be selected for {team.category.category_name}."
+            )
+        eligible_players.append(player)
+
+    now = datetime.utcnow()
+    squad = MatchDaySquad(
+        fixture_id=fixture.fixture_id,
+        team_id=team.team_id,
+        category_id=team.category_id,
+        generated_by_team_admin_id=generated_by_team_admin_id,
+        generated_at=now,
+        verified_at=datetime.utcnow(),
+        downloaded_at=None,
+        expires_at=now + timedelta(hours=24),
+        fixture_date_snapshot=fixture.fixture_date,
+        venue_snapshot=fixture.venue,
+        home_team_name_snapshot=fixture.home_team.team_name,
+        home_team_logo_snapshot=fixture.home_team.logo,
+        away_team_name_snapshot=fixture.away_team.team_name,
+        away_team_logo_snapshot=fixture.away_team.logo,
+        team_name_snapshot=team.team_name,
+        team_logo_snapshot=team.logo,
+        category_name_snapshot=team.category.category_name,
+    )
+    db.add(squad)
+    db.flush()
+
+    for player, jersey_number in zip(eligible_players, jersey_numbers, strict=True):
+        db.add(
+            MatchDaySquadMember(
+                squad_id=squad.squad_id,
+                player_id=player.player_id,
+                jersey_number=jersey_number,
+                player_name_snapshot=player.full_name,
+                player_code_snapshot=player.player_code,
+                age_group_snapshot=player.age_group,
+            )
+        )
+
+    db.commit()
+    db.refresh(squad)
+    return squad
+
+
+def get_match_day_squad(db: Session, squad_id: int) -> MatchDaySquad | None:
+    if not _has_table(db, "match_day_squads"):
+        return None
+    return db.scalar(
+        select(MatchDaySquad)
+        .options(
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.category),
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.home_team),
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.away_team),
+            selectinload(MatchDaySquad.team).selectinload(Team.category),
+            selectinload(MatchDaySquad.generated_by).selectinload(TeamAdmin.user),
+            selectinload(MatchDaySquad.members).selectinload(MatchDaySquadMember.player).selectinload(Player.team),
+        )
+        .where(MatchDaySquad.squad_id == squad_id)
+    )
+
+
+def get_team_admin_match_day_squads(db: Session, team_ids: Iterable[int]) -> list[MatchDaySquad]:
+    if not _has_table(db, "match_day_squads"):
+        return []
+    return db.scalars(
+        select(MatchDaySquad)
+        .options(
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.category),
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.home_team),
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.away_team),
+            selectinload(MatchDaySquad.team).selectinload(Team.category),
+            selectinload(MatchDaySquad.generated_by).selectinload(TeamAdmin.user),
+            selectinload(MatchDaySquad.members),
+        )
+        .where(MatchDaySquad.team_id.in_(list(team_ids)))
+        .order_by(MatchDaySquad.generated_at.desc(), MatchDaySquad.squad_id.desc())
+    ).all()
+
+
 def get_notifications_for_user(db: Session, user_id: int, *, limit: int = 20) -> list[Notification]:
     if not _has_table(db, "notifications"):
         return []
-    purge_expired_notifications(db)
     return db.scalars(
         select(Notification)
         .where(Notification.user_id == user_id)
@@ -220,7 +432,6 @@ def get_notifications_for_user(db: Session, user_id: int, *, limit: int = 20) ->
 def mark_notification_read(db: Session, notification_id: int, user_id: int) -> Notification:
     if not _has_table(db, "notifications"):
         raise RegistrationError("Notifications are not available yet.")
-    purge_expired_notifications(db)
     notification = db.scalar(
         select(Notification).where(
             Notification.notification_id == notification_id,
@@ -233,41 +444,6 @@ def mark_notification_read(db: Session, notification_id: int, user_id: int) -> N
     db.commit()
     db.refresh(notification)
     return notification
-
-
-def purge_expired_notifications(db: Session) -> int:
-    if not _has_table(db, "notifications"):
-        return 0
-    cutoff = datetime.utcnow() - timedelta(days=14)
-    deleted = db.execute(
-        delete(Notification).where(Notification.created_at < cutoff)
-    )
-    db.commit()
-    return int(getattr(deleted, "rowcount", 0) or 0)
-
-
-def delete_notification(db: Session, notification_id: int, user_id: int) -> None:
-    if not _has_table(db, "notifications"):
-        raise RegistrationError("Notifications are not available yet.")
-    purge_expired_notifications(db)
-    deleted = db.execute(
-        delete(Notification).where(
-            Notification.notification_id == notification_id,
-            Notification.user_id == user_id,
-        )
-    )
-    if not getattr(deleted, "rowcount", 0):
-        raise RegistrationError("Notification was not found.")
-    db.commit()
-
-
-def delete_all_notifications(db: Session, user_id: int) -> int:
-    if not _has_table(db, "notifications"):
-        raise RegistrationError("Notifications are not available yet.")
-    purge_expired_notifications(db)
-    deleted = db.execute(delete(Notification).where(Notification.user_id == user_id))
-    db.commit()
-    return int(getattr(deleted, "rowcount", 0) or 0)
 
 
 def create_fixture(
@@ -294,8 +470,8 @@ def create_fixture(
         raise RegistrationError("Both teams must be approved before a fixture can be created.")
     if home_team.category_id != category_id or away_team.category_id != category_id:
         raise RegistrationError("Selected teams must belong to the chosen category.")
-    if fixture_date < datetime.utcnow() + timedelta(days=2):
-        raise RegistrationError("Fixtures must be scheduled at least 2 days before match day.")
+    if fixture_date < datetime.utcnow() + timedelta(days=7):
+        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
     season = db.scalar(select(Season).order_by(Season.start_date.desc()))
     if not season:
         raise RegistrationError("No active season is available for fixture creation.")
@@ -349,8 +525,8 @@ def update_fixture(
     fixture_category_id = category_id or fixture.category_id
     home_team_id = home_team_id or fixture.home_team_id
     away_team_id = away_team_id or fixture.away_team_id
-    if fixture_date < datetime.utcnow() + timedelta(days=2):
-        raise RegistrationError("Fixtures must be scheduled at least 2 days before match day.")
+    if fixture_date < datetime.utcnow() + timedelta(days=7):
+        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
 
     category = db.get(Category, fixture_category_id)
     home_team = db.get(Team, home_team_id)
@@ -396,8 +572,8 @@ def postpone_fixture(db: Session, fixture_id: int, new_date: datetime) -> Fixtur
     fixture = db.get(Fixture, fixture_id)
     if not fixture:
         raise RegistrationError("Fixture was not found.")
-    if new_date < datetime.utcnow() + timedelta(days=2):
-        raise RegistrationError("Fixtures must be scheduled at least 2 days before match day.")
+    if new_date < datetime.utcnow() + timedelta(days=7):
+        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
     fixture.fixture_date = new_date
     fixture.status = FixtureStatus.POSTPONED.value
     if fixture.match:
@@ -431,36 +607,189 @@ def _clear_match_result_state(db: Session, match: Match) -> None:
     db.execute(delete(MatchEvent).where(MatchEvent.match_id == match.match_id))
 
 
+def _clean_goal_type(value: str | None) -> str:
+    normalized = _normalize_goal_type(value)
+    allowed_goal_types = {"Penalty", "Free Kick", "Corner Kick", "From Kickoff", "Header", "Tap In"}
+    if normalized not in allowed_goal_types:
+        raise RegistrationError("Select a valid goal type.")
+    return normalized
+
+
+def _team_admin_fixture_context(fixture: Fixture, team_admin_id: int) -> tuple[Team, Team, str]:
+    if fixture.home_team and fixture.home_team.team_admin_id == team_admin_id:
+        return fixture.home_team, fixture.away_team, "home"
+    if fixture.away_team and fixture.away_team.team_admin_id == team_admin_id:
+        return fixture.away_team, fixture.home_team, "away"
+    raise RegistrationError("You can only submit results for fixtures involving your teams.")
+
+
+def _coerce_selected_player_ids(values: Iterable[str | int | None]) -> list[int | None]:
+    coerced: list[int | None] = []
+    for value in values:
+        if value is None:
+            coerced.append(None)
+            continue
+        if isinstance(value, int):
+            coerced.append(value)
+            continue
+        text_value = str(value).strip()
+        if not text_value:
+            coerced.append(None)
+            continue
+        coerced.append(int(text_value))
+    return coerced
+
+
 def _validate_match_result_payload(
     *,
-    home_score: int,
-    away_score: int,
-    scorer_names_text: str | None,
-    goal_types_text: str | None,
-    assist_names_text: str | None,
-    require_result_details: bool = False,
+    expected_goal_count: int,
+    scorer_player_ids: list[int | None],
+    goal_types: list[str | None],
+    assist_player_ids: list[int | None],
 ) -> None:
-    total_goals = max(0, home_score + away_score)
-    scorers = _split_result_lines(scorer_names_text)
-    goal_types = _split_result_lines(goal_types_text)
-    assists = _split_result_lines(assist_names_text)
-
-    if not require_result_details and not any((scorers, goal_types, assists)):
-        return
-
-    if total_goals == 0:
-        if any(item for item in scorers + goal_types + assists):
+    if expected_goal_count == 0:
+        if any(any(str(value or "").strip() for value in group) for group in (scorer_player_ids, goal_types, assist_player_ids)):
             raise RegistrationError("A 0-0 result must not include scorer details.")
         return
 
-    if len(scorers) != total_goals:
-        raise RegistrationError(f"Expected {total_goals} scorer entries for this result.")
-    if len(goal_types) != total_goals:
-        raise RegistrationError(f"Expected {total_goals} goal type entries for this result.")
-    if len(assists) > total_goals:
-        raise RegistrationError(f"Expected at most {total_goals} assist entries for this result.")
-    if any(not scorer for scorer in scorers):
+    if len(scorer_player_ids) != expected_goal_count:
+        raise RegistrationError(f"Expected {expected_goal_count} scorer entries for this result.")
+    if len(goal_types) != expected_goal_count:
+        raise RegistrationError(f"Expected {expected_goal_count} goal type entries for this result.")
+    if len(assist_player_ids) != expected_goal_count:
+        raise RegistrationError(f"Expected {expected_goal_count} assister entries for this result.")
+    if any(player_id is None for player_id in scorer_player_ids):
         raise RegistrationError("Each goal row must include a scorer name.")
+
+
+def _player_lookup_map(db: Session, player_ids: list[int]) -> dict[int, Player]:
+    if not player_ids:
+        return {}
+    players = db.scalars(
+        select(Player)
+        .options(selectinload(Player.team).selectinload(Team.category))
+        .where(Player.player_id.in_(player_ids))
+    ).all()
+    return {player.player_id: player for player in players}
+
+
+def _assert_player_belongs_to_team(player: Player | None, team_id: int, label: str) -> None:
+    if not player or player.team_id != team_id or player.status != ApprovalStatus.APPROVED.value:
+        raise RegistrationError(f"Select only approved players from your own team for {label}.")
+
+
+def _serialize_submission_players(players: list[Player], assists: list[Player | None], goal_types: list[str]) -> tuple[str, str, str]:
+    scorer_names_text = "\n".join(player.full_name for player in players)
+    goal_types_text = "\n".join(goal_types)
+    assist_names_text = "\n".join(assister.full_name if assister else "-" for assister in assists)
+    return scorer_names_text, goal_types_text, assist_names_text
+
+
+def _remove_submission_statistics(db: Session, submission: MatchResultSubmission) -> None:
+    db.execute(delete(PlayerStatistic).where(PlayerStatistic.submission_id == submission.submission_id))
+
+
+def _write_submission_statistics(
+    db: Session,
+    *,
+    submission: MatchResultSubmission,
+    fixture: Fixture,
+    team: Team,
+    scorers: list[Player],
+    assists: list[Player | None],
+    goal_types: list[str],
+) -> None:
+    category = fixture.category or team.category
+    category_id = category.category_id if category else None
+    category_name = category.category_name if category else None
+    for index, scorer in enumerate(scorers):
+        db.add(
+            PlayerStatistic(
+                fixture_id=fixture.fixture_id,
+                match_id=submission.match_id,
+                submission_id=submission.submission_id,
+                player_id=scorer.player_id,
+                team_id=team.team_id,
+                category_id=category_id,
+                team_code=team.team_code,
+                club_name=team.team_name,
+                category_name=category_name,
+                stat_type="goal",
+                goal_type=_clean_goal_type(goal_types[index] if index < len(goal_types) else None),
+            )
+        )
+        assister = assists[index] if index < len(assists) else None
+        if assister:
+            db.add(
+                PlayerStatistic(
+                    fixture_id=fixture.fixture_id,
+                    match_id=submission.match_id,
+                    submission_id=submission.submission_id,
+                    player_id=assister.player_id,
+                    team_id=team.team_id,
+                    category_id=category_id,
+                    team_code=team.team_code,
+                    club_name=team.team_name,
+                    category_name=category_name,
+                    stat_type="assist",
+                    goal_type=None,
+                )
+            )
+
+
+def _create_system_verification(db: Session, submission: MatchResultSubmission) -> None:
+    verification = submission.verification
+    if not verification:
+        verification = ResultVerification(
+            submission_id=submission.submission_id,
+            verified_by_admin_id=None,
+            verified_by_system=True,
+            decision=ApprovalStatus.APPROVED.value,
+        )
+        db.add(verification)
+    else:
+        verification.verified_by_admin_id = None
+        verification.verified_by_system = True
+        verification.decision = ApprovalStatus.APPROVED.value
+        verification.rejection_reason = None
+        verification.verification_date = datetime.utcnow()
+
+
+def _finalize_matched_result(
+    db: Session,
+    *,
+    fixture: Fixture,
+    home_submission: MatchResultSubmission,
+    away_submission: MatchResultSubmission,
+) -> None:
+    fixture_match = fixture.match
+    if not fixture_match:
+        fixture_match = Match(fixture_id=fixture.fixture_id, match_date=fixture.fixture_date, status="scheduled")
+        db.add(fixture_match)
+        db.flush()
+        fixture.match = fixture_match
+    fixture_match.home_score = home_submission.home_score
+    fixture_match.away_score = home_submission.away_score
+    fixture_match.status = "completed"
+
+    for submission in (home_submission, away_submission):
+        submission.status = ApprovalStatus.APPROVED.value
+        _create_system_verification(db, submission)
+    db.commit()
+
+    notify_team_admins_for_teams(
+        db,
+        [fixture.home_team_id, fixture.away_team_id],
+        "Result verified",
+        f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} is now verified at {fixture_match.home_score}-{fixture_match.away_score}. League tables and player statistics have been updated automatically.",
+        "/team-admin/dashboard#results",
+    )
+    notify_super_admins(
+        db,
+        "Result verified",
+        f"System verified {fixture.home_team.team_name} vs {fixture.away_team.team_name} at {fixture_match.home_score}-{fixture_match.away_score}.",
+        "/super-admin#results",
+    )
 
 
 def submit_match_result(
@@ -471,371 +800,156 @@ def submit_match_result(
     home_score: int,
     away_score: int,
     result_file_path: str | None = None,
-    scorer_names_text: str | None,
-    goal_types_text: str | None,
-    assist_names_text: str | None,
+    scorer_player_ids: list[str | int | None],
+    goal_types: list[str | None],
+    assist_player_ids: list[str | int | None],
 ) -> MatchResultSubmission:
     fixture = db.get(Fixture, fixture_id)
     if not fixture or fixture.home_team is None or fixture.away_team is None:
         raise RegistrationError("Fixture was not found.")
     if not _fixture_allows_result_submission(fixture):
         raise RegistrationError("Results can only be entered after the fixture has been played.")
-    if team_admin_id not in {fixture.home_team.team_admin_id, fixture.away_team.team_admin_id}:
-        raise RegistrationError("You can only submit results for fixtures involving your teams.")
+    if home_score < 0 or away_score < 0:
+        raise RegistrationError("Scores cannot be negative.")
+
+    submitting_team, opposing_team, submitting_side = _team_admin_fixture_context(fixture, team_admin_id)
+    scorer_ids = _coerce_selected_player_ids(scorer_player_ids)
+    assister_ids = _coerce_selected_player_ids(assist_player_ids)
+    expected_goal_count = home_score if submitting_side == "home" else away_score
     _validate_match_result_payload(
-        home_score=home_score,
-        away_score=away_score,
-        scorer_names_text=scorer_names_text,
-        goal_types_text=goal_types_text,
-        assist_names_text=assist_names_text,
-        require_result_details=False,
+        expected_goal_count=expected_goal_count,
+        scorer_player_ids=scorer_ids,
+        goal_types=goal_types,
+        assist_player_ids=assister_ids,
     )
 
-    match = fixture.match or Match(fixture_id=fixture.fixture_id, match_date=fixture.fixture_date, status="scheduled")
+    if expected_goal_count == 0 and (home_score != 0 or away_score != 0):
+        raise RegistrationError("Invalid scoreline supplied.")
+
+    match = fixture.match or Match(
+        fixture_id=fixture.fixture_id,
+        match_date=fixture.fixture_date,
+        status="scheduled",
+    )
     if not fixture.match:
         db.add(match)
         db.flush()
+        fixture.match = match
 
-    existing_submission = db.scalar(
+    submissions = db.scalars(
         select(MatchResultSubmission)
         .where(MatchResultSubmission.match_id == match.match_id)
         .order_by(MatchResultSubmission.submission_id.asc())
-    )
-    if existing_submission and existing_submission.submitted_by_team_admin_id != team_admin_id:
-        team_ids = list(
-            db.scalars(
-                select(Team.team_id).where(
-                    Team.team_admin_id == team_admin_id,
-                    Team.team_id.in_([fixture.home_team_id, fixture.away_team_id]),
-                )
-            ).all()
-        )
-        if team_ids:
-            notify_team_admins_for_teams(
-                db,
-                team_ids,
-                "Result already submitted",
-                f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} was already set by the other team admin.",
-                "/team-admin/dashboard#results",
-            )
-        raise RegistrationError("This fixture already has a result submission from the other team admin.")
-
-    submission = existing_submission
-    if not submission:
-        submission = MatchResultSubmission(
-            match_id=match.match_id,
-            submitted_by_team_admin_id=team_admin_id,
-            home_score=home_score,
-            away_score=away_score,
-            result_file_path=result_file_path,
-            scorer_names_text=scorer_names_text,
-            goal_types_text=goal_types_text,
-            assist_names_text=assist_names_text,
-            status=ApprovalStatus.PENDING.value,
-        )
-        db.add(submission)
-    else:
-        old_file_path = submission.result_file_path
-        if submission.verification:
-            db.delete(submission.verification)
-        if submission.status != ApprovalStatus.PENDING.value:
-            _clear_match_result_state(db, match)
-        submission.home_score = home_score
-        submission.away_score = away_score
-        submission.result_file_path = result_file_path or submission.result_file_path
-        submission.scorer_names_text = scorer_names_text
-        submission.goal_types_text = goal_types_text
-        submission.assist_names_text = assist_names_text
-        submission.status = ApprovalStatus.PENDING.value
-        if result_file_path and old_file_path and old_file_path != result_file_path:
-            delete_upload(old_file_path, "match-results")
-    db.commit()
-    db.refresh(submission)
-    notify_super_admins(
-        db,
-        "New result submission",
-        f"Result submitted for {fixture.home_team.team_name} vs {fixture.away_team.team_name}.",
-        "/super-admin#results",
-    )
-    return submission
-
-
-def _find_player_for_fixture(db: Session, fixture: Fixture, player_name: str) -> Player | None:
-    normalized = " ".join(player_name.split()).casefold()
-    if not normalized:
-        return None
-    return db.scalar(
-        select(Player)
-        .options(selectinload(Player.team).selectinload(Team.category))
-        .where(
-            func.lower(Player.full_name) == normalized,
-            Player.team_id.in_([fixture.home_team_id, fixture.away_team_id]),
-        )
-    )
-
-
-def _rebuild_match_events(db: Session, match: Match, submission: MatchResultSubmission) -> None:
-    db.execute(delete(MatchEvent).where(MatchEvent.match_id == match.match_id))
-    scorers = _split_result_lines(submission.scorer_names_text)
-    goal_types = _split_result_lines(submission.goal_types_text)
-    assists = _split_result_lines(submission.assist_names_text)
-    if len(assists) < len(scorers):
-        assists.extend([""] * (len(scorers) - len(assists)))
-    for index, scorer_name in enumerate(scorers):
-        player = _find_player_for_fixture(db, match.fixture, scorer_name)
-        goal_type = _normalize_goal_type(goal_types[index] if index < len(goal_types) else None)
-        db.add(
-            MatchEvent(
-                match_id=match.match_id,
-                player_id=player.player_id if player else None,
-                event_type=f"goal:{goal_type}",
-                minute=index + 1,
-            )
-        )
-        if index < len(assists):
-            assister = _find_player_for_fixture(db, match.fixture, assists[index])
-            if assister:
-                db.add(
-                    MatchEvent(
-                        match_id=match.match_id,
-                        player_id=assister.player_id,
-                        event_type="assist",
-                        minute=index + 1,
-                    )
-                )
-
-
-def verify_match_result(
-    db: Session,
-    *,
-    submission_id: int,
-    super_admin_id: int,
-    home_score: int,
-    away_score: int,
-    scorer_names_text: str | None,
-    goal_types_text: str | None,
-    assist_names_text: str | None,
-    rejection_reason: str | None = None,
-    decision: str = ApprovalStatus.APPROVED.value,
-) -> MatchResultSubmission:
-    submission = db.get(MatchResultSubmission, submission_id)
-    if not submission:
-        raise RegistrationError("Result submission was not found.")
-
-    match = submission.match
-    if not match or not match.fixture:
-        raise RegistrationError("Linked match was not found.")
-    normalized_rejection_reason = (rejection_reason or "").strip()
-    if decision == ApprovalStatus.REJECTED.value and not normalized_rejection_reason:
-        raise RegistrationError("A rejection reason is required when rejecting a result.")
-    _validate_match_result_payload(
-        home_score=home_score,
-        away_score=away_score,
-        scorer_names_text=scorer_names_text,
-        goal_types_text=goal_types_text,
-        assist_names_text=assist_names_text,
-        require_result_details=decision == ApprovalStatus.APPROVED.value,
-    )
-
-    submission.home_score = home_score
-    submission.away_score = away_score
-    submission.scorer_names_text = scorer_names_text
-    submission.goal_types_text = goal_types_text
-    submission.assist_names_text = assist_names_text
-    submission.status = decision
-
-    verification = submission.verification
-    if not verification:
-        verification = ResultVerification(
-            submission_id=submission.submission_id,
-            verified_by_admin_id=super_admin_id,
-            decision=decision,
-            rejection_reason=normalized_rejection_reason or None,
-        )
-        db.add(verification)
-    else:
-        verification.verified_by_admin_id = super_admin_id
-        verification.decision = decision
-        verification.verification_date = datetime.utcnow()
-        verification.rejection_reason = normalized_rejection_reason or None
-
-    if decision == ApprovalStatus.APPROVED.value:
-        match.home_score = home_score
-        match.away_score = away_score
-        match.status = "completed"
-        _rebuild_match_events(db, match, submission)
-    else:
-        _clear_match_result_state(db, match)
-
-    db.flush()
-    db.commit()
-    db.refresh(submission)
-
-    if decision == ApprovalStatus.APPROVED.value:
-        notify_team_admins_for_teams(
-            db,
-            [match.fixture.home_team_id, match.fixture.away_team_id],
-            "Result updated",
-            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} is now {home_score}-{away_score}. Open Results to review the verified score, League tables to see updated standings, and Performances to view player stats.",
-            "/team-admin/dashboard#results",
-        )
-        notify_super_admins(
-            db,
-            "Results updated",
-            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} has been approved.",
-            "/super-admin#results",
-        )
-        notify_super_admins(
-            db,
-            "League tables updated",
-            f"League tables were recalculated after {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name}.",
-            "/super-admin#league-tables",
-        )
-        notify_super_admins(
-            db,
-            "Performances updated",
-            f"Player performances were updated after {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name}.",
-            "/super-admin#performances",
-        )
-    else:
-        rejection_note = normalized_rejection_reason or "No reason was provided."
-        notify_team_admins_for_teams(
-            db,
-            [match.fixture.home_team_id, match.fixture.away_team_id],
-            "Result rejected",
-            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} was rejected. Reason: {rejection_note} You can edit and resubmit the result.",
-            "/team-admin/dashboard#results",
-        )
-        notify_super_admins(
-            db,
-            "Result rejected",
-            f"Result for {match.fixture.home_team.team_name} vs {match.fixture.away_team.team_name} was rejected by Super Admin ID {super_admin_id}.",
-            "/super-admin#results",
-        )
-
-    db.refresh(submission)
-    return submission
-
-
-def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> dict[str, list[dict[str, object]]]:
-    team_query = select(Team).options(selectinload(Team.category)).where(Team.status == ApprovalStatus.APPROVED.value)
-    if team_ids is not None:
-        team_query = team_query.where(Team.team_id.in_(list(team_ids)))
-    teams = db.scalars(team_query).all()
-    standings: dict[str, dict[int, dict[str, object]]] = defaultdict(dict)
-    for team in teams:
-        standings[team.category.category_name][team.team_id] = {
-            "team": team,
-            "played": 0,
-            "wins": 0,
-            "draws": 0,
-            "losses": 0,
-            "goals_for": 0,
-            "goals_against": 0,
-            "goal_difference": 0,
-            "points": 0,
-        }
-
-    matches = db.scalars(
-        select(Match)
-        .join(Fixture, Fixture.fixture_id == Match.fixture_id)
-        .options(
-            selectinload(Match.fixture).selectinload(Fixture.category),
-            selectinload(Match.fixture).selectinload(Fixture.home_team).selectinload(Team.category),
-            selectinload(Match.fixture).selectinload(Fixture.away_team).selectinload(Team.category),
-        )
-        .where(Match.home_score.is_not(None), Match.away_score.is_not(None))
     ).all()
-    for match in matches:
-        fixture = match.fixture
-        if not fixture or not fixture.home_team or not fixture.away_team:
-            continue
-        category_name = fixture.category.category_name
-        if fixture.home_team.team_id not in standings[category_name]:
-            continue
-        if fixture.away_team.team_id not in standings[category_name]:
-            continue
-        home = standings[category_name][fixture.home_team.team_id]
-        away = standings[category_name][fixture.away_team.team_id]
-        home_score = match.home_score or 0
-        away_score = match.away_score or 0
+    own_submission = next((submission for submission in submissions if submission.submitted_by_team_admin_id == team_admin_id), None)
+    other_submission = next((submission for submission in submissions if submission.submitted_by_team_admin_id != team_admin_id), None)
 
-        home["played"] += 1
-        away["played"] += 1
-        home["goals_for"] += home_score
-        home["goals_against"] += away_score
-        away["goals_for"] += away_score
-        away["goals_against"] += home_score
-
-        if home_score > away_score:
-            home["wins"] += 1
-            away["losses"] += 1
-            home["points"] += 3
-        elif home_score < away_score:
-            away["wins"] += 1
-            home["losses"] += 1
-            away["points"] += 3
-        else:
-            home["draws"] += 1
-            away["draws"] += 1
-            home["points"] += 1
-            away["points"] += 1
-
-    for category_rows in standings.values():
-        for row in category_rows.values():
-            row["goal_difference"] = row["goals_for"] - row["goals_against"]
-
-    ordered: dict[str, list[dict[str, object]]] = {}
-    for category_name, rows in standings.items():
-        category_rows = sorted(
-            rows.values(),
-            key=lambda row: (
-                -int(row["points"]),
-                -int(row["goal_difference"]),
-                -int(row["goals_for"]),
-                str(row["team"].team_name).lower(),
-            ),
+    if other_submission and (
+        other_submission.home_score != home_score or other_submission.away_score != away_score
+    ):
+        raise RegistrationError(
+            "The other team admin already submitted a different scoreline for this fixture."
         )
-        for index, row in enumerate(category_rows, start=1):
-            row["position"] = index
-            row["team_logo"] = row["team"].logo
-        ordered[category_name] = category_rows
-    return ordered
+
+    if own_submission and own_submission.status == ApprovalStatus.APPROVED.value:
+        raise RegistrationError("This fixture has already been system verified.")
+
+    existing_submission = own_submission or MatchResultSubmission(
+        match_id=match.match_id,
+        submitted_by_team_admin_id=team_admin_id,
+        status=ApprovalStatus.PENDING.value,
+    )
+    if not own_submission:
+        db.add(existing_submission)
+        db.flush()
+    else:
+        _remove_submission_statistics(db, existing_submission)
+        if existing_submission.verification:
+            db.delete(existing_submission.verification)
+
+    selected_players = _player_lookup_map(db, [player_id for player_id in scorer_ids if player_id is not None] + [player_id for player_id in assister_ids if player_id is not None])
+    scorer_players: list[Player] = []
+    assister_players: list[Player | None] = []
+    for index, scorer_id in enumerate(scorer_ids):
+        scorer = selected_players.get(scorer_id or -1)
+        _assert_player_belongs_to_team(scorer, submitting_team.team_id, "scorers")
+        scorer_players.append(scorer)
+        assister_id = assister_ids[index] if index < len(assister_ids) else None
+        assister = selected_players.get(assister_id or -1) if assister_id is not None else None
+        if assister is not None:
+            _assert_player_belongs_to_team(assister, submitting_team.team_id, "assisters")
+        assister_players.append(assister)
+
+    scorer_names_text, goal_types_text, assist_names_text = _serialize_submission_players(
+        scorer_players,
+        assister_players,
+        [_clean_goal_type(goal_type) for goal_type in goal_types],
+    )
+
+    existing_submission.home_score = home_score
+    existing_submission.away_score = away_score
+    existing_submission.result_file_path = result_file_path or existing_submission.result_file_path
+    existing_submission.scorer_names_text = scorer_names_text
+    existing_submission.goal_types_text = goal_types_text
+    existing_submission.assist_names_text = assist_names_text
+    existing_submission.status = ApprovalStatus.PENDING.value
+
+    _write_submission_statistics(
+        db,
+        submission=existing_submission,
+        fixture=fixture,
+        team=submitting_team,
+        scorers=scorer_players,
+        assists=assister_players,
+        goal_types=[_clean_goal_type(goal_type) for goal_type in goal_types],
+    )
+
+    if other_submission and other_submission.home_score == home_score and other_submission.away_score == away_score:
+        _finalize_matched_result(
+            db,
+            fixture=fixture,
+            home_submission=other_submission if submitting_side == "away" else existing_submission,
+            away_submission=existing_submission if submitting_side == "away" else other_submission,
+        )
+        db.refresh(existing_submission)
+        return existing_submission
+
+    db.commit()
+    db.refresh(existing_submission)
+    notify_team_admins_for_teams(
+        db,
+        [submitting_team.team_id],
+        "Result saved",
+        f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} was saved and is waiting for the other team admin to submit the matching scoreline.",
+        "/team-admin/dashboard#results",
+    )
+    return existing_submission
 
 
-def get_player_performances(
+def get_player_statistics(
     db: Session,
     *,
     team_ids: Iterable[int] | None = None,
 ) -> dict[str, list[dict[str, object]]]:
-    team_id_set = set(team_ids) if team_ids is not None else None
     query = (
-        select(MatchResultSubmission)
-        .join(Match, Match.match_id == MatchResultSubmission.match_id)
-        .join(Fixture, Fixture.fixture_id == Match.fixture_id)
+        select(PlayerStatistic)
         .options(
-            selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.home_team).selectinload(Team.category),
-            selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.away_team).selectinload(Team.category),
-            selectinload(MatchResultSubmission.match).selectinload(Match.fixture).selectinload(Fixture.category),
+            selectinload(PlayerStatistic.player).selectinload(Player.team).selectinload(Team.category),
+            selectinload(PlayerStatistic.team).selectinload(Team.category),
+            selectinload(PlayerStatistic.fixture).selectinload(Fixture.category),
         )
-        .join(ResultVerification, ResultVerification.submission_id == MatchResultSubmission.submission_id)
-        .where(
-            MatchResultSubmission.status == ApprovalStatus.APPROVED.value,
-            ResultVerification.decision == ApprovalStatus.APPROVED.value,
-        )
+        .order_by(PlayerStatistic.created_at.desc(), PlayerStatistic.statistic_id.desc())
     )
-    if team_id_set is not None:
-        query = query.where(
-            or_(
-                Fixture.home_team_id.in_(list(team_id_set)),
-                Fixture.away_team_id.in_(list(team_id_set)),
-        )
-    )
-    submissions = db.scalars(query).all()
+    if team_ids is not None:
+        query = query.where(PlayerStatistic.team_id.in_(list(team_ids)))
+    statistics = db.scalars(query).all()
+
     player_groups: dict[str, dict[str, object]] = {}
 
-    def _record_player_event(player: Player | None, event_type: str) -> None:
-        if not player or not player.team:
+    def _record_statistic(statistic: PlayerStatistic) -> None:
+        player = statistic.player
+        team = statistic.team
+        if not player or not team:
             return
         identity_key = _player_identity_key(player)
         group = player_groups.setdefault(
@@ -853,46 +967,20 @@ def get_player_performances(
         if player.player_id > group["primary_player"].player_id:
             group["primary_player"] = player
 
-        category_name = player.team.category.category_name if player.team.category else ""
+        category_name = statistic.category_name or (team.category.category_name if team.category else "")
         category_entry = group["category_totals"][category_name]
-        if event_type.startswith("goal:"):
+        if statistic.stat_type == "goal":
             group["goals"] += 1
-            goal_type = event_type.split(":", 1)[1]
+            goal_type = statistic.goal_type or "Penalty"
             group["goal_types"][goal_type] += 1
             category_entry["goals"] += 1
             category_entry["goal_types"][goal_type] += 1
-        elif event_type == "assist":
+        elif statistic.stat_type == "assist":
             group["assists"] += 1
             category_entry["assists"] += 1
 
-    def _record_submission_text(submission: MatchResultSubmission) -> None:
-        fixture = submission.match.fixture if submission.match and submission.match.fixture else None
-        if not fixture or not fixture.home_team or not fixture.away_team:
-            return
-        scorers = _split_result_lines(submission.scorer_names_text)
-        goal_types = _split_result_lines(submission.goal_types_text)
-        assists = _split_result_lines(submission.assist_names_text)
-        home_goal_count = submission.home_score or 0
-        away_goal_count = submission.away_score or 0
-        total_goals = home_goal_count + away_goal_count
-        if len(assists) < total_goals:
-            assists.extend([""] * (total_goals - len(assists)))
-
-        for index, scorer_name in enumerate(scorers[:total_goals]):
-            player = _find_player_for_fixture(db, submission.match.fixture, scorer_name)
-            if player:
-                goal_type = _normalize_goal_type(goal_types[index] if index < len(goal_types) else None)
-                _record_player_event(player, f"goal:{goal_type}")
-
-            if index < len(assists):
-                assister_name = assists[index]
-                if assister_name:
-                    assister = _find_player_for_fixture(db, submission.match.fixture, assister_name)
-                    if assister:
-                        _record_player_event(assister, "assist")
-
-    for submission in submissions:
-        _record_submission_text(submission)
+    for statistic in statistics:
+        _record_statistic(statistic)
 
     def _format_goal_types(row: dict[str, object]) -> dict[str, int]:
         return dict(sorted(row["goal_types"].items(), key=lambda item: (-item[1], item[0])))
@@ -910,7 +998,6 @@ def get_player_performances(
     def _collect_clubs(row: dict[str, object]) -> list[str]:
         clubs: list[str] = []
         seen: set[str] = set()
-
         for player in sorted(row["players"].values(), key=lambda item: item.player_id):
             club_name = player.team.team_name if player.team else None
             normalized = (club_name or "").strip()
@@ -995,3 +1082,91 @@ def get_player_performances(
         key=lambda row: (-row["goals"], -row["assists"], row["player"].full_name.lower()),
     )
     return {"players": detailed_rows, "scorers": scorer_rows, "assisters": assister_rows}
+
+
+def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> dict[str, list[dict[str, object]]]:
+    team_query = select(Team).options(selectinload(Team.category)).where(Team.status == ApprovalStatus.APPROVED.value)
+    if team_ids is not None:
+        team_query = team_query.where(Team.team_id.in_(list(team_ids)))
+    teams = db.scalars(team_query).all()
+    standings: dict[str, dict[int, dict[str, object]]] = defaultdict(dict)
+    for team in teams:
+        standings[team.category.category_name][team.team_id] = {
+            "team": team,
+            "played": 0,
+            "wins": 0,
+            "draws": 0,
+            "losses": 0,
+            "goals_for": 0,
+            "goals_against": 0,
+            "goal_difference": 0,
+            "points": 0,
+        }
+
+    matches = db.scalars(
+        select(Match)
+        .join(Fixture, Fixture.fixture_id == Match.fixture_id)
+        .options(
+            selectinload(Match.fixture).selectinload(Fixture.category),
+            selectinload(Match.fixture).selectinload(Fixture.home_team).selectinload(Team.category),
+            selectinload(Match.fixture).selectinload(Fixture.away_team).selectinload(Team.category),
+        )
+        .where(Match.home_score.is_not(None), Match.away_score.is_not(None))
+    ).all()
+    for match in matches:
+        fixture = match.fixture
+        if not fixture or not fixture.home_team or not fixture.away_team:
+            continue
+        category_name = fixture.category.category_name
+        if fixture.home_team.team_id not in standings[category_name]:
+            continue
+        if fixture.away_team.team_id not in standings[category_name]:
+            continue
+        home = standings[category_name][fixture.home_team.team_id]
+        away = standings[category_name][fixture.away_team.team_id]
+        home_score = match.home_score or 0
+        away_score = match.away_score or 0
+
+        home["played"] += 1
+        away["played"] += 1
+        home["goals_for"] += home_score
+        home["goals_against"] += away_score
+        away["goals_for"] += away_score
+        away["goals_against"] += home_score
+
+        if home_score > away_score:
+            home["wins"] += 1
+            away["losses"] += 1
+            home["points"] += 3
+        elif home_score < away_score:
+            away["wins"] += 1
+            home["losses"] += 1
+            away["points"] += 3
+        else:
+            home["draws"] += 1
+            away["draws"] += 1
+            home["points"] += 1
+            away["points"] += 1
+
+    for category_rows in standings.values():
+        for row in category_rows.values():
+            row["goal_difference"] = row["goals_for"] - row["goals_against"]
+
+    ordered: dict[str, list[dict[str, object]]] = {}
+    for category_name, rows in standings.items():
+        ranked_rows = sorted(
+            rows.values(),
+            key=lambda row: (
+                -int(row["points"]),
+                -int(row["goal_difference"]),
+                -int(row["goals_for"]),
+                str(row["team"].team_name).lower(),
+            ),
+        )
+        for position, row in enumerate(ranked_rows, start=1):
+            row["position"] = position
+        ordered[category_name] = ranked_rows
+    return ordered
+
+
+get_player_performances = get_player_statistics

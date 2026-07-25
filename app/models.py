@@ -115,6 +115,9 @@ class TeamAdmin(Base):
     match_result_submissions: Mapped[list[MatchResultSubmission]] = relationship(
         back_populates="submitted_by"
     )
+    match_day_squads: Mapped[list[MatchDaySquad]] = relationship(
+        back_populates="generated_by"
+    )
 
 
 class SuperAdmin(Base):
@@ -191,6 +194,10 @@ class Team(Base):
     away_fixtures: Mapped[list[Fixture]] = relationship(
         back_populates="away_team", foreign_keys="Fixture.away_team_id"
     )
+    match_day_squads: Mapped[list[MatchDaySquad]] = relationship(
+        back_populates="team"
+    )
+    player_statistics: Mapped[list[PlayerStatistic]] = relationship(back_populates="team")
 
 
 class TeamSeason(Base):
@@ -238,7 +245,6 @@ class Player(Base):
     status: Mapped[str] = mapped_column(String(30), default=ApprovalStatus.PENDING.value)
     approved_by_super_admin_id: Mapped[int | None] = mapped_column(ForeignKey("super_admins.admin_id"), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime)
-    registration_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
     registration_reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime)
     is_on_loan: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     original_team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.team_id"))
@@ -259,7 +265,11 @@ class Player(Base):
         back_populates="player", uselist=False
     )
     match_events: Mapped[list[MatchEvent]] = relationship(back_populates="player")
+    player_statistics: Mapped[list[PlayerStatistic]] = relationship(back_populates="player")
     awards: Mapped[list[PlayerAward]] = relationship(back_populates="player")
+    match_day_squad_memberships: Mapped[list[MatchDaySquadMember]] = relationship(
+        back_populates="player"
+    )
 
 
 class PlayerDocument(Base):
@@ -470,6 +480,7 @@ class Fixture(Base):
         foreign_keys=[created_by_super_admin_id]
     )
     match: Mapped[Match | None] = relationship(back_populates="fixture", uselist=False)
+    player_statistics: Mapped[list[PlayerStatistic]] = relationship(back_populates="fixture")
 
 
 class Match(Base):
@@ -539,6 +550,31 @@ class MatchResultSubmission(Base):
     verification: Mapped[ResultVerification | None] = relationship(
         back_populates="submission", uselist=False
     )
+    player_statistics: Mapped[list[PlayerStatistic]] = relationship(back_populates="submission")
+
+
+class PlayerStatistic(Base):
+    __tablename__ = "player_statistics"
+
+    statistic_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.fixture_id"))
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.match_id"))
+    submission_id: Mapped[int] = mapped_column(ForeignKey("match_result_submissions.submission_id"))
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.player_id"))
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"))
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.category_id"))
+    team_code: Mapped[str | None] = mapped_column(String(50))
+    club_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    category_name: Mapped[str | None] = mapped_column(String(80))
+    stat_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    goal_type: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    fixture: Mapped[Fixture] = relationship(back_populates="player_statistics")
+    match: Mapped[Match] = relationship()
+    submission: Mapped[MatchResultSubmission] = relationship(back_populates="player_statistics")
+    player: Mapped[Player] = relationship(back_populates="player_statistics")
+    team: Mapped[Team] = relationship(back_populates="player_statistics")
 
 
 class ResultVerification(Base):
@@ -548,13 +584,67 @@ class ResultVerification(Base):
     submission_id: Mapped[int] = mapped_column(
         ForeignKey("match_result_submissions.submission_id"), unique=True
     )
-    verified_by_admin_id: Mapped[int] = mapped_column(ForeignKey("super_admins.admin_id"))
+    verified_by_admin_id: Mapped[int | None] = mapped_column(ForeignKey("super_admins.admin_id"))
+    verified_by_system: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     verification_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     decision: Mapped[str] = mapped_column(String(30), nullable=False)
     rejection_reason: Mapped[str | None] = mapped_column(Text)
 
     submission: Mapped[MatchResultSubmission] = relationship(back_populates="verification")
-    verified_by: Mapped[SuperAdmin] = relationship(back_populates="result_verifications")
+    verified_by: Mapped[SuperAdmin | None] = relationship(back_populates="result_verifications")
+
+
+class MatchDaySquad(Base):
+    __tablename__ = "match_day_squads"
+
+    squad_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.fixture_id"))
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"))
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.category_id"))
+    generated_by_team_admin_id: Mapped[int] = mapped_column(
+        ForeignKey("team_admins.team_admin_id")
+    )
+    generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    verified_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    fixture_date_snapshot: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    venue_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
+    home_team_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
+    home_team_logo_snapshot: Mapped[str | None] = mapped_column(String(500))
+    away_team_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
+    away_team_logo_snapshot: Mapped[str | None] = mapped_column(String(500))
+    team_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
+    team_logo_snapshot: Mapped[str | None] = mapped_column(String(500))
+    category_name_snapshot: Mapped[str] = mapped_column(String(80), nullable=False)
+
+    fixture: Mapped[Fixture] = relationship()
+    team: Mapped[Team] = relationship(back_populates="match_day_squads")
+    category: Mapped[Category] = relationship()
+    generated_by: Mapped[TeamAdmin] = relationship(back_populates="match_day_squads")
+    members: Mapped[list[MatchDaySquadMember]] = relationship(
+        back_populates="squad",
+        cascade="all, delete-orphan",
+    )
+
+
+class MatchDaySquadMember(Base):
+    __tablename__ = "match_day_squad_members"
+    __table_args__ = (
+        UniqueConstraint("squad_id", "player_id"),
+        UniqueConstraint("squad_id", "jersey_number"),
+    )
+
+    member_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    squad_id: Mapped[int] = mapped_column(ForeignKey("match_day_squads.squad_id"))
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.player_id"))
+    jersey_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    player_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
+    player_code_snapshot: Mapped[str | None] = mapped_column(String(80))
+    age_group_snapshot: Mapped[str | None] = mapped_column(String(10))
+
+    squad: Mapped[MatchDaySquad] = relationship(back_populates="members")
+    player: Mapped[Player] = relationship(back_populates="match_day_squad_memberships")
 
 
 class News(Base):
