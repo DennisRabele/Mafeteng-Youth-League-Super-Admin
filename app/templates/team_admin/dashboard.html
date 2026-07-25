@@ -1868,9 +1868,9 @@
             <label>Goal type
               <select name="goal_types" required>
                 <option value="Penalty">Penalty</option>
-                <option value="Free Kick">Free Kick</option>
-                <option value="Corner Kick">Corner Kick</option>
-                <option value="From Kickoff">From Kickoff</option>
+                <option value="Freekick">Freekick</option>
+                <option value="Cornerkick">Cornerkick</option>
+                <option value="from KickOFF">from KickOFF</option>
                 <option value="Header">Header</option>
                 <option value="Tap In">Tap In</option>
               </select>
@@ -1893,6 +1893,7 @@
               <th>Status</th>
               <th>Scorers</th>
               <th>Assists</th>
+              <th>Actions</th>
               <th>Review</th>
             </tr>
           </thead>
@@ -1905,7 +1906,18 @@
             {% set submission_category = submission_fixture.category.category_name if submission_fixture and submission_fixture.category else 'uncategorized' %}
             {% set submitted_by_name = submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' %}
             {% set reviewed_by_name = submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by and submission.verification.verified_by.user else 'System' %}
-            <tr data-row data-status="{{ submission.status }}" data-category="{{ submission_category }}">
+            <tr
+              data-row
+              data-status="{{ submission.status }}"
+              data-category="{{ submission_category }}"
+              data-fixture-id="{{ submission_match.fixture_id if submission_match and submission_match.fixture else '' }}"
+              data-home-score="{{ submission.home_score }}"
+              data-away-score="{{ submission.away_score }}"
+              data-scorer-names='{{ (submission.scorer_names_text or "") | tojson }}'
+              data-assist-names='{{ (submission.assist_names_text or "") | tojson }}'
+              data-goal-types='{{ (submission.goal_types_text or "") | tojson }}'
+              data-submitted-by-team-admin-id="{{ submission.submitted_by_team_admin_id }}"
+            >
               <td data-label="Fixture">{{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}</td>
               <td data-label="Set By">{{ submitted_by_name }}</td>
               <td data-label="Submitted">{{ submission.submitted_date.strftime('%Y-%m-%d %H:%M') }}</td>
@@ -1913,6 +1925,13 @@
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
               <td data-label="Scorers">{{ submission.scorer_names_text or '-' }}</td>
               <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
+              <td data-label="Actions">
+                {% if submission.submitted_by_team_admin_id == team_admin.team_admin_id and submission.status != 'approved' %}
+                  <button class="button button-secondary small" type="button" data-edit-result>Edit</button>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
               <td data-label="Review">
                 {% if submission.verification and submission.verification.decision == 'rejected' %}
                   Rejected by {{ reviewed_by_name }}: {{ submission.verification.rejection_reason or '-' }}
@@ -1924,7 +1943,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty">No results yet.</td></tr>
+            <tr><td colspan="9" class="empty">No results yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -2156,12 +2175,14 @@
     const goalRows = document.querySelector('[data-result-goal-rows]');
     const goalRowTemplate = document.getElementById('result-goal-row-template');
     const statusNote = document.querySelector('[data-result-status-note]');
+    const editButtons = Array.from(document.querySelectorAll('[data-edit-result]'));
     const approvedTeamIds = new Set(JSON.parse(form.dataset.approvedTeamIds || '[]').map((value) => String(value)));
     const playerCache = new Map();
     let fixturePlayers = null;
     let currentSubmittingTeamId = null;
+    let pendingEditPayload = null;
 
-    const goalTypes = ['Penalty', 'Free Kick', 'Corner Kick', 'From Kickoff', 'Header', 'Tap In'];
+    const goalTypes = ['Penalty', 'Freekick', 'Cornerkick', 'from KickOFF', 'Header', 'Tap In'];
 
     const showEmptyState = (message) => {
       goalRows.innerHTML = `<div class="fixture-empty">${message}</div>`;
@@ -2211,9 +2232,63 @@
       const options = includePlaceholder ? ['<option value="">Select player</option>'] : [];
       players.forEach((player) => {
         const suffix = player.player_code ? ` (${player.player_code})` : '';
-        options.push(`<option value="${player.player_id}"${String(player.player_id) === String(selectedValue) ? ' selected' : ''}>${player.full_name}${suffix}</option>`);
+        const label = player.full_name || player.player_name || '';
+        options.push(`<option value="${player.player_id}"${String(player.player_id) === String(selectedValue) ? ' selected' : ''}>${label}${suffix}</option>`);
       });
       return options.join('');
+    };
+
+    const parseMaybeJsonString = (value) => {
+      if (!value) {
+        return '';
+      }
+      try {
+        return JSON.parse(value);
+      } catch (error) {
+        return value;
+      }
+    };
+
+    const splitLines = (value) => {
+      const parsed = parseMaybeJsonString(value);
+      if (!parsed) {
+        return [];
+      }
+      return String(parsed).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    };
+
+    const normalizeGoalTypeLabel = (value) => {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (normalized === 'free kick') return 'Freekick';
+      if (normalized === 'freekick') return 'Freekick';
+      if (normalized === 'corner kick') return 'Cornerkick';
+      if (normalized === 'cornerkick') return 'Cornerkick';
+      if (normalized === 'from kickoff' || normalized === 'from kick off') return 'from KickOFF';
+      if (normalized === 'header') return 'Header';
+      if (normalized === 'tap in') return 'Tap In';
+      if (normalized === 'penalty') return 'Penalty';
+      return value || '';
+    };
+
+    const findPlayerIdByName = (players, name) => {
+      if (!name || name === '-') {
+        return '';
+      }
+      const normalized = String(name).trim().toLowerCase();
+      const player = players.find((item) => {
+        const fullName = String(item.full_name || item.player_name || '').trim().toLowerCase();
+        const withCode = item.player_code ? `${fullName} (${String(item.player_code).trim().toLowerCase()})` : fullName;
+        return fullName === normalized || withCode === normalized;
+      });
+      return player ? String(player.player_id) : '';
+    };
+
+    const clearPendingEdit = () => {
+      pendingEditPayload = null;
+    };
+
+    const setPendingEdit = (payload) => {
+      pendingEditPayload = payload;
     };
 
     const populateRows = () => {
@@ -2258,21 +2333,29 @@
         return;
       }
 
-      goalRows.innerHTML = '';
       const oldRows = Array.from(goalRows.querySelectorAll('[data-goal-row]'));
+      goalRows.innerHTML = '';
+      const editScorers = pendingEditPayload?.scorers || [];
+      const editAssists = pendingEditPayload?.assists || [];
+      const editGoalTypes = pendingEditPayload?.goalTypes || [];
       for (let index = 0; index < expectedCount; index += 1) {
         const currentRow = oldRows[index];
         const currentScorer = currentRow?.querySelector('select[name="scorer_player_ids"]')?.value || '';
         const currentAssist = currentRow?.querySelector('select[name="assist_player_ids"]')?.value || '';
         const currentGoalType = currentRow?.querySelector('select[name="goal_types"]')?.value || goalTypes[0];
+        const desiredScorerName = editScorers[index] || '';
+        const desiredAssistName = editAssists[index] || '';
+        const desiredGoalType = normalizeGoalTypeLabel(editGoalTypes[index] || currentGoalType);
         const row = goalRowTemplate.content.firstElementChild.cloneNode(true);
         row.querySelector('.result-goal-row__title').textContent = `Goal ${index + 1}`;
         const scorerSelect = row.querySelector('select[name="scorer_player_ids"]');
         const assistSelect = row.querySelector('select[name="assist_player_ids"]');
         const goalTypeSelect = row.querySelector('select[name="goal_types"]');
-        scorerSelect.innerHTML = buildPlayerOptions(players, currentScorer);
-        assistSelect.innerHTML = `<option value="">No assist</option>${buildPlayerOptions(players, currentAssist, false)}`;
-        goalTypeSelect.innerHTML = goalTypes.map((goalType) => `<option value="${goalType}"${goalType === currentGoalType ? ' selected' : ''}>${goalType}</option>`).join('');
+        const selectedScorerId = desiredScorerName ? findPlayerIdByName(players, desiredScorerName) : currentScorer;
+        const selectedAssistId = desiredAssistName ? findPlayerIdByName(players, desiredAssistName) : currentAssist;
+        scorerSelect.innerHTML = buildPlayerOptions(players, selectedScorerId);
+        assistSelect.innerHTML = `<option value="">No assist</option>${buildPlayerOptions(players, selectedAssistId, false)}`;
+        goalTypeSelect.innerHTML = goalTypes.map((goalType) => `<option value="${goalType}"${goalType === desiredGoalType ? ' selected' : ''}>${goalType}</option>`).join('');
         goalRows.appendChild(row);
       }
     };
@@ -2305,6 +2388,7 @@
       homeScoreInput.value = option?.dataset.homeScore || '';
       awayScoreInput.value = option?.dataset.awayScore || '';
       fixturePlayers = null;
+      clearPendingEdit();
       showEmptyState('Loading approved players for this fixture...');
       await fetchPlayersForFixture(fixtureSelect.value);
     });
@@ -2321,6 +2405,40 @@
       if (!fixtureSelect.value || (expectedCount > 0 && !goalRows.querySelector('[data-goal-row]'))) {
         event.preventDefault();
       }
+    });
+
+    editButtons.forEach((button) => {
+      button.addEventListener('click', async () => {
+        const row = button.closest('[data-row]');
+        if (!row) {
+          return;
+        }
+
+        const fixtureId = String(row.dataset.fixtureId || '');
+        const scorerNames = splitLines(row.dataset.scorerNames);
+        const assistNames = splitLines(row.dataset.assistNames);
+        const goalTypesFromRow = splitLines(row.dataset.goalTypes);
+        setPendingEdit({
+          scorers: scorerNames,
+          assists: assistNames,
+          goalTypes: goalTypesFromRow,
+        });
+
+        if (fixtureSelect.value !== fixtureId) {
+          fixtureSelect.value = fixtureId;
+          const selectedFixture = getSelectedFixtureOption();
+          homeScoreInput.value = selectedFixture?.dataset.homeScore || row.dataset.homeScore || '';
+          awayScoreInput.value = selectedFixture?.dataset.awayScore || row.dataset.awayScore || '';
+          fixturePlayers = null;
+          showEmptyState('Loading approved players for this fixture...');
+          await fetchPlayersForFixture(fixtureId);
+        } else {
+          homeScoreInput.value = row.dataset.homeScore || homeScoreInput.value || '';
+          awayScoreInput.value = row.dataset.awayScore || awayScoreInput.value || '';
+          populateRows();
+        }
+        document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     });
 
     const initialOption = getSelectedFixtureOption();

@@ -34,12 +34,15 @@ from app.services.storage import delete_upload
 
 
 GOAL_TYPE_ALIASES = {
-    "freekick": "Free Kick",
-    "free kick": "Free Kick",
+    "freekick": "Freekick",
+    "free kick": "Freekick",
     "penalty": "Penalty",
-    "header from open play": "Header From Open Play",
-    "header from corner kick": "Header From Corner Kick",
-    "open play": "Open Play",
+    "cornerkick": "Cornerkick",
+    "corner kick": "Cornerkick",
+    "from kickoff": "from KickOFF",
+    "from kick off": "from KickOFF",
+    "header": "Header",
+    "tap in": "Tap In",
 }
 
 
@@ -609,7 +612,7 @@ def _clear_match_result_state(db: Session, match: Match) -> None:
 
 def _clean_goal_type(value: str | None) -> str:
     normalized = _normalize_goal_type(value)
-    allowed_goal_types = {"Penalty", "Free Kick", "Corner Kick", "From Kickoff", "Header", "Tap In"}
+    allowed_goal_types = {"Penalty", "Freekick", "Cornerkick", "from KickOFF", "Header", "Tap In"}
     if normalized not in allowed_goal_types:
         raise RegistrationError("Select a valid goal type.")
     return normalized
@@ -850,9 +853,6 @@ def submit_match_result(
         raise RegistrationError(
             "The other team admin already submitted a different scoreline for this fixture."
         )
-
-    if own_submission and own_submission.status == ApprovalStatus.APPROVED.value:
-        raise RegistrationError("This fixture has already been system verified.")
 
     existing_submission = own_submission or MatchResultSubmission(
         match_id=match.match_id,

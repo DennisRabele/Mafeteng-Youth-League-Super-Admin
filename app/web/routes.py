@@ -2473,11 +2473,13 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
     def _load_team_players(team_id: int) -> list[dict[str, object]]:
         players = db.scalars(
             select(Player)
-            .options(selectinload(Player.team))
+            .options(selectinload(Player.team).selectinload(Team.category))
+            .join(Team, Player.team_id == Team.team_id)
             .where(
                 Player.team_id == team_id,
                 Player.status == ApprovalStatus.APPROVED.value,
                 Player.is_on_loan.is_(False),
+                Team.category_id == fixture.category_id,
                 or_(
                     func.upper(func.trim(Player.age_group)) == category_age_group,
                     func.upper(func.trim(Player.age_group)).like(f"%{category_age_group}%"),
@@ -2488,8 +2490,14 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
         return [
             {
                 "player_id": player.player_id,
+                "full_name": player.full_name,
                 "player_name": player.full_name,
+                "player_code": player.player_code,
                 "age_group": player.age_group,
+                "team_id": player.team_id,
+                "team_name": player.team.team_name if player.team else None,
+                "category_id": player.team.category_id if player.team else None,
+                "category_name": player.team.category.category_name if player.team and player.team.category else category_name,
             }
             for player in players
         ]
