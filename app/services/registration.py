@@ -1,8 +1,9 @@
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 import logging
 import re
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
@@ -15,35 +16,22 @@ from app.core.security import (
 from app.models import (
     ApprovalStatus,
     Category,
-    Coach,
-    CoachAward,
-    Fixture,
-    Match,
-    MatchEvent,
-    MatchOfficialAssignment,
-    MatchResultSubmission,
-    Notification,
     Parent,
     Player,
-    PlayerAward,
     PlayerDocument,
     PlayerRegistrationRequest,
-    PlayerPDI,
     PlayerTransferRequest,
-    PlayerRequest,
     QRPlayerCard,
     Season,
-    ResultVerification,
     SuperAdmin,
     Team,
     TeamAdmin,
     TeamSeason,
-    TrainingAttendance,
     TransferStatus,
     User,
     UserRole,
 )
-from app.services.email import send_notification_email
+from app.services.team_access import load_team_admin_approved_team_ids, load_team_admin_primary_team
 
 
 class RegistrationError(ValueError):
@@ -406,127 +394,79 @@ def _player_registration_expiry_date(db: Session, player: Player) -> date | None
     return _add_years(start_date, registration_period)
 
 
-def _player_registration_expiry_datetime(db: Session, player: Player) -> datetime | None:
-    expiry_date = _player_registration_expiry_date(db, player)
-    if not expiry_date:
-        return None
-    return datetime.combine(expiry_date, datetime.min.time())
-
-
-def _sync_player_registration_expiry(db: Session, player: Player) -> None:
-    expiry_datetime = _player_registration_expiry_datetime(db, player)
-    player.registration_expires_at = expiry_datetime
-    player.registration_reminder_sent_at = None
-
-
-def _delete_expired_player_registrations(db: Session) -> int:
-    expired_players = db.scalars(
-        select(Player)
-        .where(
-            Player.status == ApprovalStatus.APPROVED.value,
-            Player.registration_expires_at.is_not(None),
-            Player.registration_expires_at <= datetime.utcnow(),
-        )
-    ).all()
-    deleted = 0
-    for player in expired_players:
-        _delete_player_graph(db, player.player_id)
-        deleted += 1
-    if deleted:
-        db.commit()
-    return deleted
+def get_player_registration_expiry_date(db: Session, player: Player) -> date | None:
+    """Return the date when the player's current registration expires."""
+    return _player_registration_expiry_date(db, player)
 
 
 def _send_registration_expiry_reminders(db: Session) -> int:
-    reminder_window = datetime.utcnow() + timedelta(days=30)
+    reminder_deadline = date.today() + timedelta(days=30)
     players = db.scalars(
         select(Player)
         .options(selectinload(Player.team))
         .where(
             Player.status == ApprovalStatus.APPROVED.value,
-            Player.registration_expires_at.is_not(None),
-            Player.registration_expires_at > datetime.utcnow(),
-            Player.registration_expires_at <= reminder_window,
+            Player.approved_at.is_not(None),
+            Player.registration_reminder_sent_at.is_(None),
         )
     ).all()
-    grouped: dict[int, list[Player]] = defaultdict(list)
-    for player in players:
-        if player.team and player.team.team_admin_id:
-            grouped[player.team.team_admin_id].append(player)
 
-    sent = 0
+    grouped: dict[int, list[tuple[Player, date]]] = defaultdict(list)
+    for player in players:
+        expiry_date = _player_registration_expiry_date(db, player)
+        if not expiry_date or expiry_date <= date.today() or expiry_date > reminder_deadline:
+            continue
+        if not player.team or not player.team.team_admin_id:
+            continue
+        grouped[player.team.team_admin_id].append((player, expiry_date))
+
+    reminders_sent = 0
     for team_admin_id, team_players in grouped.items():
-        team_admin = db.scalar(
-            select(TeamAdmin)
-            .options(selectinload(TeamAdmin.user))
-            .where(TeamAdmin.team_admin_id == team_admin_id)
-        )
-        if not team_admin or not team_admin.user or not team_admin.user.email:
+        team_ids = sorted({player.team_id for player, _ in team_players if player.team_id})
+        if not team_ids:
             continue
-        unsent_players = [player for player in team_players if player.registration_reminder_sent_at is None]
-        if not unsent_players:
-            continue
+
         lines = [
-            f"{player.full_name} ({player.player_code or f'PLAYER-{player.player_id}'})"
-            for player in sorted(unsent_players, key=lambda item: item.full_name.lower())
+            f"{player.full_name} ({expiry_date.isoformat()})"
+            for player, expiry_date in sorted(
+                team_players,
+                key=lambda item: (item[0].full_name.lower(), item[1]),
+            )
         ]
+
         try:
-            send_notification_email(
-                to_email=team_admin.user.email,
-                title="Player registration expiry reminder",
-                message=(
+            from app.services.league import notify_team_admins_for_teams
+
+            notify_team_admins_for_teams(
+                db,
+                team_ids,
+                "Player registration expiry reminder",
+                (
                     "The following player registrations will expire within the next 30 days:\n"
                     + "\n".join(lines)
                     + "\n\nPlease renew them before the expiration date."
                 ),
-                link="/team-admin/dashboard#my-players",
+                "/team-admin/dashboard#my-players",
             )
         except Exception:
             continue
-        for player in unsent_players:
+
+        for player, _ in team_players:
             player.registration_reminder_sent_at = datetime.utcnow()
-        sent += 1
-    if sent:
-        db.commit()
-    return sent
+        reminders_sent += 1
 
-
-def _backfill_player_registration_expiry_fields(db: Session) -> int:
-    players = db.scalars(
-        select(Player)
-        .options(selectinload(Player.team))
-        .where(
-            Player.status == ApprovalStatus.APPROVED.value,
-            Player.registration_expires_at.is_(None),
-        )
-    ).all()
-    updated = 0
-    for player in players:
-        _sync_player_registration_expiry(db, player)
-        updated += 1
-    if updated:
+    if reminders_sent:
         db.commit()
-    return updated
+    return reminders_sent
 
 
 def process_player_registration_lifecycle(db: Session) -> dict[str, int]:
-    stats = {"backfilled": 0, "reminders_sent": 0, "expired_deleted": 0}
-
-    try:
-        stats["backfilled"] = _backfill_player_registration_expiry_fields(db)
-    except Exception:
-        logger.exception("Player registration expiry backfill failed")
-
+    """Process player registration reminders and expiry maintenance."""
+    stats = {"reminders_sent": 0}
     try:
         stats["reminders_sent"] = _send_registration_expiry_reminders(db)
     except Exception:
-        logger.exception("Player registration expiry reminder processing failed")
-
-    try:
-        stats["expired_deleted"] = _delete_expired_player_registrations(db)
-    except Exception:
-        logger.exception("Player registration expiry cleanup failed")
-
+        logger.exception("Player registration reminder processing failed")
     return stats
 
 
@@ -652,7 +592,7 @@ def create_team_admin_registration(
         else:
             normalized_team_name = team.team_name.strip()
         admin_count = len(db.scalars(select(TeamAdmin).where(TeamAdmin.team_id == team.team_id)).all())
-        if admin_count >= 5:
+        if admin_count >= 7:
             raise RegistrationError("Maximum number of team admins reached for this team.")
     else:
         if not normalized_team_name:
@@ -703,81 +643,6 @@ def is_first_team_admin_for_team(db: Session, team_id: int | None) -> bool:
     return get_team_admins_count(db, team_id) == 0
 
 
-def _delete_fixture_graph_for_team(db: Session, team_id: int) -> None:
-    fixture_ids = select(Fixture.fixture_id).where(
-        or_(Fixture.home_team_id == team_id, Fixture.away_team_id == team_id)
-    )
-    match_ids = select(Match.match_id).where(Match.fixture_id.in_(fixture_ids))
-    submission_ids = select(MatchResultSubmission.submission_id).where(
-        MatchResultSubmission.match_id.in_(match_ids)
-    )
-    db.execute(delete(ResultVerification).where(ResultVerification.submission_id.in_(submission_ids)))
-    db.execute(delete(MatchEvent).where(MatchEvent.match_id.in_(match_ids)))
-    db.execute(delete(MatchOfficialAssignment).where(MatchOfficialAssignment.match_id.in_(match_ids)))
-    db.execute(delete(MatchResultSubmission).where(MatchResultSubmission.match_id.in_(match_ids)))
-    db.execute(delete(Match).where(Match.match_id.in_(match_ids)))
-    db.execute(delete(Fixture).where(Fixture.fixture_id.in_(fixture_ids)))
-
-
-def _delete_player_graph(db: Session, player_id: int) -> None:
-    player = db.get(Player, player_id)
-    if not player:
-        return
-
-    db.execute(delete(PlayerRequest).where(PlayerRequest.player_id == player_id))
-    db.execute(delete(PlayerTransferRequest).where(PlayerTransferRequest.player_id == player_id))
-    db.execute(delete(PlayerRegistrationRequest).where(PlayerRegistrationRequest.player_id == player_id))
-    db.execute(delete(MatchEvent).where(MatchEvent.player_id == player_id))
-    db.execute(delete(PlayerAward).where(PlayerAward.player_id == player_id))
-    db.execute(delete(TrainingAttendance).where(TrainingAttendance.player_id == player_id))
-    db.execute(delete(PlayerPDI).where(PlayerPDI.player_id == player_id))
-    db.execute(delete(QRPlayerCard).where(QRPlayerCard.player_id == player_id))
-    db.execute(delete(PlayerDocument).where(PlayerDocument.player_id == player_id))
-    parent_id = player.parent_id
-    db.execute(delete(Player).where(Player.player_id == player_id))
-    if parent_id:
-        remaining_parent_use = db.scalar(
-            select(func.count()).select_from(Player).where(Player.parent_id == parent_id)
-        )
-        if not remaining_parent_use:
-            db.execute(delete(Parent).where(Parent.parent_id == parent_id))
-
-
-def _delete_team_graph(db: Session, team_id: int) -> None:
-    player_ids = db.scalars(select(Player.player_id).where(Player.team_id == team_id)).all()
-    for player_id in player_ids:
-        _delete_player_graph(db, player_id)
-
-    coach_ids = db.scalars(select(Coach.coach_id).where(Coach.team_id == team_id)).all()
-    for coach_id in coach_ids:
-        db.execute(delete(CoachAward).where(CoachAward.coach_id == coach_id))
-    db.execute(delete(Coach).where(Coach.team_id == team_id))
-    db.execute(delete(PlayerRequest).where(or_(PlayerRequest.from_team_id == team_id, PlayerRequest.to_team_id == team_id)))
-    db.execute(delete(PlayerTransferRequest).where(or_(PlayerTransferRequest.from_team_id == team_id, PlayerTransferRequest.to_team_id == team_id)))
-    db.execute(delete(PlayerRegistrationRequest).where(PlayerRegistrationRequest.team_id == team_id))
-    db.execute(delete(TeamSeason).where(TeamSeason.team_id == team_id))
-    _delete_fixture_graph_for_team(db, team_id)
-    db.execute(delete(Team).where(Team.team_id == team_id))
-
-
-def _delete_team_admin_graph(db: Session, team_admin: TeamAdmin) -> None:
-    team_ids = db.scalars(select(Team.team_id).where(Team.team_admin_id == team_admin.team_admin_id)).all()
-    for team_id in team_ids:
-        _delete_team_graph(db, team_id)
-
-    submission_ids = select(MatchResultSubmission.submission_id).where(
-        MatchResultSubmission.submitted_by_team_admin_id == team_admin.team_admin_id
-    )
-    db.execute(delete(ResultVerification).where(ResultVerification.submission_id.in_(submission_ids)))
-    db.execute(delete(MatchResultSubmission).where(MatchResultSubmission.submitted_by_team_admin_id == team_admin.team_admin_id))
-    db.execute(delete(PlayerRequest).where(PlayerRequest.requested_by_team_admin_id == team_admin.team_admin_id))
-    db.execute(delete(PlayerTransferRequest).where(PlayerTransferRequest.requested_by_team_admin_id == team_admin.team_admin_id))
-    db.execute(delete(PlayerRegistrationRequest).where(PlayerRegistrationRequest.requested_by_team_admin_id == team_admin.team_admin_id))
-    db.execute(delete(Notification).where(Notification.user_id == team_admin.user_id))
-    db.execute(delete(TeamAdmin).where(TeamAdmin.team_admin_id == team_admin.team_admin_id))
-    db.execute(delete(User).where(User.user_id == team_admin.user_id))
-
-
 def approve_team_admin(
     db: Session,
     team_admin_id: int,
@@ -806,7 +671,7 @@ def approve_team_admin(
     try:
         from app.services.league import create_notification
 
-        assigned_team = team_admin.assigned_team
+        assigned_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
         if assigned_team and assigned_team.team_code:
             approval_message = (
                 "Your Team Admin registration has been approved. "
@@ -843,21 +708,22 @@ def reject_team_admin(db: Session, team_admin_id: int, rejection_reason: str) ->
     if not rejection_reason.strip():
         raise RegistrationError("A rejection reason is required.")
 
-    rejection_reason = rejection_reason.strip()
+    team_admin.status = ApprovalStatus.REJECTED.value
+    team_admin.rejection_reason = rejection_reason.strip()
+    db.commit()
+    db.refresh(team_admin)
     try:
-        if team_admin.user.email:
-            send_notification_email(
-                to_email=team_admin.user.email,
-                title="Team Admin rejected",
-                message=f"Your Team Admin registration was rejected: {rejection_reason}",
-                link="/login",
-            )
+        from app.services.league import create_notification
+
+        create_notification(
+            db,
+            user_id=team_admin.user_id,
+            title="Team Admin rejected",
+            message=f"Your Team Admin registration was rejected: {team_admin.rejection_reason}",
+            link="/login",
+        )
     except Exception:
         pass
-
-    team_admin.rejection_reason = rejection_reason
-    _delete_team_admin_graph(db, team_admin)
-    db.commit()
     return team_admin
 
 
@@ -950,6 +816,8 @@ def approve_team(
     # Generate team code
     if not team.team_code:
         team.team_code = generate_team_code(db, team)
+    if team.team_admin and team.team_admin.team_id is None:
+        team.team_admin.team_id = team.team_id
     
     team.status = ApprovalStatus.APPROVED.value
     team.rejection_reason = None
@@ -997,7 +865,10 @@ def reject_team(db: Session, team_id: int, rejection_reason: str) -> Team:
     if not rejection_reason.strip():
         raise RegistrationError("A rejection reason is required.")
 
-    rejection_reason = rejection_reason.strip()
+    team.status = ApprovalStatus.REJECTED.value
+    team.rejection_reason = rejection_reason.strip()
+    db.commit()
+    db.refresh(team)
     try:
         from app.services.league import notify_team_admin
 
@@ -1005,14 +876,11 @@ def reject_team(db: Session, team_id: int, rejection_reason: str) -> Team:
             db,
             team.team_id,
             "Team rejected",
-            f"Your team {team.team_name} was rejected: {rejection_reason}",
+            f"Your team {team.team_name} was rejected: {team.rejection_reason}",
             "/team-admin/dashboard",
         )
     except Exception:
         pass
-    team.rejection_reason = rejection_reason
-    _delete_team_graph(db, team.team_id)
-    db.commit()
     return team
 
 
@@ -1103,6 +971,7 @@ def register_player(
             if age_group
             else "Player is not eligible for any youth age category."
         ),
+        registration_reminder_sent_at=None,
         status=(
             ApprovalStatus.PENDING.value
             if age_group
@@ -1150,7 +1019,8 @@ def renew_player_registration(
     registration_period: int = 1,
 ) -> PlayerRegistrationRequest:
     player = db.get(Player, player_id)
-    if not player or not player.team or player.team.team_admin_id != team_admin_id:
+    accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
+    if not player or not player.team or player.team_id not in accessible_team_ids:
         raise RegistrationError("You can only renew players from your own teams.")
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Only approved players can be renewed.")
@@ -1209,11 +1079,12 @@ def request_player_transfer(
 ) -> PlayerTransferRequest:
     player = db.get(Player, player_id)
     to_team = db.get(Team, to_team_id)
-    if not player or not player.team or player.team.team_admin_id != team_admin_id:
+    accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
+    if not player or not player.team or player.team_id not in accessible_team_ids:
         raise RegistrationError("You can only transfer players from your own teams.")
     if not to_team:
         raise RegistrationError("Selected destination team was not found.")
-    if to_team.team_admin_id == team_admin_id:
+    if to_team.team_id in accessible_team_ids:
         raise RegistrationError("Destination team must belong to another Team Admin.")
     transfer_type = _validate_text(transfer_type, field_name="Transfer type")
     player_details = _validate_text(player_details, field_name="Player details")
@@ -1256,15 +1127,16 @@ def request_player_from_team(
     player = db.get(Player, player_id)
     from_team = db.get(Team, from_team_id)
     to_team = db.get(Team, to_team_id)
+    accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
     if not player or not player.team or not from_team or player.team_id != from_team_id:
         raise RegistrationError("Invalid player or player not found in the selected team.")
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Only approved players can be requested for transfer.")
     if player.is_on_loan:
         raise RegistrationError("This player is currently on loan and cannot be requested.")
-    if not to_team or to_team.team_admin_id != team_admin_id:
+    if not to_team or to_team.team_id not in accessible_team_ids:
         raise RegistrationError("You can only request players for your own approved team.")
-    if from_team.team_admin_id == team_admin_id:
+    if from_team.team_id in accessible_team_ids:
         raise RegistrationError("You cannot request a player from your own team.")
     if from_team.status != ApprovalStatus.APPROVED.value or to_team.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Both teams must be approved before a transfer request can be sent.")
@@ -1319,11 +1191,8 @@ def respond_to_transfer(
     request = db.get(PlayerTransferRequest, transfer_id)
     if not request:
         raise RegistrationError("Transfer request was not found for your team.")
-    if request.requested_by_team_admin_id == request.to_team.team_admin_id:
-        expected_team_admin_id = request.from_team.team_admin_id
-    else:
-        expected_team_admin_id = request.to_team.team_admin_id
-    if expected_team_admin_id != team_admin_id:
+    accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
+    if request.to_team_id not in accessible_team_ids and request.from_team_id not in accessible_team_ids:
         raise RegistrationError("Transfer request was not found for your team.")
     if request.status != ApprovalStatus.PENDING.value:
         raise RegistrationError("This transfer request has already been answered.")
@@ -1354,7 +1223,7 @@ def complete_transfer_registration(
     agreement_form_path: str | None,
 ) -> PlayerTransferRequest:
     request = db.get(PlayerTransferRequest, transfer_id)
-    if not request or request.to_team.team_admin_id != team_admin_id:
+    if not request or request.to_team_id not in set(load_team_admin_approved_team_ids(db, team_admin_id)):
         raise RegistrationError("Transfer request was not found for your team.")
     if request.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Transfer must be approved before registration.")
@@ -1392,6 +1261,7 @@ def approve_player(
     player.status = ApprovalStatus.APPROVED.value
     player.approved_by_super_admin_id = approved_by_super_admin_id
     player.approved_at = datetime.utcnow()
+    player.registration_reminder_sent_at = None
     if not player.player_code:
         sequence = _next_code_number(db, Player.player_code)
         player.player_code = (
@@ -1400,7 +1270,6 @@ def approve_player(
             f"{_player_category_code(player)}"
         )
     player.rejection_reason = None
-    _sync_player_registration_expiry(db, player)
     if not player.qr_player_card:
         db.add(
             QRPlayerCard(
@@ -1441,7 +1310,10 @@ def reject_player(db: Session, player_id: int, rejection_reason: str) -> Player:
     if not rejection_reason.strip():
         raise RegistrationError("A rejection reason is required.")
 
-    rejection_reason = rejection_reason.strip()
+    player.status = ApprovalStatus.REJECTED.value
+    player.rejection_reason = rejection_reason.strip()
+    db.commit()
+    db.refresh(player)
     try:
         from app.services.league import notify_team_admin
 
@@ -1449,14 +1321,11 @@ def reject_player(db: Session, player_id: int, rejection_reason: str) -> Player:
             db,
             player.team_id,
             "Player rejected",
-            f"{player.full_name} was rejected: {rejection_reason}",
+            f"{player.full_name} was rejected: {player.rejection_reason}",
             "/team-admin/dashboard#my-players",
         )
     except Exception:
         pass
-    player.rejection_reason = rejection_reason
-    _delete_player_graph(db, player.player_id)
-    db.commit()
     return player
 
 
@@ -1481,8 +1350,8 @@ def approve_renewal(db: Session, registration_id: int, approved_by_super_admin_i
     request.player.registration_period = request.registration_period
     request.player.approved_by_super_admin_id = approved_by_super_admin_id
     request.player.approved_at = datetime.utcnow()
+    request.player.registration_reminder_sent_at = None
     request.player.rejection_reason = None
-    _sync_player_registration_expiry(db, request.player)
     db.commit()
     db.refresh(request)
     try:
@@ -1726,7 +1595,7 @@ def register_transferred_player(
     
     # Verify requesting team admin is from the receiving team
     to_team = db.get(Team, transfer.to_team_id)
-    if not to_team or to_team.team_admin_id != team_admin_id:
+    if not to_team or to_team.team_id not in set(load_team_admin_approved_team_ids(db, team_admin_id)):
         raise RegistrationError("You can only register transfers for your own team.")
     consent_form_path = _normalize_text(consent_form_path) or None
     if not consent_form_path:
@@ -1765,6 +1634,7 @@ def register_transferred_player(
         agreement_form_path=consent_form_path,
         photo_path=player.photo_path,
         age_group=player.age_group,
+        registration_reminder_sent_at=None,
         status=ApprovalStatus.PENDING.value,
         approved_at=None,
     )
@@ -1820,7 +1690,7 @@ def unregister_transferred_player(
     
     # Verify requesting team admin is from the original team
     from_team = db.get(Team, transfer.from_team_id)
-    if not from_team or from_team.team_admin_id != team_admin_id:
+    if not from_team or from_team.team_id not in set(load_team_admin_approved_team_ids(db, team_admin_id)):
         raise RegistrationError("You can only unregister players from your own team.")
     
     player = transfer.player
