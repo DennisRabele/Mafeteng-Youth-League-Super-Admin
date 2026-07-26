@@ -618,7 +618,17 @@ def _clean_goal_type(value: str | None) -> str:
     return normalized
 
 
-def _team_admin_fixture_context(fixture: Fixture, team_admin_id: int) -> tuple[Team, Team, str]:
+def _team_admin_fixture_context(
+    fixture: Fixture,
+    *,
+    team_admin_id: int,
+    approved_team_ids: Iterable[int] | None = None,
+) -> tuple[Team, Team, str]:
+    approved_team_id_set = {int(team_id) for team_id in approved_team_ids or []}
+    if fixture.home_team and fixture.home_team.team_id in approved_team_id_set:
+        return fixture.home_team, fixture.away_team, "home"
+    if fixture.away_team and fixture.away_team.team_id in approved_team_id_set:
+        return fixture.away_team, fixture.home_team, "away"
     if fixture.home_team and fixture.home_team.team_admin_id == team_admin_id:
         return fixture.home_team, fixture.away_team, "home"
     if fixture.away_team and fixture.away_team.team_admin_id == team_admin_id:
@@ -799,6 +809,7 @@ def submit_match_result(
     db: Session,
     *,
     team_admin_id: int,
+    approved_team_ids: Iterable[int] | None = None,
     fixture_id: int,
     home_score: int,
     away_score: int,
@@ -815,7 +826,11 @@ def submit_match_result(
     if home_score < 0 or away_score < 0:
         raise RegistrationError("Scores cannot be negative.")
 
-    submitting_team, opposing_team, submitting_side = _team_admin_fixture_context(fixture, team_admin_id)
+    submitting_team, opposing_team, submitting_side = _team_admin_fixture_context(
+        fixture,
+        team_admin_id=team_admin_id,
+        approved_team_ids=approved_team_ids,
+    )
     scorer_ids = _coerce_selected_player_ids(scorer_player_ids)
     assister_ids = _coerce_selected_player_ids(assist_player_ids)
     expected_goal_count = home_score if submitting_side == "home" else away_score

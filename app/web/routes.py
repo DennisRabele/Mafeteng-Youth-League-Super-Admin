@@ -1513,6 +1513,12 @@ def super_admin_dashboard(
         .order_by(Team.category_id, Team.team_name)
     ).all()
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
+    if not categories:
+        category_map: dict[int, Category] = {}
+        for team in approved_fixture_teams:
+            if team.category and team.category.category_id not in category_map:
+                category_map[team.category.category_id] = team.category
+        categories = sorted(category_map.values(), key=lambda item: item.category_name or "")
     fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
     played_fixtures = [
         fixture
@@ -2532,10 +2538,12 @@ def submit_result_route(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     try:
         submit_match_result(
             db,
             team_admin_id=team_admin.team_admin_id,
+            approved_team_ids=approved_team_ids,
             fixture_id=fixture_id,
             home_score=home_score,
             away_score=away_score,
