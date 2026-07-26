@@ -1384,6 +1384,9 @@ def super_admin_dashboard(
     fixture_bucket: str = "all",
     fixture_date_from: str | None = None,
     fixture_date_to: str | None = None,
+    dashboard_section: str | None = None,
+    notice: str | None = None,
+    notice_kind: str | None = None,
     db: Session = Depends(get_db),
 ):
     user = _require_super_admin(request, db)
@@ -1566,6 +1569,9 @@ def super_admin_dashboard(
                 "date_from": fixture_date_from or "",
                 "date_to": fixture_date_to or "",
             },
+            "dashboard_section": dashboard_section or "team-admins",
+            "dashboard_notice": notice,
+            "dashboard_notice_kind": notice_kind or "success",
             "result_submissions": verified_result_submissions,
             "league_tables": league_tables,
         "player_statistics": player_statistics,
@@ -1647,8 +1653,12 @@ def approve_player_route(player_id: int, request: Request, db: Session = Depends
         super_admin_id = _get_super_admin_id(user)
         approve_player(db, player_id, super_admin_id)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _redirect(
+            f"/super-admin?{urlencode({'dashboard_section': 'players', 'notice': str(exc), 'notice_kind': 'error'})}"
+        )
+    return _redirect(
+        f"/super-admin?{urlencode({'dashboard_section': 'players', 'notice': 'Player approved successfully.', 'notice_kind': 'success'})}"
+    )
 
 
 @router.post("/super-admin/players/{player_id}/reject")
@@ -1662,8 +1672,12 @@ def reject_player_route(
     try:
         reject_player(db, player_id, rejection_reason)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _redirect(
+            f"/super-admin?{urlencode({'dashboard_section': 'players', 'notice': str(exc), 'notice_kind': 'error'})}"
+        )
+    return _redirect(
+        f"/super-admin?{urlencode({'dashboard_section': 'players', 'notice': 'Player rejected successfully.', 'notice_kind': 'success'})}"
+    )
 
 
 @router.post("/super-admin/renewals/{registration_id}/approve")
