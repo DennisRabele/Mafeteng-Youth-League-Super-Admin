@@ -826,7 +826,7 @@
           <select id="player-statistics-team" onchange="filterPlayerStatistics('player-statistics', document.getElementById('player-statistics-category').value, this.value, event)">
             <option value="all">All Teams</option>
             {% for team in player_statistics_teams %}
-              <option value="{{ team.team_id }}">{{ team.team_name }}</option>
+              <option value="{{ team.team_id }}" data-category="{{ team.category.category_name if team.category else '' }}">{{ team.team_name }}</option>
             {% endfor %}
           </select>
         </label>
