@@ -2553,6 +2553,13 @@ def submit_result_route(
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        logger.exception("Team admin result submission failed")
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Result submission failed unexpectedly. Please check the fixture, selected players, and try again."},
+        )
     return _redirect("/team-admin/dashboard#results")
 
 
