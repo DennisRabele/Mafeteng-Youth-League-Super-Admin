@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta
+import logging
 import re
 from typing import Iterable
 
@@ -32,6 +33,8 @@ from app.services.email import send_notification_email
 from app.services.registration import RegistrationError
 from app.services.storage import delete_upload
 
+
+logger = logging.getLogger(__name__)
 
 GOAL_TYPE_ALIASES = {
     "freekick": "Freekick",
@@ -789,20 +792,22 @@ def _finalize_matched_result(
         submission.status = ApprovalStatus.APPROVED.value
         _create_system_verification(db, submission)
     db.commit()
-
-    notify_team_admins_for_teams(
-        db,
-        [fixture.home_team_id, fixture.away_team_id],
-        "Result verified",
-        f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} is now verified at {fixture_match.home_score}-{fixture_match.away_score}. League tables and player statistics have been updated automatically.",
-        "/team-admin/dashboard#results",
-    )
-    notify_super_admins(
-        db,
-        "Result verified",
-        f"System verified {fixture.home_team.team_name} vs {fixture.away_team.team_name} at {fixture_match.home_score}-{fixture_match.away_score}.",
-        "/super-admin#results",
-    )
+    try:
+        notify_team_admins_for_teams(
+            db,
+            [fixture.home_team_id, fixture.away_team_id],
+            "Result verified",
+            f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} is now verified at {fixture_match.home_score}-{fixture_match.away_score}. League tables and player statistics have been updated automatically.",
+            "/team-admin/dashboard#results",
+        )
+        notify_super_admins(
+            db,
+            "Result verified",
+            f"System verified {fixture.home_team.team_name} vs {fixture.away_team.team_name} at {fixture_match.home_score}-{fixture_match.away_score}.",
+            "/super-admin#results",
+        )
+    except Exception:
+        logger.exception("Match-result notification dispatch failed")
 
 
 def submit_match_result(
@@ -931,13 +936,16 @@ def submit_match_result(
 
     db.commit()
     db.refresh(existing_submission)
-    notify_team_admins_for_teams(
-        db,
-        [submitting_team.team_id],
-        "Result saved",
-        f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} was saved and is waiting for the other team admin to submit the matching scoreline.",
-        "/team-admin/dashboard#results",
-    )
+    try:
+        notify_team_admins_for_teams(
+            db,
+            [submitting_team.team_id],
+            "Result saved",
+            f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} was saved and is waiting for the other team admin to submit the matching scoreline.",
+            "/team-admin/dashboard#results",
+        )
+    except Exception:
+        logger.exception("Match-result notification dispatch failed")
     return existing_submission
 
 
