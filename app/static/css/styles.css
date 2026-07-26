@@ -1144,17 +1144,17 @@ body[data-app-mode="team_admin"] .transfer-list article small {
 
 .filter-select select {
   appearance: auto;
-  background: var(--white);
+  background: var(--black);
   border: 1px solid var(--line);
   border-radius: 4px;
-  color: var(--ink);
+  color: var(--white);
   min-height: 34px;
   padding: 0 10px;
 }
 
 .filter-select select option {
-  color: var(--ink);
-  background: var(--white);
+  background: var(--black);
+  color: var(--white);
 }
 
 .dashboard-chip {
