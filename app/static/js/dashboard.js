@@ -148,14 +148,17 @@
     const statusFilter = section.dataset.statusFilter || "all";
     const categoryFilter = section.dataset.categoryFilter || "all";
     const metricFilter = section.dataset.metricFilter || "all";
+    const teamFilter = section.dataset.teamFilter || "all";
     section.querySelectorAll("tbody tr[data-row]").forEach((row) => {
       const rowStatus = row.dataset.status || "all";
       const rowCategory = row.dataset.category || "all";
       const rowMetric = row.dataset.metric || "all";
+      const rowTeam = row.dataset.teamId || "all";
       const matchesStatus = statusFilter === "all" || rowStatus === statusFilter;
       const matchesCategory = categoryFilter === "all" || rowCategory === categoryFilter;
       const matchesMetric = metricFilter === "all" || rowMetric === metricFilter;
-      row.dataset.filterHidden = String(!(matchesStatus && matchesCategory && matchesMetric));
+      const matchesTeam = teamFilter === "all" || rowTeam === teamFilter;
+      row.dataset.filterHidden = String(!(matchesStatus && matchesCategory && matchesMetric && matchesTeam));
     });
     section.querySelectorAll("[data-filter-chip]").forEach((chip) => {
       chip.classList.toggle("active", chip.dataset.filterValue === statusFilter);
@@ -218,6 +221,20 @@
     syncPaginatedTables(sectionId);
   };
 
+  const filterPlayerStatistics = (sectionId, category, teamId, event) => {
+    if (event) {
+      event.preventDefault();
+    }
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    section.dataset.categoryFilter = category;
+    section.dataset.teamFilter = teamId;
+    applyStatusAndCategoryFilters(sectionId);
+    syncPaginatedTables(sectionId);
+  };
+
   const filterDashboardPanels = (sectionId, category, event) => {
     if (event) {
       event.preventDefault();
@@ -237,6 +254,7 @@
   window.filterDashboardRows = filterDashboardRows;
   window.filterDashboardCategory = filterDashboardCategory;
   window.filterDashboardMetric = filterDashboardMetric;
+  window.filterPlayerStatistics = filterPlayerStatistics;
   window.filterDashboardPanels = filterDashboardPanels;
   window.syncDashboardContext = syncDashboardContext;
   window.syncPaginatedTables = syncPaginatedTables;

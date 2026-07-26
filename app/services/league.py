@@ -1088,6 +1088,16 @@ def get_player_statistics(
                 clubs.append(normalized)
         return clubs
 
+    def _collect_player_names(row: dict[str, object]) -> list[str]:
+        names: list[str] = []
+        seen: set[str] = set()
+        for player in sorted(row["players"].values(), key=lambda item: item.player_id):
+            full_name = (player.full_name or "").strip()
+            if full_name and full_name not in seen:
+                seen.add(full_name)
+                names.append(full_name)
+        return names
+
     def _system_ids(row: dict[str, object]) -> list[str]:
         identifiers: list[str] = []
         seen: set[str] = set()
@@ -1108,6 +1118,7 @@ def get_player_statistics(
                 "player": primary_player,
                 "team": team,
                 "category_name": category_name,
+                "player_names": _collect_player_names(group),
                 "system_ids": _system_ids(group),
                 "clubs_played_for": _collect_clubs(group),
                 "goals": group["goals"],
@@ -1125,6 +1136,7 @@ def get_player_statistics(
                 "player": row["player"],
                 "team": row["team"],
                 "category_name": row["category_name"],
+                "player_names": row["player_names"],
                 "system_id": row["primary_system_id"],
                 "system_ids": row["system_ids"],
                 "photo_path": row["photo_path"],
@@ -1145,6 +1157,7 @@ def get_player_statistics(
                 "player": row["player"],
                 "team": row["team"],
                 "category_name": row["category_name"],
+                "player_names": row["player_names"],
                 "system_id": row["primary_system_id"],
                 "system_ids": row["system_ids"],
                 "photo_path": row["photo_path"],

@@ -810,15 +810,23 @@
       <div class="panel-heading">
         <h2>Player Statistics</h2>
         <div class="panel-heading-actions">
-          <button class="button button-success small" type="button" onclick="window.location='/super-admin/player-statistics/export?category=' + encodeURIComponent(document.getElementById('player-statistics-category').value || 'all')">Download Cards</button>
+          <button class="button button-success small" type="button" onclick="window.location='/super-admin/player-statistics/export?category=' + encodeURIComponent(document.getElementById('player-statistics-category').value || 'all') + '&team_id=' + encodeURIComponent(document.getElementById('player-statistics-team').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select id="player-statistics-category" data-dashboard-category-filter="player-statistics" onchange="filterDashboardPanels('player-statistics', this.value, event)">
+          <select id="player-statistics-category" onchange="filterPlayerStatistics('player-statistics', this.value, document.getElementById('player-statistics-team').value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="filter-select">Team
+          <select id="player-statistics-team" onchange="filterPlayerStatistics('player-statistics', document.getElementById('player-statistics-category').value, this.value, event)">
+            <option value="all">All Teams</option>
+            {% for team in player_statistics_teams %}
+              <option value="{{ team.team_id }}">{{ team.team_name }}</option>
             {% endfor %}
           </select>
         </label>
@@ -839,8 +847,14 @@
           </thead>
           <tbody>
             {% for row in player_statistics.players %}
-            <tr data-row data-category="{{ row.category_name }}">
-              <td data-label="Player">{{ row.player.full_name }}</td>
+            <tr data-row data-category="{{ row.category_name }}" data-team-id="{{ row.team.team_id if row.team else '' }}">
+              <td data-label="Player">
+                {% if row.player_names %}
+                  {{ row.player_names | join('; ') }}
+                {% else %}
+                  {{ row.player.full_name }}
+                {% endif %}
+              </td>
               <td data-label="Club">{{ row.team.team_name if row.team else '-' }}</td>
               <td data-label="Category">{{ row.category_name or '-' }}</td>
               <td data-label="Goals">{{ row.goals }}</td>

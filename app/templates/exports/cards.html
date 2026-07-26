@@ -1104,7 +1104,13 @@
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
-                    <h2 class="export-card__title">{{ row.player.full_name }}</h2>
+                    <h2 class="export-card__title">
+                      {% if row.player_names %}
+                        {{ row.player_names | join('; ') }}
+                      {% else %}
+                        {{ row.player.full_name }}
+                      {% endif %}
+                    </h2>
                     <div class="export-card__meta">{{ row.team.team_name }} Â· {{ row.category_name }}</div>
                   </div>
                   <span class="status approved">{{ row.goals }} goals</span>
@@ -1128,7 +1134,13 @@
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
-                    <h2 class="export-card__title">{{ row.player.full_name }}</h2>
+                    <h2 class="export-card__title">
+                      {% if row.player_names %}
+                        {{ row.player_names | join('; ') }}
+                      {% else %}
+                        {{ row.player.full_name }}
+                      {% endif %}
+                    </h2>
                     <div class="export-card__meta">{{ row.team.team_name }} · {{ row.category_name }}</div>
                   </div>
                   <span class="status approved">{{ row.goals }} goals</span>
@@ -1151,7 +1163,13 @@
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
-                    <h2 class="export-card__title">{{ row.player.full_name }}</h2>
+                    <h2 class="export-card__title">
+                      {% if row.player_names %}
+                        {{ row.player_names | join('; ') }}
+                      {% else %}
+                        {{ row.player.full_name }}
+                      {% endif %}
+                    </h2>
                     <div class="export-card__meta">{{ row.team.team_name }} · {{ row.category_name }}</div>
                   </div>
                   <span class="status approved">{{ row.assists }} assists</span>
