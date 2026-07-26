@@ -1513,12 +1513,11 @@ def super_admin_dashboard(
         .order_by(Team.category_id, Team.team_name)
     ).all()
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
-    if not categories:
-        category_map: dict[int, Category] = {}
-        for team in approved_fixture_teams:
-            if team.category and team.category.category_id not in category_map:
-                category_map[team.category.category_id] = team.category
-        categories = sorted(category_map.values(), key=lambda item: item.category_name or "")
+    category_map: dict[int, Category] = {category.category_id: category for category in categories}
+    for team in approved_fixture_teams:
+        if team.category and team.category.category_id not in category_map:
+            category_map[team.category.category_id] = team.category
+    categories = sorted(category_map.values(), key=lambda item: item.category_name or "")
     fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
     played_fixtures = [
         fixture
