@@ -639,8 +639,8 @@ def _team_admin_fixture_context(
     raise RegistrationError("You can only submit results for fixtures involving your teams.")
 
 
-def _coerce_selected_player_ids(values: Iterable[str | int | None]) -> list[int | None]:
-    coerced: list[int | None] = []
+def _coerce_selected_player_ids(values: Iterable[str | int | None]) -> list[int | str | None]:
+    coerced: list[int | str | None] = []
     for value in values:
         if value is None:
             coerced.append(None)
@@ -652,7 +652,10 @@ def _coerce_selected_player_ids(values: Iterable[str | int | None]) -> list[int 
         if not text_value:
             coerced.append(None)
             continue
-        coerced.append(int(text_value))
+        try:
+            coerced.append(int(text_value))
+        except ValueError:
+            coerced.append(text_value)
     return coerced
 
 
@@ -678,15 +681,66 @@ def _validate_match_result_payload(
         raise RegistrationError("Each goal row must include a scorer name.")
 
 
-def _player_lookup_map(db: Session, player_ids: list[int]) -> dict[int, Player]:
+def _selected_player_lookup_key(value: int | str | None) -> int | str | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    return " ".join(str(value).split()).casefold()
+
+
+def _player_lookup_map(db: Session, player_ids: list[int | str]) -> dict[int | str, Player]:
     if not player_ids:
         return {}
-    players = db.scalars(
-        select(Player)
-        .options(selectinload(Player.team).selectinload(Team.category))
-        .where(Player.player_id.in_(player_ids))
-    ).all()
-    return {player.player_id: player for player in players}
+    numeric_ids = [player_id for player_id in player_ids if isinstance(player_id, int)]
+    text_values = [str(player_id).strip() for player_id in player_ids if isinstance(player_id, str) and str(player_id).strip()]
+    players_by_key: dict[int | str, Player] = {}
+
+    if numeric_ids:
+        players = db.scalars(
+            select(Player)
+            .options(selectinload(Player.team).selectinload(Team.category))
+            .where(Player.player_id.in_(numeric_ids))
+        ).all()
+        for player in players:
+            players_by_key[player.player_id] = player
+            players_by_key[player.full_name.casefold()] = player
+            if player.player_code:
+                players_by_key[player.player_code.casefold()] = player
+                players_by_key[f"{player.full_name} ({player.player_code})".casefold()] = player
+
+    for text_value in text_values:
+        normalized_text = " ".join(text_value.split()).casefold()
+        display_match = re.match(r"^(?P<name>.+?)\s*\((?P<code>[^()]+)\)$", text_value)
+        if display_match:
+            name_value = display_match.group("name").strip().casefold()
+            code_value = display_match.group("code").strip().casefold()
+        else:
+            name_value = normalized_text
+            code_value = normalized_text
+        player = db.scalar(
+            select(Player)
+            .options(selectinload(Player.team).selectinload(Team.category))
+            .where(
+                or_(
+                    func.lower(func.trim(Player.full_name)) == name_value,
+                    func.lower(func.trim(Player.player_code)) == code_value,
+                    func.lower(func.trim(Player.full_name)) == normalized_text,
+                    func.lower(func.trim(Player.player_code)) == normalized_text,
+                )
+            )
+        )
+        if player:
+            players_by_key[normalized_text] = player
+            players_by_key[name_value] = player
+            players_by_key[code_value] = player
+            players_by_key[player.player_id] = player
+            players_by_key[player.full_name.casefold()] = player
+            if player.player_code:
+                players_by_key[player.player_code.casefold()] = player
+                players_by_key[f"{player.full_name} ({player.player_code})".casefold()] = player
+
+    return players_by_key
 
 
 def _assert_player_belongs_to_team(player: Player | None, team_id: int, label: str) -> None:
@@ -887,15 +941,19 @@ def submit_match_result(
         if existing_submission.verification:
             db.delete(existing_submission.verification)
 
-    selected_players = _player_lookup_map(db, [player_id for player_id in scorer_ids if player_id is not None] + [player_id for player_id in assister_ids if player_id is not None])
+    selected_players = _player_lookup_map(
+        db,
+        [player_id for player_id in scorer_ids if player_id is not None]
+        + [player_id for player_id in assister_ids if player_id is not None],
+    )
     scorer_players: list[Player] = []
     assister_players: list[Player | None] = []
     for index, scorer_id in enumerate(scorer_ids):
-        scorer = selected_players.get(scorer_id or -1)
+        scorer = selected_players.get(_selected_player_lookup_key(scorer_id))
         _assert_player_belongs_to_team(scorer, submitting_team.team_id, "scorers")
         scorer_players.append(scorer)
         assister_id = assister_ids[index] if index < len(assister_ids) else None
-        assister = selected_players.get(assister_id or -1) if assister_id is not None else None
+        assister = selected_players.get(_selected_player_lookup_key(assister_id)) if assister_id is not None else None
         if assister is not None:
             _assert_player_belongs_to_team(assister, submitting_team.team_id, "assisters")
         assister_players.append(assister)
