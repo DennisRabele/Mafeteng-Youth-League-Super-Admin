@@ -6,6 +6,9 @@
     <h1>Registration</h1>
     {% if error %}
       <p class="alert error">{{ error }}</p>
+      {% if details %}
+        <p class="alert" style="margin-top: 0.75rem; background: #111; color: #fff; border: 1px solid #444;">{{ details }}</p>
+      {% endif %}
     {% else %}
       <p class="alert success">{{ message }}</p>
     {% endif %}
