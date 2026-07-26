@@ -22,6 +22,7 @@ from app.models import (
     Notification,
     Season,
     Player,
+    PlayerStatistic,
     PlayerTransferRequest,
     ResultVerification,
     Team,
