@@ -205,6 +205,22 @@ def _team_admin_dashboard_redirect(
     return _redirect(f"/team-admin/dashboard?{query}#{section}")
 
 
+def _super_admin_dashboard_redirect(
+    *,
+    section: str,
+    notice: str,
+    notice_kind: str = "success",
+) -> RedirectResponse:
+    query = urlencode(
+        {
+            "dashboard_section": section,
+            "notice": notice,
+            "notice_kind": notice_kind,
+        }
+    )
+    return _redirect(f"/super-admin?{query}")
+
+
 def _decorate_player_registration_details(players: list[Player], db: Session) -> None:
     today = date.today()
     reminder_cutoff = today + timedelta(days=30)
@@ -1592,16 +1608,18 @@ def approve_team_admin_route(
         super_admin_id = _get_super_admin_id(user)
         team_admin = approve_team_admin(db, team_admin_id, super_admin_id)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+        return _super_admin_dashboard_redirect(
+            section="team-admins",
+            notice=str(exc),
+            notice_kind="error",
+        )
 
-    return _render(
-        request,
-        "super_admin/action_result.html",
-        {
-            "message": f"Team Admin approved. {team_admin.user.full_name} can now log into the Team Admin app with the password they created.",
-            "generated_code": team_admin.admin_code,
-            "credential_email": team_admin.user.email,
-        },
+    return _super_admin_dashboard_redirect(
+        section="team-admins",
+        notice=(
+            f"Team Admin approved. {team_admin.user.full_name} can now log into the Team Admin app "
+            f"with the password they created."
+        ),
     )
 
 
@@ -1616,8 +1634,15 @@ def reject_team_admin_route(
     try:
         reject_team_admin(db, team_admin_id, rejection_reason)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _super_admin_dashboard_redirect(
+            section="team-admins",
+            notice=str(exc),
+            notice_kind="error",
+        )
+    return _super_admin_dashboard_redirect(
+        section="team-admins",
+        notice="Team Admin rejected successfully.",
+    )
 
 
 @router.post("/super-admin/teams/{team_id}/approve")
@@ -1627,8 +1652,15 @@ def approve_team_route(team_id: int, request: Request, db: Session = Depends(get
         super_admin_id = _get_super_admin_id(user)
         approve_team(db, team_id, super_admin_id)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _super_admin_dashboard_redirect(
+            section="teams",
+            notice=str(exc),
+            notice_kind="error",
+        )
+    return _super_admin_dashboard_redirect(
+        section="teams",
+        notice="Team approved successfully.",
+    )
 
 
 @router.post("/super-admin/teams/{team_id}/reject")
@@ -1642,8 +1674,15 @@ def reject_team_route(
     try:
         reject_team(db, team_id, rejection_reason)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _super_admin_dashboard_redirect(
+            section="teams",
+            notice=str(exc),
+            notice_kind="error",
+        )
+    return _super_admin_dashboard_redirect(
+        section="teams",
+        notice="Team rejected successfully.",
+    )
 
 
 @router.post("/super-admin/players/{player_id}/approve")
@@ -1687,8 +1726,15 @@ def approve_renewal_route(registration_id: int, request: Request, db: Session = 
         super_admin_id = _get_super_admin_id(user)
         approve_renewal(db, registration_id, super_admin_id)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _super_admin_dashboard_redirect(
+            section="renewals",
+            notice=str(exc),
+            notice_kind="error",
+        )
+    return _super_admin_dashboard_redirect(
+        section="renewals",
+        notice="Renewal approved successfully.",
+    )
 
 
 @router.post("/super-admin/renewals/{registration_id}/reject")
@@ -1702,8 +1748,15 @@ def reject_renewal_route(
     try:
         reject_renewal(db, registration_id, rejection_reason)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _super_admin_dashboard_redirect(
+            section="renewals",
+            notice=str(exc),
+            notice_kind="error",
+        )
+    return _super_admin_dashboard_redirect(
+        section="renewals",
+        notice="Renewal rejected successfully.",
+    )
 
 
 @router.post("/super-admin/transfers/{registration_id}/approve")
@@ -1713,8 +1766,15 @@ def approve_transfer_route(registration_id: int, request: Request, db: Session =
         super_admin_id = _get_super_admin_id(user)
         approve_transfer_registration(db, registration_id, super_admin_id)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _super_admin_dashboard_redirect(
+            section="transfers",
+            notice=str(exc),
+            notice_kind="error",
+        )
+    return _super_admin_dashboard_redirect(
+        section="transfers",
+        notice="Transfer approved successfully.",
+    )
 
 
 @router.post("/super-admin/transfers/{registration_id}/reject")
@@ -1728,8 +1788,15 @@ def reject_transfer_route(
     try:
         reject_transfer_registration(db, registration_id, rejection_reason)
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin")
+        return _super_admin_dashboard_redirect(
+            section="transfers",
+            notice=str(exc),
+            notice_kind="error",
+        )
+    return _super_admin_dashboard_redirect(
+        section="transfers",
+        notice="Transfer rejected successfully.",
+    )
 
 
 @router.get("/team-admin/welcome")
@@ -2376,15 +2443,22 @@ def create_fixture_route(
             created_by_super_admin_id=_get_super_admin_id(user),
         )
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+        return _super_admin_dashboard_redirect(
+            section="fixtures",
+            notice=str(exc),
+            notice_kind="error",
+        )
     except Exception:
         logger.exception("Fixture creation failed")
-        return _render(
-            request,
-            "super_admin/action_result.html",
-            {"error": "Fixture could not be created right now. Please try again."},
+        return _super_admin_dashboard_redirect(
+            section="fixtures",
+            notice="Fixture could not be created right now. Please try again.",
+            notice_kind="error",
         )
-    return _redirect("/super-admin#fixtures")
+    return _super_admin_dashboard_redirect(
+        section="fixtures",
+        notice="Fixture created successfully.",
+    )
 
 
 @router.post("/super-admin/fixtures/{fixture_id}")
@@ -2406,15 +2480,22 @@ def update_fixture_route(
             status=status_value,
         )
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
+        return _super_admin_dashboard_redirect(
+            section="fixtures",
+            notice=str(exc),
+            notice_kind="error",
+        )
     except Exception:
         logger.exception("Fixture update failed")
-        return _render(
-            request,
-            "super_admin/action_result.html",
-            {"error": "Fixture could not be updated right now. Please try again."},
+        return _super_admin_dashboard_redirect(
+            section="fixtures",
+            notice="Fixture could not be updated right now. Please try again.",
+            notice_kind="error",
         )
-    return _redirect("/super-admin#fixtures")
+    return _super_admin_dashboard_redirect(
+        section="fixtures",
+        notice="Fixture updated successfully.",
+    )
 
 
 @router.post("/super-admin/fixtures/{fixture_id}/postpone")
@@ -2428,8 +2509,15 @@ def postpone_fixture_route(
     try:
         postpone_fixture(db, fixture_id, _parse_dashboard_datetime(new_date))
     except RegistrationError as exc:
-        return _render(request, "super_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/super-admin#fixtures")
+        return _super_admin_dashboard_redirect(
+            section="fixtures",
+            notice=str(exc),
+            notice_kind="error",
+        )
+    return _super_admin_dashboard_redirect(
+        section="fixtures",
+        notice="Fixture postponed successfully.",
+    )
 
 
 @router.post("/team-admin/results")
