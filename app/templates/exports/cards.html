@@ -1098,9 +1098,9 @@
     {% elif export_kind == 'player_statistics' %}
       <section class="export-stack">
         <div class="export-section">
-          <h2>Player Overview</h2>
+          <h2>Top Goal Scorers</h2>
           <div class="export-grid">
-            {% for row in player_statistics.players %}
+            {% for row in player_statistics.scorers %}
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
@@ -1116,42 +1116,13 @@
                   <span class="status approved">{{ row.goals }} goals</span>
                 </div>
                 <div class="export-stat-grid">
-                  <div class="export-stat"><span>System IDs</span><strong>{% for system_id in row.system_ids %}{{ system_id }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</strong></div>
-                  <div class="export-stat"><span>Assists</span><strong>{{ row.assists }}</strong></div>
+                  <div class="export-stat"><span>Club</span><strong>{{ row.team.team_name if row.team else '-' }}</strong></div>
+                  <div class="export-stat"><span>Clubs Played For</span><strong>{% if row.clubs_played_for %}{{ row.clubs_played_for | join(', ') }}{% else %}-{% endif %}</strong></div>
                   <div class="export-stat"><span>Goal Types</span><strong>{% for goal_type, count in row.goal_types.items() %}{{ goal_type }}: {{ count }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</strong></div>
                 </div>
               </article>
             {% else %}
-              <div class="export-empty">No player overview data available.</div>
-            {% endfor %}
-          </div>
-        </div>
-
-        <div class="export-section">
-          <h2>Top Scorers</h2>
-          <div class="export-grid">
-            {% for row in player_statistics.scorers %}
-              <article class="export-card">
-                <div class="export-card__head">
-                  <div>
-                    <h2 class="export-card__title">
-                      {% if row.player_names %}
-                        {{ row.player_names | join('; ') }}
-                      {% else %}
-                        {{ row.player.full_name }}
-                      {% endif %}
-                    </h2>
-                    <div class="export-card__meta">{{ row.team.team_name }} · {{ row.category_name }}</div>
-                  </div>
-                  <span class="status approved">{{ row.goals }} goals</span>
-                </div>
-                <div class="export-stat-grid">
-                  <div class="export-stat"><span>Goals</span><strong>{{ row.goals }}</strong></div>
-                  <div class="export-stat"><span>Goal Types</span><strong>{% for goal_type, count in row.goal_types.items() %}{{ goal_type }}: {{ count }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</strong></div>
-                </div>
-              </article>
-            {% else %}
-              <div class="export-empty">No goals recorded yet.</div>
+              <div class="export-empty">No goal scorers yet.</div>
             {% endfor %}
           </div>
         </div>
