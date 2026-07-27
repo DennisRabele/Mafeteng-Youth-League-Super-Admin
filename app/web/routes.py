@@ -48,6 +48,9 @@ from app.services.league import (
     create_match_day_squad,
     delete_match_day_squad,
     delete_match_day_squads,
+    _finalize_single_result_submission,
+    SPECIAL_RESULT_TYPES,
+    RESULT_TYPE_LABELS,
     submit_match_result,
     update_fixture,
 )
@@ -1534,9 +1537,6 @@ def super_admin_dashboard(
         date_to=fixture_date_to,
     )
     result_submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
-    verified_result_submissions = [
-        submission for submission in result_submissions if submission.status == ApprovalStatus.APPROVED.value
-    ]
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_statistics = _safe_dashboard_value(
         lambda: get_player_statistics(db),
@@ -1568,7 +1568,7 @@ def super_admin_dashboard(
         "renewals": len(all_renewals),
         "transfers": len(all_transfers),
         "fixtures": len(fixtures),
-        "results": len(verified_result_submissions),
+        "results": len(result_submissions),
         "notifications": unread_notifications,
         "pending": pending_count,
     }
@@ -1597,7 +1597,7 @@ def super_admin_dashboard(
             "dashboard_section": dashboard_section or "team-admins",
             "dashboard_notice": notice,
             "dashboard_notice_kind": notice_kind or "success",
-            "result_submissions": verified_result_submissions,
+            "result_submissions": result_submissions,
             "league_tables": league_tables,
             "player_statistics": player_statistics,
             "player_statistics_all": player_statistics_all,
@@ -2382,6 +2382,48 @@ def export_super_admin_results(
     )
 
 
+@router.post("/super-admin/result-submissions/{submission_id}/approve")
+def approve_super_admin_result_submission(
+    submission_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _require_super_admin(request, db)
+    super_admin_id = _get_super_admin_id(user)
+    submission = db.get(MatchResultSubmission, submission_id)
+    if not submission or not submission.match or not submission.match.fixture:
+        return _render(request, "super_admin/action_result.html", {"error": "Result submission was not found."})
+    if submission.result_type not in SPECIAL_RESULT_TYPES:
+        return _render(
+            request,
+            "super_admin/action_result.html",
+            {"error": "Only special result types can be approved from this panel."},
+        )
+    if submission.status == ApprovalStatus.APPROVED.value:
+        return _render(
+            request,
+            "super_admin/action_result.html",
+            {"error": "This result has already been approved."},
+        )
+    fixture = submission.match.fixture
+    _finalize_single_result_submission(
+        db,
+        fixture=fixture,
+        submission=submission,
+        verified_by_admin_id=super_admin_id,
+    )
+    return _render(
+        request,
+        "super_admin/action_result.html",
+        {
+            "message": (
+                f"{RESULT_TYPE_LABELS.get(submission.result_type, 'Special result')} approved. "
+                "League tables and player statistics were updated."
+            ),
+        },
+    )
+
+
 @router.get("/super-admin/league-tables/export")
 def export_super_admin_league_tables(
     request: Request,
@@ -2554,6 +2596,7 @@ def submit_result_route(
     fixture_id: int = Form(...),
     home_score: int = Form(...),
     away_score: int = Form(...),
+    result_type: str = Form("standard"),
     scorer_player_ids: list[str] = Form([]),
     goal_types: list[str] = Form([]),
     assist_player_ids: list[str] = Form([]),
@@ -2569,6 +2612,7 @@ def submit_result_route(
             fixture_id=fixture_id,
             home_score=home_score,
             away_score=away_score,
+            result_type=result_type,
             scorer_player_ids=scorer_player_ids,
             goal_types=goal_types,
             assist_player_ids=assist_player_ids,

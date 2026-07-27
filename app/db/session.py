@@ -172,6 +172,7 @@ def _ensure_schema_columns() -> None:
             "scorer_names_text": "ALTER TABLE match_result_submissions ADD COLUMN scorer_names_text TEXT",
             "goal_types_text": "ALTER TABLE match_result_submissions ADD COLUMN goal_types_text TEXT",
             "assist_names_text": "ALTER TABLE match_result_submissions ADD COLUMN assist_names_text TEXT",
+            "result_type": "ALTER TABLE match_result_submissions ADD COLUMN result_type VARCHAR(40) DEFAULT 'standard' NOT NULL",
         }
         with engine.begin() as connection:
             for column_name, statement in missing_result_columns.items():

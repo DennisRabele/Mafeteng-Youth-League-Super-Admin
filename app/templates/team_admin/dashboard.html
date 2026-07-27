@@ -1841,6 +1841,14 @@
             </label>
           </div>
           <div class="alert" data-result-status-note hidden style="margin: 0 0 0.5rem 0;"></div>
+          <label class="result-field result-field--full">Result type
+            <select id="result-type-select" name="result_type" required>
+              <option value="standard">Standard Result</option>
+              <option value="opponent_did_not_honour">Opponent Did Not Honour The Match</option>
+              <option value="opponent_forfeited">Opponent Forfeited The Match</option>
+            </select>
+          </label>
+          <p class="section-copy" style="margin: 0 0 0.5rem 0; color: #b00020; font-weight: 700;">if there was an own goal scored, choose it in goal type field, Scorer and Assister is not accepted for this type of a goal</p>
           <div class="result-goal-block">
             <div class="result-goal-block__head">
               <h3>Goals and Assists</h3>
@@ -1858,21 +1866,24 @@
           <div class="result-goal-row" data-goal-row>
             <div class="result-goal-row__title"></div>
             <label>Scorer
-              <select name="scorer_player_ids" required></select>
+              <select data-player-select="scorer" required></select>
             </label>
+            <input type="hidden" name="scorer_player_ids" value="">
             <label>Assister
-              <select name="assist_player_ids">
+              <select data-player-select="assist">
                 <option value="">No assist</option>
               </select>
             </label>
+            <input type="hidden" name="assist_player_ids" value="">
             <label>Goal type
-              <select name="goal_types" required>
+              <select data-goal-type name="goal_types" required>
                 <option value="Penalty">Penalty</option>
                 <option value="Freekick">Freekick</option>
                 <option value="Cornerkick">Cornerkick</option>
                 <option value="from KickOFF">from KickOFF</option>
                 <option value="Header">Header</option>
                 <option value="Tap In">Tap In</option>
+                <option value="Own Goal">Own Goal</option>
               </select>
             </label>
           </div>
@@ -1890,6 +1901,7 @@
               <th>Set By</th>
               <th>Submitted</th>
               <th>Score</th>
+              <th>Type</th>
               <th>Status</th>
               <th>Scorers</th>
               <th>Assists</th>
@@ -1910,6 +1922,7 @@
               data-row
               data-status="{{ submission.status }}"
               data-category="{{ submission_category }}"
+              data-result-type="{{ submission.result_type or 'standard' }}"
               data-fixture-id="{{ submission_match.fixture_id if submission_match and submission_match.fixture else '' }}"
               data-home-score="{{ submission.home_score }}"
               data-away-score="{{ submission.away_score }}"
@@ -1922,6 +1935,7 @@
               <td data-label="Set By">{{ submitted_by_name }}</td>
               <td data-label="Submitted">{{ submission.submitted_date.strftime('%Y-%m-%d %H:%M') }}</td>
               <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>
+              <td data-label="Type">{{ 'Standard' if submission.result_type == 'standard' else ('Opponent Did Not Honour The Match' if submission.result_type == 'opponent_did_not_honour' else ('Opponent Forfeited The Match' if submission.result_type == 'opponent_forfeited' else submission.result_type)) }}</td>
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
               <td data-label="Scorers">{{ submission.scorer_names_text or '-' }}</td>
               <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
@@ -1943,7 +1957,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="9" class="empty">No results yet.</td></tr>
+            <tr><td colspan="10" class="empty">No results yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -2451,9 +2465,9 @@
       const editGoalTypes = pendingEditPayload?.goalTypes || [];
       for (let index = 0; index < expectedCount; index += 1) {
         const currentRow = oldRows[index];
-        const currentScorer = currentRow?.querySelector('select[name="scorer_player_ids"]')?.value || '';
-        const currentAssist = currentRow?.querySelector('select[name="assist_player_ids"]')?.value || '';
-        const currentGoalType = currentRow?.querySelector('select[name="goal_types"]')?.value || goalTypes[0];
+        const currentScorer = currentRow?.querySelector('[data-player-select="scorer"]')?.value || '';
+        const currentAssist = currentRow?.querySelector('[data-player-select="assist"]')?.value || '';
+        const currentGoalType = currentRow?.querySelector('[data-goal-type]')?.value || goalTypes[0];
         const desiredScorerName = editScorers[index] || '';
         const desiredAssistName = editAssists[index] || '';
         const desiredGoalType = normalizeGoalTypeLabel(editGoalTypes[index] || currentGoalType);

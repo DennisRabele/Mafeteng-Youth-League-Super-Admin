@@ -657,7 +657,7 @@
 
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
       <div class="panel-heading">
-        <h2>System Verified Results</h2>
+        <h2>All Results</h2>
         <div class="panel-heading-actions">
           <button class="button button-success small" type="button" onclick="window.location='/super-admin/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
         </div>
@@ -686,11 +686,13 @@
               <th>Fixture</th>
               <th>Submitted By</th>
               <th>Score</th>
+              <th>Type</th>
               <th>Status</th>
               <th>Scorers</th>
               <th>Assists</th>
               <th>Review</th>
               <th>File</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -701,10 +703,11 @@
             {% set submission_away_team = submission_fixture.away_team if submission_fixture and submission_fixture.away_team else None %}
             {% set submission_category = submission_fixture.category.category_name if submission_fixture and submission_fixture.category else 'uncategorized' %}
             {% set submitted_by_name = submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' %}
-            <tr data-row data-status="{{ submission.status }}" data-category="{{ submission_category }}">
+            <tr data-row data-status="{{ submission.status }}" data-category="{{ submission_category }}" data-result-type="{{ submission.result_type or 'standard' }}">
               <td data-label="Fixture">{{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}</td>
               <td data-label="Submitted By">{{ submitted_by_name }}</td>
               <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>
+              <td data-label="Type">{{ 'Standard' if submission.result_type == 'standard' else ('Opponent Did Not Honour The Match' if submission.result_type == 'opponent_did_not_honour' else ('Opponent Forfeited The Match' if submission.result_type == 'opponent_forfeited' else submission.result_type)) }}</td>
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
               <td data-label="Scorers">{{ submission.scorer_names_text or '-' }}</td>
               <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
@@ -724,9 +727,18 @@
                   -
                 {% endif %}
               </td>
+              <td data-label="Action">
+                {% if submission.status == 'pending' and submission.result_type in ['opponent_did_not_honour', 'opponent_forfeited'] %}
+                  <form method="post" action="/super-admin/result-submissions/{{ submission.submission_id }}/approve">
+                    <button class="button button-primary small" type="submit">Approve</button>
+                  </form>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty">No result submissions yet.</td></tr>
+            <tr><td colspan="10" class="empty">No result submissions yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

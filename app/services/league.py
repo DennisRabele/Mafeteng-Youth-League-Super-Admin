@@ -47,7 +47,27 @@ GOAL_TYPE_ALIASES = {
     "from kick off": "from KickOFF",
     "header": "Header",
     "tap in": "Tap In",
+    "own goal": "Own Goal",
 }
+
+RESULT_TYPE_ALIASES = {
+    "standard": "standard",
+    "normal": "standard",
+    "opponent did not honour the match": "opponent_did_not_honour",
+    "did not honour": "opponent_did_not_honour",
+    "did not honor": "opponent_did_not_honour",
+    "opponent forfeited the match": "opponent_forfeited",
+    "forfeited": "opponent_forfeited",
+    "forfeit": "opponent_forfeited",
+}
+
+RESULT_TYPE_LABELS = {
+    "standard": "Standard",
+    "opponent_did_not_honour": "Opponent Did Not Honour The Match",
+    "opponent_forfeited": "Opponent Forfeited The Match",
+}
+
+SPECIAL_RESULT_TYPES = {"opponent_did_not_honour", "opponent_forfeited"}
 
 
 def _split_items(value: str | None) -> list[str]:
@@ -64,6 +84,11 @@ def _split_result_lines(value: str | None) -> list[str]:
 def _normalize_goal_type(value: str | None) -> str:
     raw = " ".join((value or "").split()).lower()
     return GOAL_TYPE_ALIASES.get(raw, raw.title() if raw else "Open Play")
+
+
+def _normalize_result_type(value: str | None) -> str:
+    raw = " ".join((value or "").split()).lower()
+    return RESULT_TYPE_ALIASES.get(raw, "standard")
 
 
 def _player_identity_key(player: Player) -> str:
@@ -616,7 +641,7 @@ def _clear_match_result_state(db: Session, match: Match) -> None:
 
 def _clean_goal_type(value: str | None) -> str:
     normalized = _normalize_goal_type(value)
-    allowed_goal_types = {"Penalty", "Freekick", "Cornerkick", "from KickOFF", "Header", "Tap In"}
+    allowed_goal_types = {"Penalty", "Freekick", "Cornerkick", "from KickOFF", "Header", "Tap In", "Own Goal"}
     if normalized not in allowed_goal_types:
         raise RegistrationError("Select a valid goal type.")
     return normalized
@@ -666,7 +691,17 @@ def _validate_match_result_payload(
     scorer_player_ids: list[int | None],
     goal_types: list[str | None],
     assist_player_ids: list[int | None],
+    result_type: str = "standard",
 ) -> None:
+    normalized_result_type = _normalize_result_type(result_type)
+    if normalized_result_type in SPECIAL_RESULT_TYPES:
+        if any(
+            any(str(value or "").strip() for value in group)
+            for group in (scorer_player_ids, goal_types, assist_player_ids)
+        ):
+            raise RegistrationError("Special results do not include scorer or assist details.")
+        return
+
     if expected_goal_count == 0:
         if any(any(str(value or "").strip() for value in group) for group in (scorer_player_ids, goal_types, assist_player_ids)):
             raise RegistrationError("A 0-0 result must not include scorer details.")
@@ -678,8 +713,15 @@ def _validate_match_result_payload(
         raise RegistrationError(f"Expected {expected_goal_count} goal type entries for this result.")
     if len(assist_player_ids) != expected_goal_count:
         raise RegistrationError(f"Expected {expected_goal_count} assister entries for this result.")
-    if any(player_id is None for player_id in scorer_player_ids):
-        raise RegistrationError("Each goal row must include a scorer name.")
+    for index, player_id in enumerate(scorer_player_ids):
+        goal_type = _clean_goal_type(goal_types[index] if index < len(goal_types) else None)
+        assist_player_id = assist_player_ids[index] if index < len(assist_player_ids) else None
+        if goal_type == "Own Goal":
+            if player_id is not None or assist_player_id is not None:
+                raise RegistrationError("Own goals must not include a scorer or assister.")
+            continue
+        if player_id is None:
+            raise RegistrationError("Each goal row must include a scorer name.")
 
 
 def _selected_player_lookup_key(value: int | str | None) -> int | str | None:
@@ -749,8 +791,12 @@ def _assert_player_belongs_to_team(player: Player | None, team_id: int, label: s
         raise RegistrationError(f"Select only approved players from your own team for {label}.")
 
 
-def _serialize_submission_players(players: list[Player], assists: list[Player | None], goal_types: list[str]) -> tuple[str, str, str]:
-    scorer_names_text = "\n".join(player.full_name for player in players)
+def _serialize_submission_players(
+    players: list[Player | None],
+    assists: list[Player | None],
+    goal_types: list[str],
+) -> tuple[str, str, str]:
+    scorer_names_text = "\n".join(player.full_name if player else "-" for player in players)
     goal_types_text = "\n".join(goal_types)
     assist_names_text = "\n".join(assister.full_name if assister else "-" for assister in assists)
     return scorer_names_text, goal_types_text, assist_names_text
@@ -766,7 +812,7 @@ def _write_submission_statistics(
     submission: MatchResultSubmission,
     fixture: Fixture,
     team: Team,
-    scorers: list[Player],
+    scorers: list[Player | None],
     assists: list[Player | None],
     goal_types: list[str],
 ) -> None:
@@ -774,6 +820,11 @@ def _write_submission_statistics(
     category_id = category.category_id if category else None
     category_name = category.category_name if category else None
     for index, scorer in enumerate(scorers):
+        goal_type = _clean_goal_type(goal_types[index] if index < len(goal_types) else None)
+        if goal_type == "Own Goal":
+            continue
+        if scorer is None:
+            continue
         db.add(
             PlayerStatistic(
                 fixture_id=fixture.fixture_id,
@@ -786,7 +837,7 @@ def _write_submission_statistics(
                 club_name=team.team_name,
                 category_name=category_name,
                 stat_type="goal",
-                goal_type=_clean_goal_type(goal_types[index] if index < len(goal_types) else None),
+                goal_type=goal_type,
             )
         )
         assister = assists[index] if index < len(assists) else None
@@ -806,6 +857,61 @@ def _write_submission_statistics(
                     goal_type=None,
                 )
             )
+
+
+def _create_admin_verification(db: Session, submission: MatchResultSubmission, verified_by_admin_id: int) -> None:
+    verification = submission.verification
+    if not verification:
+        verification = ResultVerification(
+            submission_id=submission.submission_id,
+            verified_by_admin_id=verified_by_admin_id,
+            verified_by_system=False,
+            decision=ApprovalStatus.APPROVED.value,
+        )
+        db.add(verification)
+    else:
+        verification.verified_by_admin_id = verified_by_admin_id
+        verification.verified_by_system = False
+        verification.decision = ApprovalStatus.APPROVED.value
+        verification.rejection_reason = None
+        verification.verification_date = datetime.utcnow()
+
+
+def _finalize_single_result_submission(
+    db: Session,
+    *,
+    fixture: Fixture,
+    submission: MatchResultSubmission,
+    verified_by_admin_id: int,
+) -> None:
+    fixture_match = fixture.match
+    if not fixture_match:
+        fixture_match = Match(fixture_id=fixture.fixture_id, match_date=fixture.fixture_date, status="scheduled")
+        db.add(fixture_match)
+        db.flush()
+        fixture.match = fixture_match
+    fixture_match.home_score = submission.home_score
+    fixture_match.away_score = submission.away_score
+    fixture_match.status = "completed"
+    submission.status = ApprovalStatus.APPROVED.value
+    _create_admin_verification(db, submission, verified_by_admin_id)
+    db.commit()
+    try:
+        notify_team_admins_for_teams(
+            db,
+            [fixture.home_team_id, fixture.away_team_id],
+            "Result verified",
+            f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} is now verified at {fixture_match.home_score}-{fixture_match.away_score}. League tables and player statistics have been updated automatically.",
+            "/team-admin/dashboard#results",
+        )
+        notify_super_admins(
+            db,
+            "Result verified",
+            f"Super admin approved {fixture.home_team.team_name} vs {fixture.away_team.team_name} at {fixture_match.home_score}-{fixture_match.away_score}.",
+            "/super-admin#results",
+        )
+    except Exception:
+        logger.exception("Match-result notification dispatch failed")
 
 
 def _create_system_verification(db: Session, submission: MatchResultSubmission) -> None:
@@ -942,48 +1048,52 @@ def submit_match_result(
         if existing_submission.verification:
             db.delete(existing_submission.verification)
 
-    selected_players = _player_lookup_map(
-        db,
-        [player_id for player_id in scorer_ids if player_id is not None]
-        + [player_id for player_id in assister_ids if player_id is not None],
-    )
-    scorer_players: list[Player] = []
+    scorer_players: list[Player | None] = []
     assister_players: list[Player | None] = []
-    for index, scorer_id in enumerate(scorer_ids):
-        scorer = selected_players.get(_selected_player_lookup_key(scorer_id))
-        _assert_player_belongs_to_team(scorer, submitting_team.team_id, "scorers")
-        scorer_players.append(scorer)
-        assister_id = assister_ids[index] if index < len(assister_ids) else None
-        assister = selected_players.get(_selected_player_lookup_key(assister_id)) if assister_id is not None else None
-        if assister is not None:
-            _assert_player_belongs_to_team(assister, submitting_team.team_id, "assisters")
-        assister_players.append(assister)
+    if not is_special_result:
+        selected_players = _player_lookup_map(
+            db,
+            [player_id for player_id in scorer_ids if player_id is not None]
+            + [player_id for player_id in assister_ids if player_id is not None],
+        )
+        for index, scorer_id in enumerate(scorer_ids):
+            goal_type = _clean_goal_type(goal_types[index] if index < len(goal_types) else None)
+            if goal_type == "Own Goal":
+                scorer_players.append(None)
+                assister_players.append(None)
+                continue
+            scorer = selected_players.get(_selected_player_lookup_key(scorer_id))
+            _assert_player_belongs_to_team(scorer, submitting_team.team_id, "scorers")
+            scorer_players.append(scorer)
+            assister_id = assister_ids[index] if index < len(assister_ids) else None
+            assister = selected_players.get(_selected_player_lookup_key(assister_id)) if assister_id is not None else None
+            if assister is not None:
+                _assert_player_belongs_to_team(assister, submitting_team.team_id, "assisters")
+            assister_players.append(assister)
 
-    scorer_names_text, goal_types_text, assist_names_text = _serialize_submission_players(
-        scorer_players,
-        assister_players,
-        [_clean_goal_type(goal_type) for goal_type in goal_types],
-    )
+        scorer_names_text, goal_types_text, assist_names_text = _serialize_submission_players(
+            scorer_players,
+            assister_players,
+            [_clean_goal_type(goal_type) for goal_type in goal_types],
+        )
+        existing_submission.scorer_names_text = scorer_names_text
+        existing_submission.goal_types_text = goal_types_text
+        existing_submission.assist_names_text = assist_names_text
+        _write_submission_statistics(
+            db,
+            submission=existing_submission,
+            fixture=fixture,
+            team=submitting_team,
+            scorers=scorer_players,
+            assists=assister_players,
+            goal_types=[_clean_goal_type(goal_type) for goal_type in goal_types],
+        )
+    else:
+        existing_submission.scorer_names_text = ""
+        existing_submission.goal_types_text = ""
+        existing_submission.assist_names_text = ""
 
-    existing_submission.home_score = home_score
-    existing_submission.away_score = away_score
-    existing_submission.result_file_path = result_file_path or existing_submission.result_file_path
-    existing_submission.scorer_names_text = scorer_names_text
-    existing_submission.goal_types_text = goal_types_text
-    existing_submission.assist_names_text = assist_names_text
-    existing_submission.status = ApprovalStatus.PENDING.value
-
-    _write_submission_statistics(
-        db,
-        submission=existing_submission,
-        fixture=fixture,
-        team=submitting_team,
-        scorers=scorer_players,
-        assists=assister_players,
-        goal_types=[_clean_goal_type(goal_type) for goal_type in goal_types],
-    )
-
-    if other_submission and other_submission.home_score == home_score and other_submission.away_score == away_score:
+    if not is_special_result and other_submission and other_submission.home_score == home_score and other_submission.away_score == away_score:
         _finalize_matched_result(
             db,
             fixture=fixture,
@@ -996,13 +1106,28 @@ def submit_match_result(
     db.commit()
     db.refresh(existing_submission)
     try:
-        notify_team_admins_for_teams(
-            db,
-            [submitting_team.team_id],
-            "Result saved",
-            f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} was saved and is waiting for the other team admin to submit the matching scoreline.",
-            "/team-admin/dashboard#results",
-        )
+        if is_special_result:
+            notify_team_admins_for_teams(
+                db,
+                [fixture.home_team_id, fixture.away_team_id],
+                "Result awaiting approval",
+                f"{RESULT_TYPE_LABELS.get(normalized_result_type, 'Special result')} for {fixture.home_team.team_name} vs {fixture.away_team.team_name} is waiting for super admin approval.",
+                "/team-admin/dashboard#results",
+            )
+            notify_super_admins(
+                db,
+                "Result awaiting approval",
+                f"{RESULT_TYPE_LABELS.get(normalized_result_type, 'Special result')} submitted for {fixture.home_team.team_name} vs {fixture.away_team.team_name}.",
+                "/super-admin#results",
+            )
+        else:
+            notify_team_admins_for_teams(
+                db,
+                [submitting_team.team_id],
+                "Result saved",
+                f"Result for {fixture.home_team.team_name} vs {fixture.away_team.team_name} was saved and is waiting for the other team admin to submit the matching scoreline.",
+                "/team-admin/dashboard#results",
+            )
     except Exception:
         logger.exception("Match-result notification dispatch failed")
     return existing_submission

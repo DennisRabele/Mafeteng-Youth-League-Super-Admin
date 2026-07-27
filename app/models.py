@@ -538,6 +538,7 @@ class MatchResultSubmission(Base):
     )
     submitted_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     status: Mapped[str] = mapped_column(String(30), default=ApprovalStatus.PENDING.value)
+    result_type: Mapped[str] = mapped_column(String(40), default="standard", nullable=False)
     home_score: Mapped[int | None] = mapped_column(Integer)
     away_score: Mapped[int | None] = mapped_column(Integer)
     result_file_path: Mapped[str | None] = mapped_column(String(500))
