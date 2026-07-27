@@ -2027,12 +2027,112 @@
       <div class="panel-heading">
         <h2>Player Statistics</h2>
         <div class="panel-heading-actions">
-          <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/player-statistics/export?category=' + encodeURIComponent(document.getElementById('player-statistics-category').value || 'all') + '&team_id=' + encodeURIComponent(document.getElementById('player-statistics-team').value || 'all')">Download Cards</button>
+          <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/player-statistics/export?category=all&team_id=all'">Download Top Stats</button>
         </div>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+        <div class="table-scroll-x">
+        <table class="responsive-card-table">
+          <thead>
+            <tr>
+              <th colspan="6">Top Goal Scorers</th>
+            </tr>
+            <tr>
+              <th>Player</th>
+              <th>Club</th>
+              <th>Category</th>
+              <th>Goals</th>
+              <th>Goal Types</th>
+              <th>Clubs Played For</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in player_statistics.scorers %}
+            <tr data-row data-category="{{ row.category_name }}" data-team-id="{{ row.team.team_id if row.team else '' }}">
+              <td data-label="Player">
+                {% if row.player_names %}
+                  {{ row.player_names | join('; ') }}
+                {% else %}
+                  {{ row.player.full_name }}
+                {% endif %}
+              </td>
+              <td data-label="Club">{{ row.team.team_name if row.team else '-' }}</td>
+              <td data-label="Category">{{ row.category_name or '-' }}</td>
+              <td data-label="Goals">{{ row.goals }}</td>
+              <td data-label="Goal Types">
+                {% if row.goal_types %}
+                  {{ row.goal_types | tojson }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td data-label="Clubs Played For">
+                {% if row.clubs_played_for %}
+                  {{ row.clubs_played_for | join(', ') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">No goal scorers yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+        <div class="table-scroll-x">
+        <table class="responsive-card-table">
+          <thead>
+            <tr>
+              <th colspan="5">Top Assisters</th>
+            </tr>
+            <tr>
+              <th>Player</th>
+              <th>Club</th>
+              <th>Category</th>
+              <th>Assists</th>
+              <th>Clubs Played For</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in player_statistics.assisters %}
+            <tr data-row data-category="{{ row.category_name }}" data-team-id="{{ row.team.team_id if row.team else '' }}">
+              <td data-label="Player">
+                {% if row.player_names %}
+                  {{ row.player_names | join('; ') }}
+                {% else %}
+                  {{ row.player.full_name }}
+                {% endif %}
+              </td>
+              <td data-label="Club">{{ row.team.team_name if row.team else '-' }}</td>
+              <td data-label="Category">{{ row.category_name or '-' }}</td>
+              <td data-label="Assists">{{ row.assists }}</td>
+              <td data-label="Clubs Played For">
+                {% if row.clubs_played_for %}
+                  {{ row.clubs_played_for | join(', ') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="empty">No assisters yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard-section" id="all-player-statistics" data-dashboard-section="all-player-statistics" hidden>
+      <div class="panel-heading">
+        <h2>All Player Statistics</h2>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select id="player-statistics-category" onchange="filterPlayerStatistics('player-statistics', this.value, document.getElementById('player-statistics-team').value, event)">
+          <select id="player-statistics-category" onchange="filterPlayerStatistics('all-player-statistics', this.value, document.getElementById('player-statistics-team').value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -2040,7 +2140,7 @@
           </select>
         </label>
         <label class="filter-select">Team
-          <select id="player-statistics-team" onchange="filterPlayerStatistics('player-statistics', document.getElementById('player-statistics-category').value, this.value, event)">
+          <select id="player-statistics-team" onchange="filterPlayerStatistics('all-player-statistics', document.getElementById('player-statistics-category').value, this.value, event)">
             <option value="all">All Teams</option>
             {% for team in player_statistics_teams %}
               <option value="{{ team.team_id }}" data-category="{{ team.category.category_name if team.category else '' }}">{{ team.team_name }}</option>
@@ -2063,7 +2163,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for row in player_statistics.players %}
+            {% for row in player_statistics_all.players %}
             <tr data-row data-category="{{ row.category_name }}" data-team-id="{{ row.team.team_id if row.team else '' }}">
               <td data-label="Player">
                 {% if row.player_names %}
