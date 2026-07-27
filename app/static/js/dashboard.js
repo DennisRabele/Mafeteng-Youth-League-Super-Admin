@@ -246,30 +246,34 @@
     if (!teamSelect) {
       return;
     }
-    const options = Array.from(teamSelect.options);
-    let fallbackValue = "all";
-    let hasVisibleSelection = teamSelect.value === "all";
-    options.forEach((option, index) => {
+    if (!teamSelect.dataset.allOptionsCached) {
+      teamSelect.dataset.allOptionsCached = "true";
+      teamSelect.__allOptions = Array.from(teamSelect.options).map((option) => option.cloneNode(true));
+    }
+    const allOptions = teamSelect.__allOptions || Array.from(teamSelect.options).map((option) => option.cloneNode(true));
+    const filteredOptions = allOptions.filter((option, index) => {
       if (index === 0) {
-        option.hidden = false;
-        option.disabled = false;
-        return;
+        return true;
       }
       const optionCategory = option.dataset.category || "";
-      const matchesCategory = categoryFilter === "all" || optionCategory === categoryFilter;
-      option.hidden = !matchesCategory;
-      option.disabled = !matchesCategory;
-      if (matchesCategory && fallbackValue === "all") {
-        fallbackValue = option.value;
-      }
-      if (matchesCategory && option.value === teamSelect.value) {
-        hasVisibleSelection = true;
-      }
+      return categoryFilter === "all" || optionCategory === categoryFilter;
     });
-    if (!hasVisibleSelection) {
-      teamSelect.value = fallbackValue;
-      section.dataset.teamFilter = fallbackValue;
+    teamSelect.replaceChildren(...filteredOptions.map((option) => option.cloneNode(true)));
+    const availableValues = new Set(Array.from(teamSelect.options).map((option) => option.value));
+    let fallbackValue = "all";
+    for (const option of Array.from(teamSelect.options)) {
+      if (option.value !== "all") {
+        fallbackValue = option.value;
+        break;
+      }
     }
+    const selectedValue = availableValues.has(teamSelect.value)
+      ? teamSelect.value
+      : availableValues.has(section.dataset.teamFilter || "")
+        ? section.dataset.teamFilter
+        : fallbackValue;
+    teamSelect.value = selectedValue;
+    section.dataset.teamFilter = selectedValue;
   };
 
   const filterDashboardPanels = (sectionId, category, event) => {
