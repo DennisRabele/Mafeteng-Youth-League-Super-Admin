@@ -510,14 +510,14 @@
             <input name="venue" required>
           </label>
           <label>Home Team
-            <select name="home_team_id" id="fixture-home-team-select" required>
+            <select name="home_team_id" id="fixture-home-team-select" class="super-admin-category-select" required>
               {% for team in approved_fixture_teams %}
                 <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
               {% endfor %}
             </select>
           </label>
           <label>Away Team
-            <select name="away_team_id" id="fixture-away-team-select" required>
+            <select name="away_team_id" id="fixture-away-team-select" class="super-admin-category-select" required>
               {% for team in approved_fixture_teams %}
                 <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
               {% endfor %}
