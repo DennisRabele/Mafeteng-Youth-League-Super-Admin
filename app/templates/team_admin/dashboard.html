@@ -11,7 +11,6 @@
     <button class="side-button" type="button" data-section-target="match-day-squads">Match Day Squad</button>
     <button class="side-button" type="button" data-section-target="results">Results</button>
     <button class="side-button" type="button" data-section-target="player-statistics">Player Statistics</button>
-    <button class="side-button" type="button" data-section-target="all-player-statistics">All Player Statistics</button>
     <button class="side-button" type="button" data-section-target="league-tables">League tables</button>
     <button class="side-button" type="button" data-section-target="notifications">Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</button>
     <button class="side-button" type="button" data-section-target="my-account">My Account</button>
@@ -2125,15 +2124,12 @@
         </table>
         </div>
       </div>
-    </section>
-
-    <section class="panel dashboard-section" id="all-player-statistics" data-dashboard-section="all-player-statistics" hidden>
-      <div class="panel-heading">
+      <div class="panel-heading" style="margin-top: 1.5rem;">
         <h2>All Player Statistics</h2>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select id="player-statistics-category" onchange="filterPlayerStatistics('all-player-statistics', this.value, document.getElementById('player-statistics-team').value, event)">
+          <select id="player-statistics-category" onchange="filterPlayerStatistics('player-statistics', this.value, document.getElementById('player-statistics-team').value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -2141,7 +2137,7 @@
           </select>
         </label>
         <label class="filter-select">Team
-          <select id="player-statistics-team" onchange="filterPlayerStatistics('all-player-statistics', document.getElementById('player-statistics-category').value, this.value, event)">
+          <select id="player-statistics-team" onchange="filterPlayerStatistics('player-statistics', document.getElementById('player-statistics-category').value, this.value, event)">
             <option value="all">All Teams</option>
             {% for team in player_statistics_teams %}
               <option value="{{ team.team_id }}" data-category="{{ team.category.category_name if team.category else '' }}">{{ team.team_name }}</option>

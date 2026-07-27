@@ -384,7 +384,7 @@
   window.addEventListener("hashchange", activateSectionFromLocation);
   activateSectionFromLocation();
   applyInitialCategoryPanelFilters();
-  document.querySelectorAll("[data-dashboard-section='all-player-statistics']").forEach((section) => {
+  document.querySelectorAll("[data-dashboard-section='player-statistics']").forEach((section) => {
     if (window.syncPlayerStatisticsTeams) {
       window.syncPlayerStatisticsTeams(section.id);
     }

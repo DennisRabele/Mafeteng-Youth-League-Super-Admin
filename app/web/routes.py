@@ -1543,7 +1543,7 @@ def super_admin_dashboard(
         {"players": [], "scorers": [], "assisters": []},
     )
     player_statistics_all = _safe_dashboard_value(
-        lambda: get_player_statistics(db, team_ids=approved_team_ids),
+        lambda: get_player_statistics(db),
         {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
@@ -2095,7 +2095,7 @@ def team_admin_dashboard(
             "league_tables": league_tables,
             "player_statistics": player_statistics,
             "player_statistics_all": player_statistics_all,
-            "player_statistics_teams": approved_teams,
+            "player_statistics_teams": all_teams,
             "notifications": notifications,
             "unread_notifications": unread_notifications,
         },
