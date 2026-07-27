@@ -478,6 +478,32 @@ def mark_notification_read(db: Session, notification_id: int, user_id: int) -> N
     return notification
 
 
+def delete_notification(db: Session, notification_id: int, user_id: int) -> None:
+    if not _has_table(db, "notifications"):
+        raise RegistrationError("Notifications are not available yet.")
+    notification = db.scalar(
+        select(Notification).where(
+            Notification.notification_id == notification_id,
+            Notification.user_id == user_id,
+        )
+    )
+    if not notification:
+        raise RegistrationError("Notification was not found.")
+    db.delete(notification)
+    db.commit()
+
+
+def delete_all_notifications_for_user(db: Session, user_id: int) -> int:
+    if not _has_table(db, "notifications"):
+        raise RegistrationError("Notifications are not available yet.")
+    notifications = db.scalars(select(Notification).where(Notification.user_id == user_id)).all()
+    count = len(notifications)
+    for notification in notifications:
+        db.delete(notification)
+    db.commit()
+    return count
+
+
 def create_fixture(
     db: Session,
     *,
@@ -502,8 +528,8 @@ def create_fixture(
         raise RegistrationError("Both teams must be approved before a fixture can be created.")
     if home_team.category_id != category_id or away_team.category_id != category_id:
         raise RegistrationError("Selected teams must belong to the chosen category.")
-    if fixture_date < datetime.utcnow() + timedelta(days=7):
-        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
+    if fixture_date < datetime.utcnow() + timedelta(hours=1):
+        raise RegistrationError("Fixtures must be scheduled at least 1 hour before match time.")
     season = db.scalar(select(Season).order_by(Season.start_date.desc()))
     if not season:
         raise RegistrationError("No active season is available for fixture creation.")
@@ -557,8 +583,8 @@ def update_fixture(
     fixture_category_id = category_id or fixture.category_id
     home_team_id = home_team_id or fixture.home_team_id
     away_team_id = away_team_id or fixture.away_team_id
-    if fixture_date < datetime.utcnow() + timedelta(days=7):
-        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
+    if fixture_date < datetime.utcnow() + timedelta(hours=1):
+        raise RegistrationError("Fixtures must be scheduled at least 1 hour before match time.")
 
     category = db.get(Category, fixture_category_id)
     home_team = db.get(Team, home_team_id)
@@ -604,8 +630,8 @@ def postpone_fixture(db: Session, fixture_id: int, new_date: datetime) -> Fixtur
     fixture = db.get(Fixture, fixture_id)
     if not fixture:
         raise RegistrationError("Fixture was not found.")
-    if new_date < datetime.utcnow() + timedelta(days=7):
-        raise RegistrationError("Fixtures must be scheduled at least 7 days before match day.")
+    if new_date < datetime.utcnow() + timedelta(hours=1):
+        raise RegistrationError("Fixtures must be scheduled at least 1 hour before match time.")
     fixture.fixture_date = new_date
     fixture.status = FixtureStatus.POSTPONED.value
     if fixture.match:

@@ -500,7 +500,7 @@
         <summary>Create Fixture</summary>
         <form class="form-grid two fixture-builder-form" method="post" action="/super-admin/fixtures">
           <label>Category
-            <select name="category_id" id="fixture-category-select" required onchange="syncFixtureTeamFilters()">
+            <select name="category_id" id="fixture-category-select" class="super-admin-category-select" required onchange="syncFixtureTeamFilters()">
               {% for category in categories %}
                 <option value="{{ category.category_id }}">{{ category.category_name }}</option>
               {% endfor %}
@@ -993,8 +993,11 @@
     </section>
 
     <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden>
-      <div class="panel-heading">
+      <div class="panel-heading" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
         <h2>Notifications{% if unread_notifications %} <span class="status approved">{{ unread_notifications }} new</span>{% endif %}</h2>
+        <form method="post" action="/notifications/delete-all" onsubmit="return confirm('Delete all notifications?');">
+          <button class="button button-danger small" type="submit">Delete All</button>
+        </form>
       </div>
       <div class="notification-list">
         {% for notification in notifications %}
@@ -1015,6 +1018,9 @@
                 <button class="button button-primary small" type="submit">Mark read</button>
               </form>
             {% endif %}
+            <form method="post" action="/notifications/{{ notification.notification_id }}/delete" onsubmit="return confirm('Delete this notification?');" style="margin-top: 0.5rem;">
+              <button class="button button-danger small" type="submit">Delete</button>
+            </form>
           </article>
         {% else %}
           <p class="empty">No notifications yet.</p>

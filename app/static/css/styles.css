@@ -1213,6 +1213,17 @@ body[data-app-mode="team_admin"] .transfer-list article small {
   padding: 16px;
 }
 
+body[data-app-mode="super_admin"] .fixture-builder-form select[name="category_id"] {
+  appearance: auto;
+  color-scheme: dark;
+}
+
+body[data-app-mode="super_admin"] .fixture-builder-form select[name="category_id"],
+body[data-app-mode="super_admin"] .fixture-builder-form select[name="category_id"] option {
+  background: var(--black);
+  color: var(--white);
+}
+
 .fixture-toolbar {
   align-items: flex-end;
   display: flex;

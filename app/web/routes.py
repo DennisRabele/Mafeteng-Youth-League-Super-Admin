@@ -41,6 +41,8 @@ from app.services.league import (
     get_match_day_squad,
     get_team_admin_match_day_squads,
     get_player_statistics,
+    delete_all_notifications_for_user,
+    delete_notification,
     mark_notification_read,
     postpone_fixture,
     purge_expired_match_day_squads,
@@ -2711,6 +2713,35 @@ def mark_notification_read_route(
     user = _require_user(request, db)
     try:
         mark_notification_read(db, notification_id, user.user_id)
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    destination = _destination_for_user(user)
+    return _redirect(f"{destination}#notifications")
+
+
+@router.post("/notifications/{notification_id}/delete")
+def delete_notification_route(
+    notification_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _require_user(request, db)
+    try:
+        delete_notification(db, notification_id, user.user_id)
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    destination = _destination_for_user(user)
+    return _redirect(f"{destination}#notifications")
+
+
+@router.post("/notifications/delete-all")
+def delete_all_notifications_route(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _require_user(request, db)
+    try:
+        delete_all_notifications_for_user(db, user.user_id)
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
     destination = _destination_for_user(user)
