@@ -140,6 +140,8 @@
     }
   };
 
+  const normalizeCategoryValue = (value) => String(value || "").trim().toLowerCase();
+
   const applyStatusAndCategoryFilters = (sectionId) => {
     const section = document.getElementById(sectionId);
     if (!section) {
@@ -147,15 +149,17 @@
     }
     const statusFilter = section.dataset.statusFilter || "all";
     const categoryFilter = section.dataset.categoryFilter || "all";
+    const normalizedCategoryFilter = normalizeCategoryValue(categoryFilter);
     const metricFilter = section.dataset.metricFilter || "all";
     const teamFilter = section.dataset.teamFilter || "all";
     section.querySelectorAll("tbody tr[data-row]").forEach((row) => {
       const rowStatus = row.dataset.status || "all";
       const rowCategory = row.dataset.category || "all";
+      const normalizedRowCategory = normalizeCategoryValue(rowCategory);
       const rowMetric = row.dataset.metric || "all";
       const rowTeam = row.dataset.teamId || "all";
       const matchesStatus = statusFilter === "all" || rowStatus === statusFilter;
-      const matchesCategory = categoryFilter === "all" || rowCategory === categoryFilter;
+      const matchesCategory = normalizedCategoryFilter === "all" || normalizedRowCategory === normalizedCategoryFilter;
       const matchesMetric = metricFilter === "all" || rowMetric === metricFilter;
       const matchesTeam = teamFilter === "all" || rowTeam === teamFilter;
       row.dataset.filterHidden = String(!(matchesStatus && matchesCategory && matchesMetric && matchesTeam));
@@ -242,6 +246,7 @@
       return;
     }
     const categoryFilter = section.dataset.categoryFilter || "all";
+    const normalizedCategoryFilter = normalizeCategoryValue(categoryFilter);
     const teamSelect = section.querySelector("#player-statistics-team");
     if (!teamSelect) {
       return;
@@ -255,8 +260,8 @@
       if (index === 0) {
         return true;
       }
-      const optionCategory = option.dataset.category || "";
-      return categoryFilter === "all" || optionCategory === categoryFilter;
+      const optionCategory = normalizeCategoryValue(option.dataset.category || "");
+      return normalizedCategoryFilter === "all" || optionCategory === normalizedCategoryFilter;
     });
     teamSelect.replaceChildren(...filteredOptions.map((option) => option.cloneNode(true)));
     const availableValues = new Set(Array.from(teamSelect.options).map((option) => option.value));
@@ -285,9 +290,10 @@
       return;
     }
     section.dataset.categoryFilter = category;
+    const normalizedCategory = normalizeCategoryValue(category);
     const panels = section.querySelectorAll("[data-category-panel]");
     panels.forEach((panel) => {
-      panel.hidden = category !== "all" && panel.dataset.categoryPanel !== category;
+      panel.hidden = normalizedCategory !== "all" && normalizeCategoryValue(panel.dataset.categoryPanel) !== normalizedCategory;
     });
     syncPaginatedTables(sectionId);
   };
