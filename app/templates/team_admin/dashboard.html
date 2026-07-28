@@ -1543,7 +1543,7 @@
                 </select>
               </label>
               <label>Jersey Number
-                <input id="match-day-jersey-input" type="number" min="1" max="99" disabled required>
+                <input id="match-day-jersey-input" type="number" min="1" max="99" disabled>
               </label>
               <div class="form-actions wide" style="align-self:end;">
                 <button class="button button-primary" type="button" data-add-player disabled>Add to List</button>
@@ -1609,6 +1609,7 @@
                 playerSelect.value &&
                 jerseyInput.value.trim()
               );
+              jerseyInput.required = Boolean(playerSelect.value);
               addButton.disabled = !canAdd;
             };
 
@@ -1667,7 +1668,10 @@
               const selectedOption = playerSelect.selectedOptions[0];
               const jerseyNumber = jerseyInput.value.trim();
               const jerseyValue = Number(jerseyNumber);
-              if (!playerId || !selectedOption || !Number.isInteger(jerseyValue) || jerseyValue < 1 || jerseyValue > 99) {
+              if (!playerId || !selectedOption) {
+                return;
+              }
+              if (!jerseyNumber || !Number.isInteger(jerseyValue) || jerseyValue < 1 || jerseyValue > 99) {
                 return;
               }
               if (selectedPlayerIds.has(playerId)) {
@@ -1722,7 +1726,10 @@
 
             addButton.addEventListener("click", addPlayerRow);
             playerSelect.addEventListener("change", () => {
-              jerseyInput.focus();
+              jerseyInput.required = Boolean(playerSelect.value);
+              if (playerSelect.value) {
+                jerseyInput.focus();
+              }
               updateAddButtonState();
             });
             jerseyInput.addEventListener("input", updateAddButtonState);
