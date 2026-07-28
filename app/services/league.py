@@ -53,9 +53,11 @@ GOAL_TYPE_ALIASES = {
 RESULT_TYPE_ALIASES = {
     "standard": "standard",
     "normal": "standard",
+    "opponent_did_not_honour": "opponent_did_not_honour",
     "opponent did not honour the match": "opponent_did_not_honour",
     "did not honour": "opponent_did_not_honour",
     "did not honor": "opponent_did_not_honour",
+    "opponent_forfeited": "opponent_forfeited",
     "opponent forfeited the match": "opponent_forfeited",
     "forfeited": "opponent_forfeited",
     "forfeit": "opponent_forfeited",
