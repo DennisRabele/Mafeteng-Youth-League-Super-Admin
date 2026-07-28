@@ -528,8 +528,6 @@ def create_fixture(
         raise RegistrationError("Both teams must be approved before a fixture can be created.")
     if home_team.category_id != category_id or away_team.category_id != category_id:
         raise RegistrationError("Selected teams must belong to the chosen category.")
-    if fixture_date < datetime.utcnow() + timedelta(hours=1):
-        raise RegistrationError("Fixtures must be scheduled at least 1 hour before match time.")
     season = db.scalar(select(Season).order_by(Season.start_date.desc()))
     if not season:
         raise RegistrationError("No active season is available for fixture creation.")
@@ -583,9 +581,6 @@ def update_fixture(
     fixture_category_id = category_id or fixture.category_id
     home_team_id = home_team_id or fixture.home_team_id
     away_team_id = away_team_id or fixture.away_team_id
-    if fixture_date < datetime.utcnow() + timedelta(hours=1):
-        raise RegistrationError("Fixtures must be scheduled at least 1 hour before match time.")
-
     category = db.get(Category, fixture_category_id)
     home_team = db.get(Team, home_team_id)
     away_team = db.get(Team, away_team_id)
@@ -630,8 +625,6 @@ def postpone_fixture(db: Session, fixture_id: int, new_date: datetime) -> Fixtur
     fixture = db.get(Fixture, fixture_id)
     if not fixture:
         raise RegistrationError("Fixture was not found.")
-    if new_date < datetime.utcnow() + timedelta(hours=1):
-        raise RegistrationError("Fixtures must be scheduled at least 1 hour before match time.")
     fixture.fixture_date = new_date
     fixture.status = FixtureStatus.POSTPONED.value
     if fixture.match:
@@ -1009,6 +1002,7 @@ def submit_match_result(
     scorer_player_ids: list[str | int | None],
     goal_types: list[str | None],
     assist_player_ids: list[str | int | None],
+    result_type: str = "standard",
 ) -> MatchResultSubmission:
     fixture = db.get(Fixture, fixture_id)
     if not fixture or fixture.home_team is None or fixture.away_team is None:
@@ -1023,18 +1017,29 @@ def submit_match_result(
         team_admin_id=team_admin_id,
         approved_team_ids=approved_team_ids,
     )
+    normalized_result_type = _normalize_result_type(result_type)
     scorer_ids = _coerce_selected_player_ids(scorer_player_ids)
     assister_ids = _coerce_selected_player_ids(assist_player_ids)
+    is_special_result = normalized_result_type in SPECIAL_RESULT_TYPES
     expected_goal_count = home_score if submitting_side == "home" else away_score
+    if is_special_result:
+        expected_goal_count = 3
     _validate_match_result_payload(
         expected_goal_count=expected_goal_count,
         scorer_player_ids=scorer_ids,
         goal_types=goal_types,
         assist_player_ids=assister_ids,
+        result_type=normalized_result_type,
     )
 
-    if expected_goal_count == 0 and (home_score != 0 or away_score != 0):
-        raise RegistrationError("Invalid scoreline supplied.")
+    if is_special_result:
+        expected_home_score = 3 if submitting_side == "home" else 0
+        expected_away_score = 3 if submitting_side == "away" else 0
+        if home_score != expected_home_score or away_score != expected_away_score:
+            raise RegistrationError("Special result types must be submitted as a 3-0 scoreline for the team that showed up.")
+    else:
+        if expected_goal_count == 0 and (home_score != 0 or away_score != 0):
+            raise RegistrationError("Invalid scoreline supplied.")
 
     match = fixture.match or Match(
         fixture_id=fixture.fixture_id,
