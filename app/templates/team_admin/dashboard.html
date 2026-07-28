@@ -1520,7 +1520,9 @@
               <select name="fixture_id" id="match-day-fixture-select" required>
                 <option value="">Select fixture</option>
                 {% for fixture in match_day_fixtures_data %}
-                  <option value="{{ fixture.fixture_id }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
+                  <option value="{{ fixture.fixture_id }}">
+                    {{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }} - {{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }} (Fixture #{{ fixture.fixture_id }})
+                  </option>
                 {% endfor %}
               </select>
             </label>
@@ -1816,8 +1818,8 @@
           <label class="result-field result-field--full">Played fixture
             <select id="result-fixture-select" name="fixture_id" required>
               <option value="">Select a played fixture</option>
-              {% for fixture in played_fixtures %}
-                <option
+                {% for fixture in played_fixtures %}
+                  <option
                   value="{{ fixture.fixture_id }}"
                   data-home-team-id="{{ fixture.home_team.team_id }}"
                   data-away-team-id="{{ fixture.away_team.team_id }}"
@@ -1827,7 +1829,7 @@
                   data-away-score="{{ fixture.latest_result_submission.away_score if fixture.latest_result_submission else '' }}"
                   data-result-status="{{ fixture.latest_result_status or '' }}"
                   data-rejection-reason="{{ fixture.latest_result_rejection_reason or '' }}"
-                >{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
+                >{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }} - {{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }} (Fixture #{{ fixture.fixture_id }})</option>
               {% endfor %}
             </select>
           </label>
@@ -1938,7 +1940,12 @@
               data-goal-types='{{ (submission.goal_types_text or "") | tojson }}'
               data-submitted-by-team-admin-id="{{ submission.submitted_by_team_admin_id }}"
             >
-              <td data-label="Fixture">{{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}</td>
+              <td data-label="Fixture">
+                {{ submission_fixture.fixture_date.strftime('%Y-%m-%d %H:%M') if submission_fixture and submission_fixture.fixture_date else 'Unknown date' }}
+                -
+                {{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}
+                {% if submission_fixture %}(Fixture #{{ submission_fixture.fixture_id }}){% endif %}
+              </td>
               <td data-label="Set By">{{ submitted_by_name }}</td>
               <td data-label="Submitted">{{ submission.submitted_date.strftime('%Y-%m-%d %H:%M') }}</td>
               <td data-label="Score">{{ submission.home_score }}-{{ submission.away_score }}</td>

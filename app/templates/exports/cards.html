@@ -1022,7 +1022,11 @@
             <article class="export-card">
               <div class="export-card__head">
                 <div>
-                  <h2 class="export-card__title">{{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}</h2>
+                  <h2 class="export-card__title">
+                    {{ submission.match.fixture.fixture_date.strftime('%Y-%m-%d %H:%M') if submission.match and submission.match.fixture and submission.match.fixture.fixture_date else 'Unknown date' }}
+                    - {{ submission.match.fixture.home_team.team_name }} vs {{ submission.match.fixture.away_team.team_name }}
+                    {% if submission.match and submission.match.fixture %}(Fixture #{{ submission.match.fixture.fixture_id }}){% endif %}
+                  </h2>
                   <div class="export-card__meta">{{ submission.match.fixture.category.category_name }} · {{ submission.submitted_by.user.full_name }}</div>
                 </div>
                 <span class="status {{ submission.status }}">{{ submission.status }}</span>
