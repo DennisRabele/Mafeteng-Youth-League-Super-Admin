@@ -1521,7 +1521,7 @@
                 <option value="">Select fixture</option>
                 {% for fixture in match_day_fixtures_data %}
                   <option value="{{ fixture.fixture_id }}">
-                    {{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }} - {{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }} (Fixture #{{ fixture.fixture_id }})
+                    {{ fixture.fixture_date }} - {{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }} (Fixture #{{ fixture.fixture_id }})
                   </option>
                 {% endfor %}
               </select>
