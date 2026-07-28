@@ -585,7 +585,7 @@ class ResultVerification(Base):
     submission_id: Mapped[int] = mapped_column(
         ForeignKey("match_result_submissions.submission_id"), unique=True
     )
-    verified_by_admin_id: Mapped[int | None] = mapped_column(ForeignKey("super_admins.admin_id"))
+    verified_by_admin_id: Mapped[int | None] = mapped_column(ForeignKey("super_admins.admin_id"), nullable=True)
     verified_by_system: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     verification_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     decision: Mapped[str] = mapped_column(String(30), nullable=False)

@@ -228,6 +228,7 @@ def _ensure_schema_columns() -> None:
             for column_name, statement in missing_verification_columns.items():
                 if column_name not in verification_columns:
                     connection.execute(text(statement))
+            connection.execute(text("ALTER TABLE result_verifications ALTER COLUMN verified_by_admin_id DROP NOT NULL"))
 
 
 def _seed_app_assets(db: Session) -> None:
