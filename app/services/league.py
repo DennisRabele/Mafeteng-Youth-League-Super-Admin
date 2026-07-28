@@ -1039,9 +1039,6 @@ def submit_match_result(
         expected_away_score = 3 if submitting_side == "away" else 0
         if home_score != expected_home_score or away_score != expected_away_score:
             raise RegistrationError("Special result types must be submitted as a 3-0 scoreline for the team that showed up.")
-    else:
-        if expected_goal_count == 0 and (home_score != 0 or away_score != 0):
-            raise RegistrationError("Invalid scoreline supplied.")
 
     match = fixture.match or Match(
         fixture_id=fixture.fixture_id,
