@@ -253,6 +253,10 @@ def _seed_app_assets(db: Session) -> None:
 
 
 def _seed_super_admin(db: Session) -> None:
+    if not settings.seed_initial_super_admin:
+        return
+    if not settings.super_admin_email.strip() or not settings.super_admin_password.strip():
+        return
     existing = db.scalar(
         select(User).where(User.email == settings.super_admin_email.lower())
     )

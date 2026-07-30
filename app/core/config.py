@@ -47,9 +47,10 @@ class Settings:
     supabase_player_agreements_bucket: str = os.getenv(
         "SUPABASE_PLAYER_AGREEMENTS_BUCKET", "player agreements"
     )
+    seed_initial_super_admin: bool = os.getenv("SEED_INITIAL_SUPER_ADMIN", "false").strip().lower() in {"1", "true", "yes", "on"}
     super_admin_name: str = os.getenv("SUPER_ADMIN_NAME", "League Super Admin")
-    super_admin_email: str = os.getenv("SUPER_ADMIN_EMAIL", "admin@ydl.local")
-    super_admin_password: str = os.getenv("SUPER_ADMIN_PASSWORD", "Admin123!")
+    super_admin_email: str = os.getenv("SUPER_ADMIN_EMAIL", "")
+    super_admin_password: str = os.getenv("SUPER_ADMIN_PASSWORD", "")
     default_season_name: str = os.getenv(
         "DEFAULT_SEASON_NAME", "2026 Youth Development League"
     )
