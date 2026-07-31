@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import BASE_DIR, settings
@@ -60,6 +60,10 @@ def create_app(app_mode: str = "combined") -> FastAPI:
             upload_dir = BASE_DIR / upload_dir
         upload_dir.mkdir(parents=True, exist_ok=True)
         app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        return FileResponse(static_dir / "images" / "logo.jpg", media_type="image/jpeg")
 
     @app.middleware("http")
     async def app_mode_guard(request: Request, call_next):
