@@ -54,7 +54,7 @@ def create_app(app_mode: str = "combined") -> FastAPI:
 
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    if not _using_supabase_storage():
+    if _using_local_upload_storage():
         upload_dir = settings.upload_dir
         if not upload_dir.is_absolute():
             upload_dir = BASE_DIR / upload_dir
@@ -84,6 +84,18 @@ def create_app(app_mode: str = "combined") -> FastAPI:
 
 def _using_supabase_storage() -> bool:
     return bool(settings.supabase_url and settings.supabase_service_role_key)
+
+
+def _using_cloudinary_storage() -> bool:
+    return bool(
+        settings.cloudinary_cloud_name
+        and settings.cloudinary_api_key
+        and settings.cloudinary_api_secret
+    )
+
+
+def _using_local_upload_storage() -> bool:
+    return not _using_supabase_storage() and not _using_cloudinary_storage()
 
 
 def _should_init_db() -> bool:
