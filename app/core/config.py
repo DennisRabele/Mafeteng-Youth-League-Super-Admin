@@ -22,13 +22,21 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 
+def _normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + database_url.removeprefix("postgresql://")
+    if database_url.startswith("postgres://"):
+        return "postgresql+psycopg://" + database_url.removeprefix("postgres://")
+    return database_url
+
+
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Mafeteng Youth Development League")
     secret_key: str = os.getenv("SECRET_KEY", "change-this-before-production")
-    database_url: str = os.getenv(
+    database_url: str = _normalize_database_url(os.getenv(
         "DATABASE_URL",
         "postgresql+psycopg://postgres:postgres@localhost:5432/youth_league",
-    )
+    ))
     upload_dir: Path = Path(os.getenv("UPLOAD_DIR", "storage/uploads"))
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
