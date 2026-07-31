@@ -47,6 +47,12 @@ class Settings:
     supabase_player_agreements_bucket: str = os.getenv(
         "SUPABASE_PLAYER_AGREEMENTS_BUCKET", "player agreements"
     )
+    cloudinary_cloud_name: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+    cloudinary_api_key: str = os.getenv("CLOUDINARY_API_KEY", "")
+    cloudinary_api_secret: str = os.getenv("CLOUDINARY_API_SECRET", "")
+    cloudinary_folder_prefix: str = os.getenv(
+        "CLOUDINARY_FOLDER_PREFIX", "Mafeteng Youth League"
+    ).strip().strip("/")
     seed_initial_super_admin: bool = os.getenv("SEED_INITIAL_SUPER_ADMIN", "false").strip().lower() in {"1", "true", "yes", "on"}
     super_admin_name: str = os.getenv("SUPER_ADMIN_NAME", "League Super Admin")
     super_admin_email: str = os.getenv("SUPER_ADMIN_EMAIL", "")
