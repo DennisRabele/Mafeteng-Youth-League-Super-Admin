@@ -44,26 +44,6 @@ class Settings:
         "postgresql://postgres:postgres@localhost:5432/youth_league",
     ))
     upload_dir: Path = Path(os.getenv("UPLOAD_DIR", "storage/uploads"))
-    supabase_url: str = os.getenv("SUPABASE_URL", "")
-    supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    supabase_admin_photos_bucket: str = os.getenv(
-        "SUPABASE_ADMIN_PHOTOS_BUCKET", "admin photos"
-    )
-    supabase_team_logos_bucket: str = os.getenv(
-        "SUPABASE_TEAM_LOGOS_BUCKET", "team logos"
-    )
-    supabase_player_documents_bucket: str = os.getenv(
-        "SUPABASE_PLAYER_DOCUMENTS_BUCKET", "player documents"
-    )
-    supabase_player_photos_bucket: str = os.getenv(
-        "SUPABASE_PLAYER_PHOTOS_BUCKET", "player photos"
-    )
-    supabase_player_agreements_bucket: str = os.getenv(
-        "SUPABASE_PLAYER_AGREEMENTS_BUCKET", "player agreements"
-    )
-    supabase_match_results_bucket: str = os.getenv(
-        "SUPABASE_MATCH_RESULTS_BUCKET", "match results"
-    )
     cloudinary_cloud_name: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
     cloudinary_api_key: str = os.getenv("CLOUDINARY_API_KEY", "")
     cloudinary_api_secret: str = os.getenv("CLOUDINARY_API_SECRET", "")

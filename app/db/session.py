@@ -2,7 +2,6 @@ from datetime import date
 
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 from app.core.security import hash_password
@@ -23,8 +22,6 @@ connect_args = (
     else {"prepare_threshold": None}
 )
 engine_kwargs = {"connect_args": connect_args, "future": True}
-if ".pooler.supabase.com" in settings.database_url:
-    engine_kwargs["poolclass"] = NullPool
 
 _engine = None
 _SessionLocal = sessionmaker(autoflush=False, autocommit=False, future=True)

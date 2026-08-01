@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from app.core.config import BASE_DIR, settings
+from app.core.config import settings
 from app.db.session import SessionLocal, init_db
 from app.services.registration import process_player_registration_lifecycle
 from app.web.routes import router as web_router
@@ -52,12 +52,6 @@ def create_app(app_mode: str = "combined") -> FastAPI:
 
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    if _using_local_upload_storage():
-        upload_dir = settings.upload_dir
-        if not upload_dir.is_absolute():
-            upload_dir = BASE_DIR / upload_dir
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
     def _favicon_response():
         favicon_path = static_dir / "images" / "logo.jpg"
@@ -101,22 +95,6 @@ def create_app(app_mode: str = "combined") -> FastAPI:
 
     app.include_router(web_router)
     return app
-
-
-def _using_supabase_storage() -> bool:
-    return bool(settings.supabase_url and settings.supabase_service_role_key)
-
-
-def _using_cloudinary_storage() -> bool:
-    return bool(
-        settings.cloudinary_cloud_name
-        and settings.cloudinary_api_key
-        and settings.cloudinary_api_secret
-    )
-
-
-def _using_local_upload_storage() -> bool:
-    return not _using_supabase_storage() and not _using_cloudinary_storage()
 
 
 def _should_init_db() -> bool:
