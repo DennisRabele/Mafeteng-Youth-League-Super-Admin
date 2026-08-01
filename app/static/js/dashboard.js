@@ -90,19 +90,9 @@
   });
 
   document.addEventListener("click", (event) => {
-    const trigger = event.target.closest("[data-loading-trigger], a[href]");
+    const trigger = event.target.closest("[data-loading-trigger]");
     if (!trigger) {
       return;
-    }
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-      return;
-    }
-    if (trigger.matches("a[href]")) {
-      const href = trigger.getAttribute("href") || "";
-      const target = trigger.getAttribute("target");
-      if (href.startsWith("#") || target === "_blank" || trigger.hasAttribute("download")) {
-        return;
-      }
     }
     showLoading();
   });
