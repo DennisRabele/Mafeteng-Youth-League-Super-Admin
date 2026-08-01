@@ -66,6 +66,15 @@ def create_app(app_mode: str = "combined") -> FastAPI:
         return FileResponse(static_dir / "images" / "logo.jpg", media_type="image/jpeg")
 
     @app.middleware("http")
+    async def strip_vercel_api_prefix(request: Request, call_next):
+        path = request.scope.get("path", "")
+        if path.startswith("/api/index"):
+            request.scope["path"] = path.removeprefix("/api/index") or "/"
+        elif path.startswith("/api/super_admin"):
+            request.scope["path"] = path.removeprefix("/api/super_admin") or "/"
+        return await call_next(request)
+
+    @app.middleware("http")
     async def app_mode_guard(request: Request, call_next):
         path = request.url.path
         if app_mode == "super_admin":
