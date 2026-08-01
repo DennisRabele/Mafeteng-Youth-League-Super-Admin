@@ -8,8 +8,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import BASE_DIR, settings
-from app.db.session import SessionLocal
-from app.db.session import _ensure_schema_columns, init_db
+from app.db.session import SessionLocal, init_db
 from app.services.registration import process_player_registration_lifecycle
 from app.web.routes import router as web_router
 
@@ -112,10 +111,12 @@ def _using_local_upload_storage() -> bool:
 
 
 def _should_init_db() -> bool:
+    if _is_vercel_deployment():
+        return True
     raw_value = os.getenv("RUN_DB_INIT")
     if raw_value is not None:
         return raw_value.strip().lower() in {"1", "true", "yes", "on"}
-    return not _is_vercel_deployment()
+    return True
 
 
 def _is_vercel_deployment() -> bool:
