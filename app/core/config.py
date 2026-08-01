@@ -23,10 +23,16 @@ _load_dotenv()
 
 
 def _normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("cockroachdb+psycopg://"):
+        return database_url
+    if database_url.startswith("cockroachdb://"):
+        return "cockroachdb+psycopg://" + database_url.removeprefix("cockroachdb://")
     if database_url.startswith("postgresql://"):
-        return "postgresql+psycopg://" + database_url.removeprefix("postgresql://")
+        return "cockroachdb+psycopg://" + database_url.removeprefix("postgresql://")
+    if database_url.startswith("postgresql+psycopg://"):
+        return "cockroachdb+psycopg://" + database_url.removeprefix("postgresql+psycopg://")
     if database_url.startswith("postgres://"):
-        return "postgresql+psycopg://" + database_url.removeprefix("postgres://")
+        return "cockroachdb+psycopg://" + database_url.removeprefix("postgres://")
     return database_url
 
 
