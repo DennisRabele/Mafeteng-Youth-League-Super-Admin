@@ -16,7 +16,6 @@ from app.web.routes import router as web_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if _should_init_db():
-        _ensure_schema_columns()
         init_db()
 
     async def _registration_housekeeping_loop() -> None:
