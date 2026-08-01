@@ -59,12 +59,19 @@ def create_app(app_mode: str = "combined") -> FastAPI:
         upload_dir.mkdir(parents=True, exist_ok=True)
         app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
-    @app.get("/favicon.ico", include_in_schema=False)
-    async def favicon():
+    def _favicon_response():
         favicon_path = static_dir / "images" / "logo.jpg"
         if not favicon_path.is_file():
             return Response(status_code=204)
         return FileResponse(favicon_path, media_type="image/jpeg")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon_ico():
+        return _favicon_response()
+
+    @app.get("/favicon.png", include_in_schema=False)
+    async def favicon_png():
+        return _favicon_response()
 
     @app.middleware("http")
     async def strip_vercel_api_prefix(request: Request, call_next):
