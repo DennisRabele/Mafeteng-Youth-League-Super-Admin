@@ -1,6 +1,5 @@
 from datetime import date
 
-import sqlalchemy_cockroachdb  # noqa: F401
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
