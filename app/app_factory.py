@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import BASE_DIR, settings
@@ -61,7 +61,10 @@ def create_app(app_mode: str = "combined") -> FastAPI:
 
     @app.get("/favicon.ico", include_in_schema=False)
     async def favicon():
-        return FileResponse(static_dir / "images" / "logo.jpg", media_type="image/jpeg")
+        favicon_path = static_dir / "images" / "logo.jpg"
+        if not favicon_path.is_file():
+            return Response(status_code=204)
+        return FileResponse(favicon_path, media_type="image/jpeg")
 
     @app.middleware("http")
     async def strip_vercel_api_prefix(request: Request, call_next):
