@@ -24,15 +24,15 @@ _load_dotenv()
 
 def _normalize_database_url(database_url: str) -> str:
     if database_url.startswith("cockroachdb+psycopg://"):
-        return "cockroachdb://" + database_url.removeprefix("cockroachdb+psycopg://")
-    if database_url.startswith("cockroachdb://"):
         return database_url
+    if database_url.startswith("cockroachdb://"):
+        return "cockroachdb+psycopg://" + database_url.removeprefix("cockroachdb://")
     if database_url.startswith("postgresql://"):
-        return "cockroachdb://" + database_url.removeprefix("postgresql://")
+        return "cockroachdb+psycopg://" + database_url.removeprefix("postgresql://")
     if database_url.startswith("postgresql+psycopg://"):
-        return "cockroachdb://" + database_url.removeprefix("postgresql+psycopg://")
+        return "cockroachdb+psycopg://" + database_url.removeprefix("postgresql+psycopg://")
     if database_url.startswith("postgres://"):
-        return "cockroachdb://" + database_url.removeprefix("postgres://")
+        return "cockroachdb+psycopg://" + database_url.removeprefix("postgres://")
     return database_url
 
 
@@ -41,7 +41,7 @@ class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "change-this-before-production")
     database_url: str = _normalize_database_url(os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/youth_league",
+        "postgresql+psycopg://postgres:postgres@localhost:5432/youth_league",
     ))
     upload_dir: Path = Path(os.getenv("UPLOAD_DIR", "storage/uploads"))
     cloudinary_cloud_name: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
