@@ -43,15 +43,15 @@
           </form>
         {% else %}
           {% if app_mode == 'super_admin' %}
-            <a data-loading-trigger class="active" href="/">Home</a>
+            <a class="active" href="/">Home</a>
           {% elif app_mode == 'team_admin' %}
-            <a data-loading-trigger class="active" href="/">Home</a>
+            <a class="active" href="/">Home</a>
           {% endif %}
-          <a data-loading-trigger href="/login">Login</a>
+          <a href="/login">Login</a>
           {% if app_mode == 'super_admin' %}
-            <a data-loading-trigger class="button button-primary" href="/register/super-admin">Register</a>
+            <a class="button button-primary" href="/register/super-admin">Register</a>
           {% elif app_mode != 'super_admin' %}
-            <a data-loading-trigger class="button button-primary" href="/register/team-admin">Register</a>
+            <a class="button button-primary" href="/register/team-admin">Register</a>
           {% endif %}
         {% endif %}
       </nav>
