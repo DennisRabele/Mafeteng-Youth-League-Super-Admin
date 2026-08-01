@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -12,11 +13,17 @@ from app.db.session import SessionLocal, init_db
 from app.services.registration import process_player_registration_lifecycle
 from app.web.routes import router as web_router
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if _should_init_db():
-        init_db()
+        try:
+            init_db()
+        except Exception:
+            logger.exception("Super Admin startup failed while initializing the database")
+            raise
 
     async def _registration_housekeeping_loop() -> None:
         while True:
