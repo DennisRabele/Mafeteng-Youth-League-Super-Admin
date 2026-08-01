@@ -24,6 +24,12 @@ _CLOUDINARY_FOLDERS = {
     "player-photos": "player-photos",
     "player-agreements": "player-agreements",
 }
+_CLOUDINARY_PRESETS = {
+    "admin-photos": "admin_photos",
+    "team-logos": "team_logos",
+    "player-documents": "player_documents",
+    "player-photos": "player_photos",
+}
 _supabase_client = None
 
 
@@ -128,6 +134,10 @@ def _cloudinary_folder(folder: str) -> str:
     return f"{prefix}/{cloudinary_folder}" if prefix else cloudinary_folder
 
 
+def _cloudinary_preset(folder: str) -> str | None:
+    return _CLOUDINARY_PRESETS.get(folder)
+
+
 def _content_type(upload: UploadFile) -> str:
     if upload.content_type:
         return upload.content_type
@@ -177,15 +187,22 @@ def _save_to_cloudinary(upload: UploadFile, folder: str) -> str:
         )
 
     upload.file.seek(0)
+    cloudinary_preset = _cloudinary_preset(folder)
+    upload_kwargs = {
+        "public_id": uuid4().hex,
+        "overwrite": True,
+        "unique_filename": False,
+        "use_filename": False,
+        "resource_type": "auto",
+        "filename_override": upload.filename or uuid4().hex,
+    }
+    if cloudinary_preset:
+        upload_kwargs["upload_preset"] = cloudinary_preset
+    else:
+        upload_kwargs["folder"] = _cloudinary_folder(folder)
     result = uploader.upload(
         upload.file,
-        folder=_cloudinary_folder(folder),
-        public_id=uuid4().hex,
-        overwrite=False,
-        unique_filename=False,
-        use_filename=False,
-        resource_type="auto",
-        filename_override=upload.filename or uuid4().hex,
+        **upload_kwargs,
     )
     upload.file.seek(0)
     return result["secure_url"]
