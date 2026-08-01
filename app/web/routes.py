@@ -579,6 +579,22 @@ def _load_result_submissions(
     return db.scalars(query).all()
 
 
+def _filter_result_submissions_by_category(
+    submissions: list[MatchResultSubmission],
+    category: str = "all",
+) -> list[MatchResultSubmission]:
+    if not category or category == "all":
+        return submissions
+    return [
+        submission
+        for submission in submissions
+        if submission.match
+        and submission.match.fixture
+        and submission.match.fixture.category
+        and submission.match.fixture.category.category_name == category
+    ]
+
+
 def _combine_result_lines(*chunks: str | None) -> str | None:
     lines: list[str] = []
     for chunk in chunks:
