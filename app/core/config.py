@@ -61,6 +61,9 @@ class Settings:
     supabase_player_agreements_bucket: str = os.getenv(
         "SUPABASE_PLAYER_AGREEMENTS_BUCKET", "player agreements"
     )
+    supabase_match_results_bucket: str = os.getenv(
+        "SUPABASE_MATCH_RESULTS_BUCKET", "match results"
+    )
     cloudinary_cloud_name: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
     cloudinary_api_key: str = os.getenv("CLOUDINARY_API_KEY", "")
     cloudinary_api_secret: str = os.getenv("CLOUDINARY_API_SECRET", "")
