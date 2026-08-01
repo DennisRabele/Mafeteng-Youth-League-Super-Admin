@@ -28,24 +28,24 @@
 
     <div class="form-grid two">
       <label>Full Name
-        <input name="full_name" value="{{ form_data.full_name if form_data else '' }}" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
+        <input name="full_name" autocomplete="name" value="{{ form_data.full_name if form_data else '' }}" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
       </label>
       <label id="team_name_field" {% if is_first is false %}hidden{% endif %}>Team Name
-        <input id="team_name_input" name="team_name" value="{{ form_data.team_name if form_data else '' }}" {% if is_first is not false %}required{% endif %}>
+        <input id="team_name_input" name="team_name" autocomplete="organization" value="{{ form_data.team_name if form_data else '' }}" {% if is_first is not false %}required{% endif %}>
         <small style="display:block; margin-top:0.35rem; color:#666;">Use the exact team name from your Team Admin registration.</small>
       </label>
       <label id="team_code_field" {% if is_first != false %}hidden{% endif %}>Team Code
-        <input id="team_code_input" name="team_code" value="{{ form_data.team_code if form_data else '' }}" {% if is_first is false %}required{% endif %} placeholder="Enter the team code">
+        <input id="team_code_input" name="team_code" autocomplete="off" value="{{ form_data.team_code if form_data else '' }}" {% if is_first is false %}required{% endif %} placeholder="Enter the team code">
         <small style="display:block; margin-top:0.35rem; color:#666;">Ask a colleague Team Admin for the code if the team was already registered.</small>
       </label>
       <label>National ID
-        <input name="national_id" value="{{ form_data.national_id if form_data else '' }}" required pattern="[A-Za-z0-9+\-\/\s]+" title="National ID may contain letters, numbers, +, -, /, and spaces">
+        <input name="national_id" autocomplete="off" value="{{ form_data.national_id if form_data else '' }}" required pattern="[A-Za-z0-9+\-\/\s]+" title="National ID may contain letters, numbers, +, -, /, and spaces">
       </label>
       <label>Phone Number
-        <input name="phone" value="{{ form_data.phone if form_data else '' }}" required pattern="[0-9+\-\s]+" title="Phone can contain numbers, +, -, or spaces" inputmode="tel">
+        <input name="phone" autocomplete="tel" value="{{ form_data.phone if form_data else '' }}" required pattern="[0-9+\-\s]+" title="Phone can contain numbers, +, -, or spaces" inputmode="tel">
       </label>
       <label>Email Address
-        <input name="email" type="email" value="{{ form_data.email if form_data else '' }}" required>
+        <input name="email" type="email" autocomplete="email" value="{{ form_data.email if form_data else '' }}" required>
       </label>
       <label>Password
         <input name="password" type="password" required minlength="8" autocomplete="new-password">

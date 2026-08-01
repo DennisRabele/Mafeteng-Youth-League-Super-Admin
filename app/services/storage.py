@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import mimetypes
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
@@ -31,6 +32,7 @@ _CLOUDINARY_PRESETS = {
     "player-photos": "player_photos",
 }
 _supabase_client = None
+logger = logging.getLogger(__name__)
 
 
 def _local_upload_root() -> Path:
@@ -188,22 +190,28 @@ def _save_to_cloudinary(upload: UploadFile, folder: str) -> str:
 
     upload.file.seek(0)
     cloudinary_preset = _cloudinary_preset(folder)
-    upload_kwargs = {
+    base_kwargs = {
         "public_id": uuid4().hex,
         "overwrite": True,
         "unique_filename": False,
         "use_filename": False,
         "resource_type": "auto",
         "filename_override": upload.filename or uuid4().hex,
+        "folder": _cloudinary_folder(folder),
     }
-    if cloudinary_preset:
-        upload_kwargs["upload_preset"] = cloudinary_preset
-    else:
-        upload_kwargs["folder"] = _cloudinary_folder(folder)
-    result = uploader.upload(
-        upload.file,
-        **upload_kwargs,
-    )
+    try:
+        if cloudinary_preset:
+            result = uploader.upload(upload.file, upload_preset=cloudinary_preset, **base_kwargs)
+        else:
+            result = uploader.upload(upload.file, **base_kwargs)
+    except Exception as exc:
+        logger.warning(
+            "Cloudinary preset upload failed for folder=%s; falling back to folder upload: %s",
+            folder,
+            exc,
+        )
+        upload.file.seek(0)
+        result = uploader.upload(upload.file, **base_kwargs)
     upload.file.seek(0)
     return result["secure_url"]
 
