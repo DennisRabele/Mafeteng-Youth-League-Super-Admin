@@ -1112,17 +1112,20 @@ def team_admin_registration(
             commit=False,
         )
         verification_code = issue_email_verification_code(db, team_admin.user, commit=False)
-        send_verification_code(to_email=team_admin.user.email, code=verification_code)
+        verification_user = team_admin.user
+        verification_email = verification_user.email
+        requested_team_name = team_admin.requested_team_name
+        send_verification_code(to_email=verification_email, code=verification_code)
         db.commit()
         db.refresh(team_admin)
         _announce_submission(
             db,
-            recipient_email=team_admin.user.email,
+            recipient_email=verification_email,
             title="Team admin registration submitted",
-            message=f"Your Team Admin registration for {team_admin.requested_team_name} has been submitted and is awaiting approval.",
+            message=f"Your Team Admin registration for {requested_team_name} has been submitted and is awaiting approval.",
             link="/team-admin/account",
             super_admin_title="Team admin registration submitted",
-            super_admin_message=f"{full_name} submitted a Team Admin registration for {team_admin.requested_team_name}.",
+            super_admin_message=f"{full_name} submitted a Team Admin registration for {requested_team_name}.",
             super_admin_link="/super-admin#team-admins",
         )
     except RegistrationError as exc:
@@ -1162,6 +1165,7 @@ def team_admin_registration(
             },
         )
     except Exception:
+        logger.exception("Team admin registration failed unexpectedly")
         db.rollback()
         return _render(
             request,
@@ -1183,7 +1187,7 @@ def team_admin_registration(
     return _render_code_screen(
         request,
         purpose="email_verification",
-        user=team_admin.user,
+        user=verification_user,
         message="Registration submitted. A verification code was sent to your email address.",
     )
 
@@ -1259,7 +1263,9 @@ def super_admin_registration(
             commit=False,
         )
         verification_code = issue_email_verification_code(db, super_admin.user, commit=False)
-        send_verification_code(to_email=super_admin.user.email, code=verification_code)
+        verification_user = super_admin.user
+        verification_email = verification_user.email
+        send_verification_code(to_email=verification_email, code=verification_code)
         db.commit()
         db.refresh(super_admin)
     except RegistrationError as exc:
@@ -1293,6 +1299,7 @@ def super_admin_registration(
             },
         )
     except Exception:
+        logger.exception("Super admin registration failed unexpectedly")
         db.rollback()
         return _render(
             request,
@@ -1311,7 +1318,7 @@ def super_admin_registration(
     return _render_code_screen(
         request,
         purpose="email_verification",
-        user=super_admin.user,
+        user=verification_user,
         message="Super Admin registered. A verification code was sent to your email address.",
     )
 
