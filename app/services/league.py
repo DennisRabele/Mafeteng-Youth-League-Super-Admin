@@ -804,9 +804,21 @@ def _player_lookup_map(db: Session, player_ids: list[int | str]) -> dict[int | s
     return players_by_key
 
 
-def _assert_player_belongs_to_team(player: Player | None, team_id: int, label: str) -> None:
-    if not player or player.team_id != team_id or player.status != ApprovalStatus.APPROVED.value:
-        raise RegistrationError(f"Select only approved players from your own team for {label}.")
+def _assert_player_belongs_to_team(
+    player: Player | None,
+    submitting_team: Team,
+    label: str,
+    *,
+    fixture_category_name: str | None = None,
+) -> None:
+    if not player or player.status != ApprovalStatus.APPROVED.value or not player.team:
+        raise RegistrationError(f"Select only approved players from your own club for {label}.")
+    if player.team.team_admin_id != submitting_team.team_admin_id:
+        raise RegistrationError(f"Select only approved players from your own club for {label}.")
+    if not player_can_play_for_category(player, fixture_category_name or submitting_team.category.category_name if submitting_team.category else None):
+        raise RegistrationError(
+            f"{player.full_name} is not eligible for {fixture_category_name or submitting_team.category.category_name or 'this fixture'}."
+        )
 
 
 def _serialize_submission_players(
@@ -1090,12 +1102,22 @@ def submit_match_result(
                 assister_players.append(None)
                 continue
             scorer = selected_players.get(_selected_player_lookup_key(scorer_id))
-            _assert_player_belongs_to_team(scorer, submitting_team.team_id, "scorers")
+            _assert_player_belongs_to_team(
+                scorer,
+                submitting_team,
+                "scorers",
+                fixture_category_name=fixture.category.category_name if fixture.category else None,
+            )
             scorer_players.append(scorer)
             assister_id = assister_ids[index] if index < len(assister_ids) else None
             assister = selected_players.get(_selected_player_lookup_key(assister_id)) if assister_id is not None else None
             if assister is not None:
-                _assert_player_belongs_to_team(assister, submitting_team.team_id, "assisters")
+                _assert_player_belongs_to_team(
+                    assister,
+                    submitting_team,
+                    "assisters",
+                    fixture_category_name=fixture.category.category_name if fixture.category else None,
+                )
             assister_players.append(assister)
 
         scorer_names_text, goal_types_text, assist_names_text = _serialize_submission_players(
