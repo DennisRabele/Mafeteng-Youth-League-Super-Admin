@@ -345,6 +345,58 @@ def determine_player_club_category(gender: str, dob: date, reference: date | Non
     return None
 
 
+def _category_gender_prefix(category_name: str | None) -> str | None:
+    if not category_name:
+        return None
+    normalized = category_name.strip().lower()
+    if normalized.startswith("male "):
+        return "male"
+    if normalized.startswith("female "):
+        return "female"
+    return None
+
+
+def _category_age_group(category_name: str | None) -> str | None:
+    if not category_name:
+        return None
+    match = re.search(r"\bU\d{2}\b", category_name, re.IGNORECASE)
+    return match.group(0).upper() if match else None
+
+
+def _age_group_rank(age_group: str | None) -> int | None:
+    if not age_group:
+        return None
+    normalized = age_group.strip().upper()
+    return AGE_GROUP_MAX_AGE.get(normalized)
+
+
+def player_can_play_for_category(player: Player, category_name: str | None) -> bool:
+    player_age_group = (player.age_group or "").strip().upper()
+    target_age_group = _category_age_group(category_name)
+    if not player_age_group or not target_age_group:
+        return False
+
+    player_gender = (player.gender or "").strip().lower()
+    target_gender = _category_gender_prefix(category_name)
+    if not player_gender or not target_gender:
+        return False
+    if not player_gender.startswith(target_gender):
+        return False
+
+    player_rank = _age_group_rank(player_age_group)
+    target_rank = _age_group_rank(target_age_group)
+    if player_rank is None or target_rank is None:
+        return False
+
+    allowed_targets = {
+        "U13": {"U13", "U15", "U17"},
+        "U15": {"U15", "U17", "U20"},
+        "U17": {"U17", "U20"},
+        "U20": {"U20"},
+    }
+    return target_rank >= player_rank and target_age_group in allowed_targets.get(player_age_group, set())
+
+
 def _is_loan_transfer(transfer_type: str) -> bool:
     return "loan" in (transfer_type or "").strip().lower()
 

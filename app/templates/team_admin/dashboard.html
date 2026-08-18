@@ -1506,7 +1506,7 @@
       <div class="panel-heading">
         <div>
           <h2>Match Day Squad</h2>
-          <p class="section-copy"><strong>Select a fixture first. The squad sheet will lock to that match and only allow eligible players from the correct team category.</strong></p>
+          <p class="section-copy"><strong>Select a fixture first. The squad sheet will lock to that match and only allow eligible players who can play up into the selected fixture category.</strong></p>
         </div>
       </div>
       <div class="alert" style="background:#fff2cc; border-color:#d9a300; color:#111; margin-bottom: 1rem;">
@@ -1593,6 +1593,43 @@
             let activeFixture = null;
             let activeTeamId = "";
 
+            const extractAgeGroup = (value) => {
+              const match = String(value || "").toUpperCase().match(/\bU\d{2}\b/);
+              return match ? match[0] : "";
+            };
+
+            const extractGender = (value) => {
+              const normalized = String(value || "").trim().toLowerCase();
+              if (normalized.startsWith("male")) {
+                return "male";
+              }
+              if (normalized.startsWith("female")) {
+                return "female";
+              }
+              return "";
+            };
+
+            const canPlayForCategory = (player, targetCategory) => {
+              const targetAgeGroup = extractAgeGroup(targetCategory);
+              const playerAgeGroup = extractAgeGroup(player.age_group);
+              const targetGender = extractGender(targetCategory);
+              const playerGender = extractGender(player.category_name);
+              const allowedTargets = {
+                U13: ["U13", "U15", "U17"],
+                U15: ["U15", "U17", "U20"],
+                U17: ["U17", "U20"],
+                U20: ["U20"],
+              };
+              return Boolean(
+                targetAgeGroup &&
+                playerAgeGroup &&
+                targetGender &&
+                playerGender &&
+                targetGender === playerGender &&
+                allowedTargets[playerAgeGroup]?.includes(targetAgeGroup)
+              );
+            };
+
             const clearSquadList = () => {
               selectedPlayerIds.clear();
               squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
@@ -1647,13 +1684,14 @@
               playerSelect.innerHTML = '<option value="">Select player</option>';
               const selectedFixture = activeFixture;
               const selectedTeamId = teamSelect.value;
+              const targetCategory = selectedFixture?.category_name || "";
               const eligiblePlayers = playerData.filter((player) => {
-                return selectedFixture && selectedTeamId && String(player.team_id) === String(selectedTeamId) && !selectedPlayerIds.has(String(player.player_id));
+                return selectedFixture && selectedTeamId && canPlayForCategory(player, targetCategory) && !selectedPlayerIds.has(String(player.player_id));
               });
               eligiblePlayers.forEach((player) => {
                 const option = document.createElement("option");
                 option.value = player.player_id;
-                option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group})`;
+                option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group}) • ${player.category_name}`;
                 option.dataset.playerCode = player.player_code;
                 option.dataset.ageGroup = player.age_group;
                 option.dataset.teamName = player.team_name;

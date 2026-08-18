@@ -69,7 +69,6 @@ from app.services.registration import (
     get_team_admins_count,
     is_first_team_admin_for_team,
     issue_email_verification_code,
-    issue_login_code,
     issue_password_recovery_code,
     process_player_registration_lifecycle,
     get_player_registration_expiry_date,
@@ -90,7 +89,6 @@ from app.services.registration import (
     unregister_transferred_player,
     age_on,
     verify_email_code,
-    verify_login_code,
     verify_password_recovery_code,
 )
 from app.services.team_access import (
@@ -103,7 +101,6 @@ from app.services.team_access import (
 )
 from app.services.email import (
     EmailDeliveryError,
-    send_login_code,
     send_notification_email,
     send_verification_code,
 )
@@ -112,7 +109,6 @@ from app.services.storage import delete_upload, save_upload
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
-LOGIN_CHALLENGE_COOKIE = "ydl_login_challenge"
 VERIFY_CHALLENGE_COOKIE = "ydl_verify_challenge"
 PASSWORD_RECOVERY_COOKIE = "ydl_password_recovery"
 logger = logging.getLogger(__name__)
@@ -256,28 +252,6 @@ def _render_code_screen(
     message: str,
     error: str | None = None,
 ):
-    if purpose == "login":
-        response = _render(
-            request,
-            "code_verification.html",
-            {
-                "title": "Login Code Verification",
-                "action": "/login/code",
-                "code_field": "one_time_code",
-                "submit_label": "Continue",
-                "message": message,
-                "error": error,
-                "hide_public_auth_nav": True,
-            },
-        )
-        response.set_cookie(
-            LOGIN_CHALLENGE_COOKIE,
-            sign_session({"sub": user.user_id, "purpose": "login"}, settings.login_code_minutes * 60),
-            httponly=True,
-            samesite="lax",
-        )
-        return response
-    
     if purpose == "password_recovery":
         response = _render(
             request,
@@ -669,23 +643,10 @@ def login(
         )
 
     if not user.email_verified:
-        try:
-            verification_code = issue_email_verification_code(db, user)
-            send_verification_code(to_email=user.email, code=verification_code)
-        except EmailDeliveryError as exc:
-            return _render(request, "login.html", {"error": "Verification code was not sent. Please try again."})
-        except Exception:
-            db.rollback()
-            return _render(
-                request,
-                "login.html",
-                {"error": "Verification could not be completed right now. Please try again."},
-            )
-        return _render_code_screen(
+        return _render(
             request,
-            purpose="email_verification",
-            user=user,
-            message="A verification code was sent to your email address.",
+            "login.html",
+            {"error": "Please verify your email address before logging in."},
         )
 
     if user.role == UserRole.TEAM_ADMIN.value:
@@ -697,46 +658,6 @@ def login(
                 {"error": "Your Team Admin registration is still pending approval."},
             )
 
-    try:
-        login_code = issue_login_code(db, user)
-        send_login_code(to_email=user.email, code=login_code)
-    except EmailDeliveryError:
-        return _render(request, "login.html", {"error": "Login code was not sent. Please try again."})
-    except Exception:
-        db.rollback()
-        return _render(
-            request,
-            "login.html",
-            {"error": "Login could not be completed right now. Please try again."},
-        )
-    return _render_code_screen(
-        request,
-        purpose="login",
-        user=user,
-        message="A one-time login code was sent to your email address.",
-    )
-
-@router.post("/login/code")
-def verify_login_code_route(
-    request: Request,
-    one_time_code: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    user = _challenge_user(request, db, LOGIN_CHALLENGE_COOKIE, "login")
-    if not user:
-        return _render(request, "login.html", {"error": "Login code expired. Please log in again."})
-
-    try:
-        verify_login_code(db, user, one_time_code)
-    except RegistrationError as exc:
-        return _render_code_screen(
-            request,
-            purpose="login",
-            user=user,
-            message="Enter the one-time code sent to your email address.",
-            error=str(exc),
-        )
-
     destination = _destination_for_user(user)
     response = _redirect(destination)
     response.set_cookie(
@@ -745,7 +666,6 @@ def verify_login_code_route(
         httponly=True,
         samesite="lax",
     )
-    response.delete_cookie(LOGIN_CHALLENGE_COOKIE)
     return response
 
 

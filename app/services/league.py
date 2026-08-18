@@ -31,7 +31,7 @@ from app.models import (
     UserRole,
 )
 from app.services.email import send_notification_email
-from app.services.registration import RegistrationError
+from app.services.registration import RegistrationError, player_can_play_for_category
 from app.services.storage import delete_upload
 
 
@@ -342,8 +342,7 @@ def create_match_day_squad(
     if team.category_id != fixture.category_id:
         raise RegistrationError("Selected team does not match the fixture category.")
 
-    category_age_group = _category_age_group(team.category.category_name)
-    if not category_age_group:
+    if not _category_age_group(team.category.category_name):
         raise RegistrationError("Selected team category is not eligible for match day squads.")
 
     if not player_ids:
@@ -369,9 +368,7 @@ def create_match_day_squad(
         player = player_map[player_id]
         if player.status != ApprovalStatus.APPROVED.value:
             raise RegistrationError(f"{player.full_name} is not approved for selection.")
-        if not player.team or player.team.team_id != team.team_id:
-            raise RegistrationError(f"{player.full_name} does not belong to the selected team.")
-        if (player.age_group or "").strip().upper() != category_age_group:
+        if not player_can_play_for_category(player, team.category.category_name):
             raise RegistrationError(
                 f"{player.full_name} is registered in {player.age_group or 'another category'} and cannot be selected for {team.category.category_name}."
             )
@@ -1181,7 +1178,7 @@ def get_player_statistics(
         query = query.where(PlayerStatistic.team_id.in_(list(team_ids)))
     statistics = db.scalars(query).all()
 
-    player_groups: dict[str, dict[str, object]] = {}
+    player_groups: dict[tuple[str, str], dict[str, object]] = {}
 
     def _record_statistic(statistic: PlayerStatistic) -> None:
         player = statistic.player
@@ -1189,11 +1186,14 @@ def get_player_statistics(
         if not player or not team:
             return
         identity_key = _player_identity_key(player)
+        category_name = statistic.category_name or (team.category.category_name if team.category else "")
+        group_key = (identity_key, category_name)
         group = player_groups.setdefault(
-            identity_key,
+            group_key,
             {
                 "players": {},
                 "primary_player": player,
+                "category_name": category_name,
                 "goals": 0,
                 "assists": 0,
                 "goal_types": defaultdict(int),
@@ -1204,7 +1204,6 @@ def get_player_statistics(
         if player.player_id > group["primary_player"].player_id:
             group["primary_player"] = player
 
-        category_name = statistic.category_name or (team.category.category_name if team.category else "")
         category_entry = group["category_totals"][category_name]
         if statistic.stat_type == "goal":
             group["goals"] += 1
@@ -1272,7 +1271,7 @@ def get_player_statistics(
             {
                 "player": primary_player,
                 "team": team,
-                "category_name": category_name,
+                "category_name": group["category_name"],
                 "player_names": _collect_player_names(group),
                 "system_ids": _system_ids(group),
                 "clubs_played_for": _collect_clubs(group),
@@ -1363,6 +1362,45 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
         )
         .where(Match.home_score.is_not(None), Match.away_score.is_not(None))
     ).all()
+
+    def _head_to_head_metrics(category_name: str, tied_team_ids: list[int]) -> dict[int, dict[str, int]]:
+        stats = {
+            team_id: {"points": 0, "goals_for": 0, "goals_against": 0, "goal_difference": 0}
+            for team_id in tied_team_ids
+        }
+        tied_team_set = set(tied_team_ids)
+        for match in matches:
+            fixture = match.fixture
+            if not fixture or not fixture.category or fixture.category.category_name != category_name:
+                continue
+            if not fixture.home_team or not fixture.away_team:
+                continue
+            home_team_id = fixture.home_team.team_id
+            away_team_id = fixture.away_team.team_id
+            if home_team_id not in tied_team_set or away_team_id not in tied_team_set:
+                continue
+
+            home_score = match.home_score or 0
+            away_score = match.away_score or 0
+            home = stats[home_team_id]
+            away = stats[away_team_id]
+
+            home["goals_for"] += home_score
+            home["goals_against"] += away_score
+            away["goals_for"] += away_score
+            away["goals_against"] += home_score
+
+            if home_score > away_score:
+                home["points"] += 3
+            elif home_score < away_score:
+                away["points"] += 3
+            else:
+                home["points"] += 1
+                away["points"] += 1
+
+        for row in stats.values():
+            row["goal_difference"] = row["goals_for"] - row["goals_against"]
+        return stats
     for match in matches:
         fixture = match.fixture
         if not fixture or not fixture.home_team or not fixture.away_team:
@@ -1406,13 +1444,36 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
     for category_name, rows in standings.items():
         ranked_rows = sorted(
             rows.values(),
-            key=lambda row: (
-                -int(row["points"]),
-                -int(row["goal_difference"]),
-                -int(row["goals_for"]),
-                str(row["team"].team_name).lower(),
-            ),
+            key=lambda row: (-int(row["points"]), str(row["team"].team_name).lower()),
         )
+        index = 0
+        while index < len(ranked_rows):
+            point_total = int(ranked_rows[index]["points"])
+            group_end = index + 1
+            while group_end < len(ranked_rows) and int(ranked_rows[group_end]["points"]) == point_total:
+                group_end += 1
+            point_group = ranked_rows[index:group_end]
+            if len(point_group) > 1:
+                tied_team_ids = [row["team"].team_id for row in point_group]
+                head_to_head = _head_to_head_metrics(category_name, tied_team_ids)
+                for row in point_group:
+                    metrics = head_to_head[row["team"].team_id]
+                    row["head_to_head_points"] = metrics["points"]
+                    row["head_to_head_goal_difference"] = metrics["goal_difference"]
+                point_group.sort(
+                    key=lambda row: (
+                        -int(row["head_to_head_points"]),
+                        -int(row["head_to_head_goal_difference"]),
+                        -int(row["goal_difference"]),
+                        -int(row["goals_for"]),
+                        str(row["team"].team_name).lower(),
+                    ),
+                )
+            else:
+                point_group[0]["head_to_head_points"] = 0
+                point_group[0]["head_to_head_goal_difference"] = 0
+            ranked_rows[index:group_end] = point_group
+            index = group_end
         for position, row in enumerate(ranked_rows, start=1):
             row["position"] = position
         ordered[category_name] = ranked_rows
