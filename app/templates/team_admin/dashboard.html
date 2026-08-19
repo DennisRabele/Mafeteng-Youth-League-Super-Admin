@@ -2414,9 +2414,21 @@
     const buildPlayerOptions = (players, selectedValue = '', includePlaceholder = true) => {
       const options = includePlaceholder ? ['<option value="">Select player</option>'] : [];
       players.forEach((player) => {
-        const suffix = player.player_code ? ` (${player.player_code})` : '';
-        const label = player.full_name || player.player_name || '';
-        options.push(`<option value="${player.player_id}"${String(player.player_id) === String(selectedValue) ? ' selected' : ''}>${label}${suffix}</option>`);
+        const labelParts = [player.full_name || player.player_name || 'Player'];
+        if (player.team_name) {
+          labelParts.push(player.team_name);
+        }
+        if (player.category_name) {
+          labelParts.push(player.category_name);
+        }
+        let label = labelParts[0];
+        if (labelParts.length > 1) {
+          label += ` - ${labelParts.slice(1).join(' • ')}`;
+        }
+        if (player.player_code) {
+          label += ` (${player.player_code})`;
+        }
+        options.push(`<option value="${player.player_id}"${String(player.player_id) === String(selectedValue) ? ' selected' : ''}>${label}</option>`);
       });
       return options.join('');
     };
