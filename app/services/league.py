@@ -31,7 +31,7 @@ from app.models import (
     UserRole,
 )
 from app.services.email import send_notification_email
-from app.services.registration import RegistrationError, player_can_play_for_category
+from app.services.registration import RegistrationError, player_can_play_for_category, player_matches_exact_category
 from app.services.storage import delete_upload
 
 
@@ -816,9 +816,9 @@ def _assert_player_belongs_to_team(
 ) -> None:
     if not player or player.status != ApprovalStatus.APPROVED.value or not player.team:
         raise RegistrationError(f"Select only approved players from your own club for {label}.")
-    if player.team.team_admin_id != submitting_team.team_admin_id:
+    if player.team_id != submitting_team.team_id:
         raise RegistrationError(f"Select only approved players from your own club for {label}.")
-    if not player_can_play_for_category(player, fixture_category_name or submitting_team.category.category_name if submitting_team.category else None):
+    if not player_matches_exact_category(player, fixture_category_name or submitting_team.category.category_name if submitting_team.category else None):
         raise RegistrationError(
             f"{player.full_name} is not eligible for {fixture_category_name or submitting_team.category.category_name or 'this fixture'}."
         )

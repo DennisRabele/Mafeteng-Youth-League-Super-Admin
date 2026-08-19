@@ -397,6 +397,22 @@ def player_can_play_for_category(player: Player, category_name: str | None) -> b
     return target_rank >= player_rank and target_age_group in allowed_targets.get(player_age_group, set())
 
 
+def player_matches_exact_category(player: Player, category_name: str | None) -> bool:
+    if player.status != ApprovalStatus.APPROVED.value or not player.team:
+        return False
+
+    player_age_group = (player.age_group or "").strip().upper()
+    target_age_group = _category_age_group(category_name)
+    if not player_age_group or not target_age_group or player_age_group != target_age_group:
+        return False
+
+    player_gender = (player.gender or "").strip().lower()
+    target_gender = _category_gender_prefix(category_name)
+    if not player_gender or not target_gender:
+        return False
+    return player_gender.startswith(target_gender)
+
+
 def _is_loan_transfer(transfer_type: str) -> bool:
     return "loan" in (transfer_type or "").strip().lower()
 

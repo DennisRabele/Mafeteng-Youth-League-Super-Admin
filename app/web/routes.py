@@ -91,6 +91,7 @@ from app.services.registration import (
     verify_email_code,
     verify_password_recovery_code,
     player_can_play_for_category,
+    player_matches_exact_category,
 )
 from app.services.team_access import (
     load_team_admin_approved_team_ids,
@@ -2607,19 +2608,14 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
         players = db.scalars(
             select(Player)
             .options(selectinload(Player.team).selectinload(Team.category))
-            .join(Team, Player.team_id == Team.team_id)
             .where(
-                Team.team_admin_id == team.team_admin_id,
+                Player.team_id == team.team_id,
                 Player.status == ApprovalStatus.APPROVED.value,
                 Player.is_on_loan.is_(False),
             )
             .order_by(Player.full_name.asc(), Player.player_id.asc())
         ).all()
-        players = [
-            player
-            for player in players
-            if player_can_play_for_category(player, fixture.category.category_name)
-        ]
+        players = [player for player in players if player_matches_exact_category(player, fixture.category.category_name)]
         return [
             {
                 "player_id": player.player_id,
