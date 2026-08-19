@@ -750,7 +750,12 @@ def _selected_player_lookup_key(value: int | str | None) -> int | str | None:
     return " ".join(str(value).split()).casefold()
 
 
-def _player_lookup_map(db: Session, player_ids: list[int | str]) -> dict[int | str, Player]:
+def _player_lookup_map(
+    db: Session,
+    player_ids: list[int | str],
+    *,
+    team_admin_id: int | None = None,
+) -> dict[int | str, Player]:
     if not player_ids:
         return {}
     numeric_ids = [player_id for player_id in player_ids if isinstance(player_id, int)]
@@ -758,11 +763,10 @@ def _player_lookup_map(db: Session, player_ids: list[int | str]) -> dict[int | s
     players_by_key: dict[int | str, Player] = {}
 
     if numeric_ids:
-        players = db.scalars(
-            select(Player)
-            .options(selectinload(Player.team).selectinload(Team.category))
-            .where(Player.player_id.in_(numeric_ids))
-        ).all()
+        query = select(Player).options(selectinload(Player.team).selectinload(Team.category)).where(Player.player_id.in_(numeric_ids))
+        if team_admin_id is not None:
+            query = query.join(Team, Player.team_id == Team.team_id).where(Team.team_admin_id == team_admin_id)
+        players = db.scalars(query).all()
         for player in players:
             players_by_key[player.player_id] = player
             players_by_key[player.full_name.casefold()] = player
@@ -779,18 +783,17 @@ def _player_lookup_map(db: Session, player_ids: list[int | str]) -> dict[int | s
         else:
             name_value = normalized_text
             code_value = normalized_text
-        player = db.scalar(
-            select(Player)
-            .options(selectinload(Player.team).selectinload(Team.category))
-            .where(
-                or_(
-                    func.lower(func.trim(Player.full_name)) == name_value,
-                    func.lower(func.trim(Player.player_code)) == code_value,
-                    func.lower(func.trim(Player.full_name)) == normalized_text,
-                    func.lower(func.trim(Player.player_code)) == normalized_text,
-                )
+        query = select(Player).options(selectinload(Player.team).selectinload(Team.category)).where(
+            or_(
+                func.lower(func.trim(Player.full_name)) == name_value,
+                func.lower(func.trim(Player.player_code)) == code_value,
+                func.lower(func.trim(Player.full_name)) == normalized_text,
+                func.lower(func.trim(Player.player_code)) == normalized_text,
             )
         )
+        if team_admin_id is not None:
+            query = query.join(Team, Player.team_id == Team.team_id).where(Team.team_admin_id == team_admin_id)
+        player = db.scalar(query)
         if player:
             players_by_key[normalized_text] = player
             players_by_key[name_value] = player
@@ -1094,6 +1097,7 @@ def submit_match_result(
             db,
             [player_id for player_id in scorer_ids if player_id is not None]
             + [player_id for player_id in assister_ids if player_id is not None],
+            team_admin_id=submitting_team.team_admin_id,
         )
         for index, scorer_id in enumerate(scorer_ids):
             goal_type = _clean_goal_type(goal_types[index] if index < len(goal_types) else None)
