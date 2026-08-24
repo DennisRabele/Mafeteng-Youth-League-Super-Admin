@@ -2094,19 +2094,38 @@ def export_team_admin_fixtures(
 def create_team_admin_match_day_squad(
     request: Request,
     fixture_id: int = Form(...),
-    squad_team_id: int = Form(...),
     player_ids: list[int] = Form(...),
     jersey_numbers: list[int] = Form(...),
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
     approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
-    if squad_team_id not in approved_team_ids:
+    fixture = db.scalar(
+        select(Fixture)
+        .options(
+            selectinload(Fixture.category),
+            selectinload(Fixture.home_team),
+            selectinload(Fixture.away_team),
+        )
+        .where(Fixture.fixture_id == fixture_id)
+    )
+    if not fixture or not fixture.home_team or not fixture.away_team:
         return _render(
             request,
             "team_admin/action_result.html",
-            {"error": "Select one of your approved clubs before generating a squad."},
+            {"error": "Selected fixture could not be found."},
         )
+    fixture_team_ids = [team_id for team_id in [fixture.home_team_id, fixture.away_team_id] if team_id in approved_team_ids]
+    if not fixture_team_ids:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Selected fixture does not include one of your approved clubs."},
+        )
+    squad_team_id = fixture_team_ids[0]
+    primary_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
+    if primary_team and primary_team.team_id in fixture_team_ids:
+        squad_team_id = primary_team.team_id
     try:
         squad = create_match_day_squad(
             db,
