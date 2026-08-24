@@ -1530,7 +1530,7 @@
               Squad team is selected automatically from the approved club involved in the chosen fixture.
             </div>
           </div>
-          <input type="hidden" name="squad_team_id" id="match-day-squad-team-id" value="">
+          <input type="hidden" name="squad_team_id" id="match-day-squad-team-id" value="{{ approved_team_id }}">
 
           <div class="squad-builder">
             <div class="squad-builder__head">
@@ -1587,10 +1587,11 @@
             const squadList = document.querySelector("[data-squad-list]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
             const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
+            const approvedTeamId = squadTeamIdInput?.value ? String(squadTeamIdInput.value) : "";
             const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
             const selectedPlayerIds = new Set();
             let activeFixture = null;
-            let activeTeamId = "";
+            let activeTeamId = approvedTeamId;
 
             const extractAgeGroup = (value) => {
               const match = String(value || "").toUpperCase().match(/\bU\d{2}\b/);
@@ -1685,12 +1686,9 @@
               updateAddButtonState();
             };
 
-            const selectFixtureTeam = (fixture) => {
-              const fixtureTeams = [fixture?.home_team, fixture?.away_team].filter(Boolean);
-              const approvedFixtureTeams = fixtureTeams.filter((team) => approvedTeamIds.has(String(team.team_id)));
-              const preferredTeam = approvedFixtureTeams[0] || fixtureTeams[0] || null;
-              activeTeamId = preferredTeam ? String(preferredTeam.team_id) : "";
-              squadTeamIdInput.value = activeTeamId;
+            const selectFixtureTeam = () => {
+              activeTeamId = approvedTeamId;
+              squadTeamIdInput.value = approvedTeamId;
             };
 
             const addPlayerRow = () => {
