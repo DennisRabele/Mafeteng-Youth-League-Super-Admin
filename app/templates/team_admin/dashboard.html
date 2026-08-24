@@ -1770,11 +1770,13 @@
               refreshPlayerSelect();
             };
 
-            fixtureSelect.addEventListener("change", () => {
+            const syncFixtureSelection = () => {
               activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
               clearSquadList();
               populateTeamSelect();
-            });
+            };
+
+            fixtureSelect.addEventListener("change", syncFixtureSelection);
 
             teamSelect.addEventListener("change", () => {
               activeTeamId = teamSelect.value;
@@ -1792,6 +1794,8 @@
             });
             jerseyInput.addEventListener("input", updateAddButtonState);
             jerseyInput.addEventListener("change", updateAddButtonState);
+
+            syncFixtureSelection();
 
             form.addEventListener("submit", (event) => {
               if (!activeFixture || !teamSelect.value) {
