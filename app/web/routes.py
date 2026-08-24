@@ -1808,6 +1808,7 @@ def team_admin_dashboard(
     approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
     owned_approved_teams = load_team_admin_owned_approved_teams(db, team_admin.team_admin_id)
     approved_team = approved_teams[0] if approved_teams else None
+    approved_team_id = approved_team.team_id if approved_team else None
     approved_team_ids = [team.team_id for team in approved_teams]
     can_register_clubs = bool(owned_approved_teams) or not approved_teams
     players = db.scalars(
@@ -2014,6 +2015,7 @@ def team_admin_dashboard(
             "teams": teams,
             "approved_teams": approved_teams,
             "approved_team": approved_team,
+            "approved_team_id": approved_team_id,
             "approved_team_ids": approved_team_ids,
             "can_register_clubs": can_register_clubs,
             "players": players,

@@ -1573,6 +1573,7 @@
 
         <script type="application/json" id="match-day-fixture-data">{{ match_day_fixtures_data | tojson }}</script>
         <script type="application/json" id="match-day-player-data">{{ match_day_players_data | tojson }}</script>
+        <script type="application/json" id="match-day-approved-team-id">{{ approved_team_id | tojson }}</script>
         <script type="application/json" id="match-day-approved-team-ids">{{ approved_team_ids | tojson }}</script>
         <script>
           (function () {
@@ -1588,6 +1589,7 @@
             const squadList = document.querySelector("[data-squad-list]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
             const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
+            const approvedTeamId = JSON.parse(document.getElementById("match-day-approved-team-id")?.textContent || "null");
             const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
             const selectedPlayerIds = new Set();
             let activeFixture = null;
@@ -1663,8 +1665,9 @@
               if (!activeFixture) {
                 return;
               }
-              const teams = [activeFixture.home_team, activeFixture.away_team]
-                .filter((team) => team && approvedTeamIds.has(String(team.team_id)));
+              const fixtureTeams = [activeFixture.home_team, activeFixture.away_team].filter(Boolean);
+              const approvedFixtureTeams = fixtureTeams.filter((team) => approvedTeamIds.has(String(team.team_id)));
+              const teams = approvedFixtureTeams.length > 0 ? approvedFixtureTeams : fixtureTeams;
               teams.forEach((team) => {
                 const option = document.createElement("option");
                 option.value = team.team_id;
@@ -1672,8 +1675,12 @@
                 teamSelect.appendChild(option);
               });
               teamSelect.disabled = teams.length === 0;
-              if (teams.length === 1) {
-                teamSelect.value = String(teams[0].team_id);
+              const preferredTeamId =
+                (approvedTeamId && teams.some((team) => String(team.team_id) === String(approvedTeamId)) && String(approvedTeamId)) ||
+                (approvedFixtureTeams.length === 1 ? String(approvedFixtureTeams[0].team_id) : "") ||
+                (teams.length === 1 ? String(teams[0].team_id) : "");
+              if (preferredTeamId) {
+                teamSelect.value = preferredTeamId;
                 activeTeamId = teamSelect.value;
               }
               jerseyInput.value = "";
@@ -1686,7 +1693,11 @@
               const selectedTeamId = teamSelect.value;
               const targetCategory = selectedFixture?.category_name || "";
               const eligiblePlayers = playerData.filter((player) => {
-                return selectedFixture && selectedTeamId && canPlayForCategory(player, targetCategory) && !selectedPlayerIds.has(String(player.player_id));
+                return selectedFixture &&
+                  selectedTeamId &&
+                  String(player.team_id) === String(selectedTeamId) &&
+                  canPlayForCategory(player, targetCategory) &&
+                  !selectedPlayerIds.has(String(player.player_id));
               });
               eligiblePlayers.forEach((player) => {
                 const option = document.createElement("option");
