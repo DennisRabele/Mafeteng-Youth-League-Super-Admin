@@ -1617,10 +1617,17 @@
               const targetGender = extractGender(targetCategory);
               const playerGender = extractGender(player.category_name);
               const allowedTargets = {
-                U13: ["U13", "U15", "U17"],
-                U15: ["U15", "U17", "U20"],
-                U17: ["U17", "U20"],
-                U20: ["U20"],
+                male: {
+                  U13: ["U13", "U15", "U17"],
+                  U15: ["U15", "U17"],
+                  U17: ["U17"],
+                },
+                female: {
+                  U13: ["U13", "U15", "U17"],
+                  U15: ["U15", "U17", "U20"],
+                  U17: ["U17", "U20"],
+                  U20: ["U20"],
+                },
               };
               return Boolean(
                 targetAgeGroup &&
@@ -1628,7 +1635,7 @@
                 targetGender &&
                 playerGender &&
                 targetGender === playerGender &&
-                allowedTargets[playerAgeGroup]?.includes(targetAgeGroup)
+                allowedTargets[playerGender]?.[playerAgeGroup]?.includes(targetAgeGroup)
               );
             };
 

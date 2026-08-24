@@ -389,12 +389,19 @@ def player_can_play_for_category(player: Player, category_name: str | None) -> b
         return False
 
     allowed_targets = {
-        "U13": {"U13", "U15", "U17"},
-        "U15": {"U15", "U17", "U20"},
-        "U17": {"U17", "U20"},
-        "U20": {"U20"},
+        "male": {
+            "U13": {"U13", "U15", "U17"},
+            "U15": {"U15", "U17"},
+            "U17": {"U17"},
+        },
+        "female": {
+            "U13": {"U13", "U15", "U17"},
+            "U15": {"U15", "U17", "U20"},
+            "U17": {"U17", "U20"},
+            "U20": {"U20"},
+        },
     }
-    return target_rank >= player_rank and target_age_group in allowed_targets.get(player_age_group, set())
+    return target_rank >= player_rank and target_age_group in allowed_targets.get(player_gender, {}).get(player_age_group, set())
 
 
 def player_matches_exact_category(player: Player, category_name: str | None) -> bool:
