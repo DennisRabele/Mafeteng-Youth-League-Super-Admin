@@ -1530,8 +1530,6 @@
               Squad team is selected automatically from the approved club involved in the chosen fixture.
             </div>
           </div>
-          <input type="hidden" name="squad_team_id" id="match-day-squad-team-id" value="{{ approved_team_id }}">
-
           <div class="squad-builder">
             <div class="squad-builder__head">
               <h3>Add Player</h3>
@@ -1580,18 +1578,14 @@
               return;
             }
             const fixtureSelect = document.getElementById("match-day-fixture-select");
-            const squadTeamIdInput = document.getElementById("match-day-squad-team-id");
             const playerSelect = document.getElementById("match-day-player-select");
             const jerseyInput = document.getElementById("match-day-jersey-input");
             const addButton = document.querySelector("[data-add-player]");
             const squadList = document.querySelector("[data-squad-list]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
             const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
-            const approvedTeamId = squadTeamIdInput?.value ? String(squadTeamIdInput.value) : "";
-            const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
             const selectedPlayerIds = new Set();
             let activeFixture = null;
-            let activeTeamId = approvedTeamId;
 
             const extractAgeGroup = (value) => {
               const match = String(value || "").toUpperCase().match(/\bU\d{2}\b/);
@@ -1651,7 +1645,6 @@
             const updateAddButtonState = () => {
               const canAdd = Boolean(
                 activeFixture &&
-                activeTeamId &&
                 playerSelect.value &&
                 jerseyInput.value.trim()
               );
@@ -1662,12 +1655,9 @@
             const refreshPlayerSelect = () => {
               playerSelect.innerHTML = '<option value="">Select player</option>';
               const selectedFixture = activeFixture;
-              const selectedTeamId = activeTeamId;
               const targetCategory = selectedFixture?.category_name || "";
               const eligiblePlayers = playerData.filter((player) => {
                 return selectedFixture &&
-                  selectedTeamId &&
-                  String(player.team_id) === String(selectedTeamId) &&
                   canPlayForCategory(player, targetCategory) &&
                   !selectedPlayerIds.has(String(player.player_id));
               });
@@ -1680,15 +1670,10 @@
                 option.dataset.teamName = player.team_name;
                 playerSelect.appendChild(option);
               });
-              const enabled = Boolean(selectedFixture && selectedTeamId);
+              const enabled = Boolean(selectedFixture);
               playerSelect.disabled = !enabled;
               jerseyInput.disabled = !enabled;
               updateAddButtonState();
-            };
-
-            const selectFixtureTeam = () => {
-              activeTeamId = approvedTeamId;
-              squadTeamIdInput.value = approvedTeamId;
             };
 
             const addPlayerRow = () => {
@@ -1742,7 +1727,6 @@
 
             const syncFixtureSelection = () => {
               activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
-              selectFixtureTeam(activeFixture);
               clearSquadList();
               jerseyInput.value = "";
               refreshPlayerSelect();
@@ -1764,7 +1748,7 @@
             syncFixtureSelection();
 
             form.addEventListener("submit", (event) => {
-              if (!activeFixture || !activeTeamId) {
+              if (!activeFixture) {
                 event.preventDefault();
                 return;
               }
