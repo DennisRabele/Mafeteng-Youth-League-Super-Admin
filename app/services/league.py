@@ -305,6 +305,44 @@ def _category_age_group(category_name: str | None) -> str | None:
     return match.group(0).upper() if match else None
 
 
+def _category_gender_prefix(category_name: str | None) -> str | None:
+    if not category_name:
+        return None
+    normalized = category_name.strip().lower()
+    if normalized.startswith("male"):
+        return "male"
+    if normalized.startswith("female"):
+        return "female"
+    return None
+
+
+def _category_can_play_up(from_category_name: str | None, to_category_name: str | None) -> bool:
+    from_age_group = _category_age_group(from_category_name)
+    to_age_group = _category_age_group(to_category_name)
+    if not from_age_group or not to_age_group:
+        return False
+
+    from_gender = _category_gender_prefix(from_category_name)
+    to_gender = _category_gender_prefix(to_category_name)
+    if not from_gender or not to_gender or not from_gender.startswith(to_gender):
+        return False
+
+    allowed_targets = {
+        "male": {
+            "U13": {"U13", "U15", "U17"},
+            "U15": {"U15", "U17"},
+            "U17": {"U17"},
+        },
+        "female": {
+            "U13": {"U13", "U15", "U17"},
+            "U15": {"U15", "U17", "U20"},
+            "U17": {"U17", "U20"},
+            "U20": {"U20"},
+        },
+    }
+    return to_age_group in allowed_targets.get(from_gender, {}).get(from_age_group, set())
+
+
 def create_match_day_squad(
     db: Session,
     *,
@@ -339,8 +377,8 @@ def create_match_day_squad(
         raise RegistrationError("Selected team does not exist or is not approved.")
     if team.team_id not in {fixture.home_team_id, fixture.away_team_id}:
         raise RegistrationError("Selected team is not part of the chosen fixture.")
-    if team.category_id != fixture.category_id:
-        raise RegistrationError("Selected team does not match the fixture category.")
+    if not _category_can_play_up(team.category.category_name, fixture.category.category_name):
+        raise RegistrationError("Selected team cannot play in the chosen fixture category.")
 
     if not _category_age_group(team.category.category_name):
         raise RegistrationError("Selected team category is not eligible for match day squads.")
