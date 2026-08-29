@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 from uuid import uuid4
@@ -24,6 +25,10 @@ _CLOUDINARY_PRESETS = {
     "player-documents": "player_documents",
     "player-photos": "player_photos",
 }
+_IMAGE_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".avi"}
+_DOCUMENT_UPLOAD_EXTENSIONS = {".doc", ".docx", ".pdf", ".txt"}
+_IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024
+_DOCUMENT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
@@ -64,6 +69,47 @@ def _cloudinary_folder(folder: str) -> str:
 
 def _cloudinary_preset(folder: str) -> str | None:
     return _CLOUDINARY_PRESETS.get(folder)
+
+
+def _content_type(upload: UploadFile) -> str:
+    if upload.content_type:
+        return upload.content_type
+    guessed_type, _ = mimetypes.guess_type(upload.filename or "")
+    return guessed_type or "application/octet-stream"
+
+
+def _upload_limit(upload: UploadFile) -> tuple[int, str]:
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix in _IMAGE_UPLOAD_EXTENSIONS:
+        return _IMAGE_UPLOAD_MAX_BYTES, "Images"
+    if suffix in _DOCUMENT_UPLOAD_EXTENSIONS:
+        return _DOCUMENT_UPLOAD_MAX_BYTES, "Documents"
+
+    guessed_type = _content_type(upload)
+    if guessed_type.startswith("image/") or guessed_type in {"video/x-msvideo", "video/avi"}:
+        return _IMAGE_UPLOAD_MAX_BYTES, "Images"
+    if guessed_type in {"application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/pdf", "text/plain"}:
+        return _DOCUMENT_UPLOAD_MAX_BYTES, "Documents"
+
+    raise ValueError(
+        "Unsupported file type. Allowed image files are JPG, JPEG, PNG, and AVI. "
+        "Allowed document files are DOC, DOCX, PDF, and TXT."
+    )
+
+
+def _upload_size_bytes(upload: UploadFile) -> int:
+    current_position = upload.file.tell()
+    upload.file.seek(0, 2)
+    size = upload.file.tell()
+    upload.file.seek(current_position)
+    return size
+
+
+def _validate_upload(upload: UploadFile) -> None:
+    max_bytes, label = _upload_limit(upload)
+    if _upload_size_bytes(upload) > max_bytes:
+        max_mb = max_bytes // (1024 * 1024)
+        raise ValueError(f"{label} must be less than {max_mb}MB.")
 
 
 def _save_to_cloudinary(upload: UploadFile, folder: str) -> str:
@@ -160,4 +206,5 @@ def delete_upload(path: str | None, folder: str | None = None) -> bool:
 def save_upload(upload: UploadFile | None, folder: str) -> str | None:
     if not upload or not upload.filename:
         return None
+    _validate_upload(upload)
     return _save_to_cloudinary(upload, folder)

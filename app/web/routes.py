@@ -183,6 +183,8 @@ def _current_user(request: Request, db: Session | None = None) -> User | None:
 def _safe_upload(upload: UploadFile | None, folder: str) -> str | None:
     try:
         return save_upload(upload, folder)
+    except ValueError as exc:
+        raise RegistrationError(str(exc)) from exc
     except Exception as exc:
         raise RegistrationError(
             "A file upload could not be completed right now. Please try again."
