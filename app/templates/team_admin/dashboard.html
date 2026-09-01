@@ -1513,9 +1513,10 @@
       <div class="alert" style="background:#fff2cc; border-color:#d9a300; color:#111; margin-bottom: 1rem;">
         Match day squads are automatically deleted 24 hours after they are generated, even if they are never downloaded.
       </div>
+      <div class="alert error" data-match-day-error hidden style="margin-bottom: 1rem;"></div>
 
       {% if approved_teams and match_day_fixtures_data %}
-        <form class="match-day-squad-form" method="post" action="/team-admin/match-day-squads" data-match-day-squad-form>
+        <form class="match-day-squad-form" method="post" action="/team-admin/match-day-squads" data-match-day-squad-form data-primary-team-id="{{ primary_team_id or '' }}">
           <div class="form-grid two">
             <label>Fixture
               <select name="fixture_id" id="match-day-fixture-select" required>
@@ -1583,10 +1584,14 @@
             const jerseyInput = document.getElementById("match-day-jersey-input");
             const addButton = document.querySelector("[data-add-player]");
             const squadList = document.querySelector("[data-squad-list]");
+            const matchDayError = document.querySelector("[data-match-day-error]");
+            const primaryTeamId = String(form.dataset.primaryTeamId || "").trim();
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
             const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
+            const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
             const selectedPlayerIds = new Set();
             let activeFixture = null;
+            let activeTeamId = null;
 
             const extractAgeGroup = (value) => {
               const match = String(value || "").toUpperCase().match(/\bU\d{2}\b/);
@@ -1632,6 +1637,43 @@
               );
             };
 
+            const setMatchDayError = (message) => {
+              if (!matchDayError) {
+                return;
+              }
+              const text = String(message || "").trim();
+              matchDayError.textContent = text;
+              matchDayError.hidden = !text;
+            };
+
+            const clearMatchDayError = () => {
+              setMatchDayError("");
+            };
+
+            const resolveFixtureTeamId = (fixture) => {
+              if (!fixture) {
+                return null;
+              }
+              const fixtureTeamIds = [fixture.home_team_id, fixture.away_team_id]
+                .map((value) => String(value || "").trim())
+                .filter(Boolean);
+              if (primaryTeamId && fixtureTeamIds.includes(primaryTeamId)) {
+                return primaryTeamId;
+              }
+              const candidateTeamIds = [fixture.home_team_id, fixture.away_team_id]
+                .map((value) => String(value || "").trim())
+                .filter((value) => value && approvedTeamIds.has(value));
+              if (candidateTeamIds.length === 1) {
+                return candidateTeamIds[0];
+              }
+              if (candidateTeamIds.length === 0) {
+                setMatchDayError("team id not parsed from selected fixture.");
+                return null;
+              }
+              setMatchDayError("selected fixture matched more than one approved team.");
+              return null;
+            };
+
             const clearSquadList = () => {
               selectedPlayerIds.clear();
               squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
@@ -1656,9 +1698,12 @@
             const refreshPlayerSelect = () => {
               playerSelect.innerHTML = '<option value="">Select player</option>';
               const selectedFixture = activeFixture;
+              const selectedTeamId = activeTeamId || primaryTeamId;
               const targetCategory = selectedFixture?.category_name || "";
               const eligiblePlayers = playerData.filter((player) => {
                 return selectedFixture &&
+                  selectedTeamId &&
+                  String(player.team_id) === String(selectedTeamId) &&
                   canPlayForCategory(player, targetCategory) &&
                   !selectedPlayerIds.has(String(player.player_id));
               });
@@ -1674,6 +1719,13 @@
               const enabled = Boolean(selectedFixture);
               playerSelect.disabled = !enabled;
               jerseyInput.disabled = !enabled;
+              if (selectedFixture && !selectedTeamId) {
+                setMatchDayError("team id not parsed from selected fixture.");
+              } else if (selectedFixture && selectedTeamId && eligiblePlayers.length === 0) {
+                setMatchDayError("No eligible players found for the selected fixture.");
+              } else if (selectedFixture && selectedTeamId) {
+                clearMatchDayError();
+              }
               updateAddButtonState();
             };
 

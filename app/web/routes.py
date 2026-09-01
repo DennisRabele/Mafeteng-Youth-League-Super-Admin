@@ -1850,11 +1850,13 @@ def team_admin_dashboard(
             "dashboard_time": fixture.dashboard_time,
             "dashboard_day_name": fixture.dashboard_day_name,
             "venue": fixture.venue,
+            "home_team_id": fixture.home_team_id,
             "home_team": {
                 "team_id": fixture.home_team.team_id if fixture.home_team else None,
                 "team_name": fixture.home_team.team_name if fixture.home_team else "-",
                 "logo": fixture.home_team.logo if fixture.home_team else None,
             },
+            "away_team_id": fixture.away_team_id,
             "away_team": {
                 "team_id": fixture.away_team.team_id if fixture.away_team else None,
                 "team_name": fixture.away_team.team_name if fixture.away_team else "-",
@@ -2095,12 +2097,52 @@ def export_team_admin_fixtures(
 @router.post("/team-admin/match-day-squads")
 def create_team_admin_match_day_squad(
     request: Request,
-    fixture_id: int = Form(...),
-    player_ids: list[int] = Form(...),
-    jersey_numbers: list[int] = Form(...),
+    fixture_id: str = Form(...),
+    player_ids: list[str] | None = Form(None),
+    jersey_numbers: list[str] | None = Form(None),
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
+    try:
+        parsed_fixture_id = int(str(fixture_id).strip())
+    except (TypeError, ValueError):
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "team id not parsed from selected fixture."},
+        )
+    if not player_ids:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Select at least one player for the squad."},
+        )
+    if not jersey_numbers:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Enter jersey numbers for each selected player."},
+        )
+    parsed_player_ids: list[int] = []
+    for index, value in enumerate(player_ids):
+        try:
+            parsed_player_ids.append(int(str(value).strip()))
+        except (TypeError, ValueError):
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": f"player id not parsed at squad row {index + 1}."},
+            )
+    parsed_jersey_numbers: list[int] = []
+    for index, value in enumerate(jersey_numbers):
+        try:
+            parsed_jersey_numbers.append(int(str(value).strip()))
+        except (TypeError, ValueError):
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": f"jersey number not parsed at squad row {index + 1}."},
+            )
     primary_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
     if not primary_team:
         return _render(
@@ -2115,7 +2157,7 @@ def create_team_admin_match_day_squad(
             selectinload(Fixture.home_team),
             selectinload(Fixture.away_team),
         )
-        .where(Fixture.fixture_id == fixture_id)
+        .where(Fixture.fixture_id == parsed_fixture_id)
     )
     if not fixture or not fixture.home_team or not fixture.away_team:
         return _render(
@@ -2132,11 +2174,11 @@ def create_team_admin_match_day_squad(
     try:
         squad = create_match_day_squad(
             db,
-            fixture_id=fixture_id,
+            fixture_id=parsed_fixture_id,
             team_id=primary_team.team_id,
             generated_by_team_admin_id=team_admin.team_admin_id,
-            player_ids=player_ids,
-            jersey_numbers=jersey_numbers,
+            player_ids=parsed_player_ids,
+            jersey_numbers=parsed_jersey_numbers,
         )
     except RegistrationError as exc:
         return _render(
