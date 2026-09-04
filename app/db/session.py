@@ -7,10 +7,13 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models import (
+    ApprovalStatus,
     AppAsset,
     Category,
     Season,
+    TeamAdmin,
     SuperAdmin,
+    Notification,
     User,
     UserRole,
 )
@@ -56,6 +59,7 @@ def init_db() -> None:
         _seed_app_assets(db)
         _seed_super_admin(db)
         _seed_season_and_categories(db)
+        _purge_rejected_team_admins(db)
         db.commit()
 
 
@@ -241,6 +245,25 @@ def _ensure_schema_columns() -> None:
                 if column_name not in verification_columns:
                     connection.execute(text(statement))
             connection.execute(text("ALTER TABLE result_verifications ALTER COLUMN verified_by_admin_id DROP NOT NULL"))
+
+
+def _purge_rejected_team_admins(db: Session) -> None:
+    rejected_team_admins = db.scalars(
+        select(TeamAdmin).where(TeamAdmin.status == ApprovalStatus.REJECTED.value)
+    ).all()
+    if not rejected_team_admins:
+        return
+
+    for team_admin in rejected_team_admins:
+        user = team_admin.user
+        if user:
+            db.query(Notification).filter(Notification.user_id == user.user_id).delete(
+                synchronize_session=False
+            )
+        db.delete(team_admin)
+        if user:
+            db.delete(user)
+    db.flush()
 
 
 def _seed_app_assets(db: Session) -> None:

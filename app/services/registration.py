@@ -17,6 +17,7 @@ from app.models import (
     ApprovalStatus,
     Category,
     Parent,
+    Notification,
     Player,
     PlayerDocument,
     PlayerRegistrationRequest,
@@ -32,6 +33,7 @@ from app.models import (
     UserRole,
 )
 from app.services.team_access import load_team_admin_approved_team_ids, load_team_admin_primary_team
+from app.services.email import EmailDeliveryError, send_notification_email
 
 
 class RegistrationError(ValueError):
@@ -783,10 +785,27 @@ def reject_team_admin(db: Session, team_admin_id: int, rejection_reason: str) ->
     if not rejection_reason.strip():
         raise RegistrationError("A rejection reason is required.")
 
-    team_admin.status = ApprovalStatus.REJECTED.value
-    team_admin.rejection_reason = rejection_reason.strip()
+    rejected_reason = rejection_reason.strip()
+    user = team_admin.user
+    user_id = team_admin.user_id
+    user_email = user.email if user else None
+    user_name = user.full_name if user else "Team Admin"
+    team_admin.rejection_reason = rejected_reason
+    if user_email:
+        try:
+            send_notification_email(
+                to_email=user_email,
+                title="Team Admin registration rejected",
+                message=f"Hello {user_name}, your Team Admin registration was rejected: {rejected_reason}",
+                link="/login",
+            )
+        except EmailDeliveryError as exc:
+            raise RegistrationError("Rejection email could not be sent. Please try again.") from exc
+    db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
+    db.delete(team_admin)
+    if user:
+        db.delete(user)
     db.commit()
-    db.refresh(team_admin)
     try:
         from app.services.league import create_notification
 
@@ -794,7 +813,7 @@ def reject_team_admin(db: Session, team_admin_id: int, rejection_reason: str) ->
             db,
             user_id=team_admin.user_id,
             title="Team Admin rejected",
-            message=f"Your Team Admin registration was rejected: {team_admin.rejection_reason}",
+            message=f"Your Team Admin registration was rejected: {rejected_reason}",
             link="/login",
         )
     except Exception:
