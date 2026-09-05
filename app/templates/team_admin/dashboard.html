@@ -521,14 +521,13 @@
             </div>
             <div class="section-content" style="display: none;">
             <form class="form-grid" method="post" action="/team-admin/player-requests">
-              <label style="grid-column: 1 / 2;">Player Name (Type Name)
-                <input name="player_name" type="text" placeholder="Type player name to search" required list="request-players-list">
-                <datalist id="request-players-list">
-                  {% for player in all_registered_players %}
-                    <option value="{{ player.full_name }} ({{ player.player_id }})">
+              <label style="grid-column: 1 / 2;">Register To Team
+                <select name="to_team_id" required>
+                  <option value="">Select your team</option>
+                  {% for team in approved_teams %}
+                    <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
                   {% endfor %}
-                </datalist>
-                <input name="player_id" type="hidden" required>
+                </select>
               </label>
               <label style="grid-column: 2 / 3;">From Team
                 <select name="from_team_id" required>
@@ -538,13 +537,14 @@
                   {% endfor %}
                 </select>
               </label>
-              <label style="grid-column: 1 / 2;">Register To Team
-                <select name="to_team_id" required>
-                  <option value="">Select your team</option>
-                  {% for team in approved_teams %}
-                    <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+              <label style="grid-column: 1 / 2;">Player Name (Type Name)
+                <input name="player_name" type="text" placeholder="Type player name to search" required list="request-players-list">
+                <datalist id="request-players-list">
+                  {% for player in all_registered_players %}
+                    <option value="{{ player.full_name }} ({{ player.player_id }})">
                   {% endfor %}
-                </select>
+                </datalist>
+                <input name="player_id" type="hidden" required>
               </label>
               <label style="grid-column: 2 / 3;">Request Type
                 <select name="request_type" required onchange="toggleRequestFields(this)">
