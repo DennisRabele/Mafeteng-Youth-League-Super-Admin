@@ -1476,7 +1476,15 @@
               <td>{{ transfer.from_team.team_name }}</td>
               <td>{{ transfer.to_team.team_name }}</td>
               <td>{{ transfer.transfer_type }}</td>
-              <td><span class="status {{ transfer.status }}">{{ transfer.status }}</span></td>
+              <td>
+                {% if transfer.completed_at %}
+                  <span class="status approved">Completed</span>
+                {% elif transfer.status == 'approved' %}
+                  <span class="status approved">Registered</span>
+                {% else %}
+                  <span class="status pending">Pending</span>
+                {% endif %}
+              </td>
               <td><button class="button button-primary small" type="button" onclick="loadTransferRegistration('{{ transfer.transfer_id }}')">Load Transfers</button></td>
             </tr>
             <tr id="transfer-details-{{ transfer.transfer_id }}" hidden>
