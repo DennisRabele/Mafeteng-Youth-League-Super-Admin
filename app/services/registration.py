@@ -589,6 +589,14 @@ def _release_player_for_transfer(transfer: PlayerTransferRequest) -> None:
     player.registration_type = "transferred_out"
 
 
+def _is_receiving_team_loan_player(player: Player) -> bool:
+    return bool(
+        player.is_on_loan
+        and player.original_team_id is not None
+        and player.team_id != player.original_team_id
+    )
+
+
 def restore_expired_loans(db: Session) -> None:
     expired_players = db.scalars(
         select(Player).where(
@@ -601,8 +609,12 @@ def restore_expired_loans(db: Session) -> None:
         return
 
     for player in expired_players:
+        if _is_receiving_team_loan_player(player):
+            player.status = TRANSFERRED_STATUS
+            player.registration_type = "loan_returned"
         player.is_on_loan = False
         player.loan_end_date = None
+        player.original_team_id = None
     db.commit()
 
 

@@ -1489,8 +1489,17 @@
           </thead>
           <tbody>
             {% for player in players %}
-            <tr data-row data-status="{{ player.status }}" data-team="{{ player.team.team_id }}" class="{% if player.is_on_loan %}player-on-loan{% endif %}">
-              <td>{{ player.full_name }}{% if player.is_on_loan %}<span class="loan-marker">On Loan</span>{% endif %}</td>
+            {% set is_source_loan = player.is_on_loan and player.original_team_id and player.team_id == player.original_team_id %}
+            {% set is_receiving_loan = player.is_on_loan and player.original_team_id and player.team_id != player.original_team_id %}
+            <tr data-row data-status="{{ player.status }}" data-team="{{ player.team.team_id }}" class="{% if is_source_loan %}player-on-loan{% elif is_receiving_loan %}player-loanee{% endif %}">
+              <td>
+                {{ player.full_name }}
+                {% if is_source_loan %}
+                  <span class="loan-marker">On Loan</span>
+                {% elif is_receiving_loan %}
+                  <span class="loan-marker loanee">Loanee</span>
+                {% endif %}
+              </td>
               <td>{{ player.player_code or '-' }}</td>
               <td>{{ player.team.team_name }}</td>
               <td>{{ player.age_group or 'Not eligible' }}</td>
@@ -1504,12 +1513,16 @@
                 {% endif %}
               </td>
               <td>
-                {% if player.registration_is_expired %}
+                {% if is_source_loan %}
+                  <span class="status pending">On Loan</span>
+                {% elif is_receiving_loan %}
+                  <span class="status approved">Loanee</span>
+                {% elif player.registration_is_expired %}
                   <span class="status rejected">ineligible</span>
                 {% else %}
                   <span class="status {{ player.status }}">{{ player.status }}</span>
                 {% endif %}
-                {% if player.is_on_loan and player.loan_end_date %}<br><small>Returns {{ player.loan_end_date }}</small>{% endif %}
+                {% if (is_source_loan or is_receiving_loan) and player.loan_end_date %}<br><small>Returns {{ player.loan_end_date }}</small>{% endif %}
               </td>
               <td>{% if player.status == 'rejected' %}{{ player.rejection_reason or '-' }}{% else %}-{% endif %}</td>
             </tr>
@@ -1568,16 +1581,17 @@
           </thead>
           <tbody>
             {% for transfer in transfer_history %}
+            {% set is_loan_transfer = transfer.transfer_type and 'loan' in transfer.transfer_type|lower %}
             <tr data-row data-status="{{ transfer.status }}">
               <td>{{ transfer.player.full_name }}</td>
               <td>{{ transfer.from_team.team_name }}</td>
               <td>{{ transfer.to_team.team_name }}</td>
-              <td>{{ transfer.transfer_type }}</td>
+              <td>{% if is_loan_transfer %}Loaned{% else %}{{ transfer.transfer_type }}{% endif %}</td>
               <td>
                 {% if transfer.completed_at %}
-                  <span class="status approved">Completed</span>
+                  <span class="status approved">{% if is_loan_transfer %}Loaned{% else %}Completed{% endif %}</span>
                 {% elif transfer.status == 'approved' %}
-                  <span class="status approved">Approved-Pending Registration</span>
+                  <span class="status approved">{% if is_loan_transfer %}Loaned-Pending Registration{% else %}Approved-Pending Registration{% endif %}</span>
                 {% else %}
                   <span class="status pending">Pending Transfer</span>
                 {% endif %}
@@ -1592,7 +1606,7 @@
                     <div><strong>Transfer Status:</strong> {{ transfer.status }}</div>
                     <div><strong>From Team:</strong> {{ transfer.from_team.team_name }}</div>
                     <div><strong>To Team:</strong> {{ transfer.to_team.team_name }}</div>
-                    <div><strong>Transfer Type:</strong> {{ transfer.transfer_type }}</div>
+                    <div><strong>Transfer Type:</strong> {% if is_loan_transfer %}Loaned{% else %}{{ transfer.transfer_type }}{% endif %}</div>
                     <div><strong>Loan Period:</strong> {{ transfer.loan_period or '-' }}</div>
                     <div><strong>Requested:</strong> {{ transfer.created_at.strftime('%Y-%m-%d') if transfer.created_at else '-' }}</div>
                     <div><strong>Completed:</strong> {{ transfer.completed_at.strftime('%Y-%m-%d') if transfer.completed_at else '-' }}</div>
