@@ -1258,22 +1258,60 @@ def request_player_from_team(
     from_team = db.get(Team, from_team_id)
     to_team = db.get(Team, to_team_id)
     accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
-    if not player or not player.team or not from_team or player.team_id != from_team_id:
-        raise RegistrationError("Invalid player or player not found in the selected team.")
+    if not player:
+        raise RegistrationError(f"Player id {player_id} was not found.")
+    if not from_team:
+        raise RegistrationError(f"From Team id {from_team_id} was not found.")
+    if not player.team:
+        raise RegistrationError(
+            f"Player '{player.full_name}' (player id {player.player_id}) does not have an assigned team."
+        )
+    if player.team_id != from_team_id:
+        raise RegistrationError(
+            "Selected player mismatch: "
+            f"player '{player.full_name}' (player id {player.player_id}) belongs to "
+            f"'{player.team.team_name}' (team id {player.team_id}), not the selected From Team "
+            f"'{from_team.team_name}' (team id {from_team.team_id})."
+        )
     if player.status != ApprovalStatus.APPROVED.value:
-        raise RegistrationError("Only approved players can be requested for transfer.")
+        raise RegistrationError(
+            f"Player '{player.full_name}' (player id {player.player_id}) is currently '{player.status}'. "
+            "Only approved players can be requested for transfer."
+        )
     if player.is_on_loan:
-        raise RegistrationError("This player is currently on loan and cannot be requested.")
-    if not to_team or to_team.team_id not in accessible_team_ids:
-        raise RegistrationError("You can only request players for your own approved team.")
+        loan_info = f" until {player.loan_end_date}" if player.loan_end_date else ""
+        raise RegistrationError(
+            f"Player '{player.full_name}' (player id {player.player_id}) is currently on loan{loan_info} "
+            "and cannot be requested."
+        )
+    if not to_team:
+        raise RegistrationError(f"To Team id {to_team_id} was not found.")
+    if to_team.team_id not in accessible_team_ids:
+        raise RegistrationError(
+            f"To Team '{to_team.team_name}' (team id {to_team.team_id}) is not approved for Team Admin id {team_admin_id}."
+        )
     if from_team.team_id in accessible_team_ids:
-        raise RegistrationError("You cannot request a player from your own team.")
+        raise RegistrationError(
+            f"From Team '{from_team.team_name}' (team id {from_team.team_id}) belongs to the same Team Admin; "
+            "you cannot request a player from your own team."
+        )
     if from_team.status != ApprovalStatus.APPROVED.value or to_team.status != ApprovalStatus.APPROVED.value:
-        raise RegistrationError("Both teams must be approved before a transfer request can be sent.")
+        raise RegistrationError(
+            f"Both teams must be approved before a transfer request can be sent. "
+            f"From Team status: {from_team.status}; To Team status: {to_team.status}."
+        )
     if from_team.category_id != to_team.category_id:
-        raise RegistrationError("Selected teams must belong to the same category.")
+        raise RegistrationError(
+            f"Selected teams must belong to the same category. "
+            f"From Team '{from_team.team_name}' category id {from_team.category_id}; "
+            f"To Team '{to_team.team_name}' category id {to_team.category_id}."
+        )
     if player.team.category_id != to_team.category_id:
-        raise RegistrationError("Selected player must belong to the same category as your team.")
+        raise RegistrationError(
+            f"Selected player '{player.full_name}' belongs to '{player.team.team_name}' "
+            f"(category id {player.team.category_id}), not the same category as your team "
+            f"'{to_team.team_name}' (category id {to_team.category_id})."
+        )
     if registration_period not in (1, 2, 3):
         raise RegistrationError("Registration period must be 1, 2, or 3 years.")
     request_type = _validate_text(request_type, field_name="Request type")

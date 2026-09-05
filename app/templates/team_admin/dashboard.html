@@ -898,6 +898,7 @@
             if (toTeamSelect) {
               toTeamSelect.addEventListener('change', () => {
                 filterFromTeamsByCategory();
+                playerNameInput.value = '';
                 playerIdInput.value = '';
                 clearPlayerOptions();
               });
@@ -905,6 +906,7 @@
 
             if (fromTeamSelect) {
               fromTeamSelect.addEventListener('change', () => {
+                playerNameInput.value = '';
                 playerIdInput.value = '';
                 refreshPlayerOptions();
               });

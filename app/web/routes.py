@@ -3157,8 +3157,9 @@ def complete_transfer_route(
 @router.post("/team-admin/player-requests")
 def request_player_route(
     request: Request,
-    player_id: int = Form(...),
-    from_team_id: int = Form(...),
+    player_name: str = Form(""),
+    player_id: str = Form(...),
+    from_team_id: str = Form(...),
     to_team_id: int | None = Form(None),
     request_type: str = Form(...),
     request_details: str = Form(...),
@@ -3168,6 +3169,36 @@ def request_player_route(
 ):
     team_admin = _require_team_admin(request, db)
     approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    player_id_raw = (player_id or "").strip()
+    from_team_id_raw = (from_team_id or "").strip()
+
+    try:
+        parsed_player_id = int(player_id_raw)
+    except (TypeError, ValueError):
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {
+                "error": (
+                    f"Player id could not be parsed from the selected player '{player_name or player_id_raw}'. "
+                    f"Submitted player_id='{player_id_raw}'. Please reselect the player from the filtered From Team list."
+                )
+            },
+        )
+
+    try:
+        parsed_from_team_id = int(from_team_id_raw)
+    except (TypeError, ValueError):
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {
+                "error": (
+                    f"From Team id could not be parsed from submitted value '{from_team_id_raw}'. "
+                    "Please reselect the From Team and try again."
+                )
+            },
+        )
     
     # Get the requesting team (to_team)
     if to_team_id:
@@ -3190,8 +3221,8 @@ def request_player_route(
         request_player_from_team(
             db,
             team_admin_id=team_admin.team_admin_id,
-            player_id=player_id,
-            from_team_id=from_team_id,
+            player_id=parsed_player_id,
+            from_team_id=parsed_from_team_id,
             to_team_id=to_team.team_id,
             request_type=request_type,
             request_details=request_details,
