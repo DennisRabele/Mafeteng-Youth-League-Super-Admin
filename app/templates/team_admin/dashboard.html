@@ -407,6 +407,12 @@
                             <td style="padding: 0.3rem 0;"><strong>Transfer Type:</strong></td>
                             <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.transfer_type }}</td>
                           </tr>
+                          {% if transfer.loan_period %}
+                          <tr>
+                            <td style="padding: 0.3rem 0;"><strong>Loan Period:</strong></td>
+                            <td style="padding: 0.3rem 0; text-align: right;">{{ transfer.loan_period }}</td>
+                          </tr>
+                          {% endif %}
                           <tr>
                             <td style="padding: 0.3rem 0;"><strong>Status:</strong></td>
                             <td style="padding: 0.3rem 0; text-align: right;"><span class="status {{ transfer.status }}" style="padding: 0.3rem 0.6rem; border-radius: 3px; font-size: 0.9rem;">{{ transfer.status }}</span></td>

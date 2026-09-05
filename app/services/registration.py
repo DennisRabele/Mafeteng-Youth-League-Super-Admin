@@ -495,6 +495,8 @@ def _player_registration_expiry_date(db: Session, player: Player) -> date | None
 
 def get_player_registration_expiry_date(db: Session, player: Player) -> date | None:
     """Return the date when the player's current registration expires."""
+    if player.is_on_loan and player.loan_end_date:
+        return player.loan_end_date
     return _player_registration_expiry_date(db, player)
 
 
