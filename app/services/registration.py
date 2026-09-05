@@ -1762,6 +1762,7 @@ def register_transferred_player(
     documents.append(("Parent/Guardian Consent Form", consent_form_path))
     
     # Create new player record in receiving team
+    is_loan_transfer = _is_loan_transfer(transfer.transfer_type)
     new_player = Player(
         team_id=transfer.to_team_id,
         parent_id=player.parent_id,
@@ -1779,6 +1780,9 @@ def register_transferred_player(
         photo_path=player.photo_path,
         age_group=player.age_group,
         registration_reminder_sent_at=None,
+        is_on_loan=is_loan_transfer,
+        original_team_id=transfer.from_team_id if is_loan_transfer else None,
+        loan_end_date=transfer.loan_end_date if is_loan_transfer else None,
         status=ApprovalStatus.PENDING.value,
         approved_at=None,
     )
