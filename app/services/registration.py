@@ -53,6 +53,7 @@ PERSON_NAME_PATTERN = re.compile(r"^[A-Za-z]+(?:[A-Za-z\s'\-]*[A-Za-z])?$")
 TEAM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9]+(?:[A-Za-z0-9\s'\-&]*[A-Za-z0-9])?$")
 PHONE_PATTERN = re.compile(r"^[0-9+\-\s]+$")
 logger = logging.getLogger(__name__)
+TRANSFER_ACCESS_PATH = "My clubs -> Register Players -> transferred players"
 
 
 def _normalize_text(value: str | None) -> str:
@@ -424,6 +425,27 @@ def player_matches_exact_category(player: Player, category_name: str | None) -> 
 
 def _is_loan_transfer(transfer_type: str) -> bool:
     return "loan" in (transfer_type or "").strip().lower()
+
+
+def _notify_transfer_team_admins(
+    db: Session,
+    *,
+    from_team: Team,
+    to_team: Team,
+    title: str,
+    message: str,
+) -> None:
+    from app.services.league import notify_team_admins_for_teams
+
+    team_ids = [team.team_id for team in (from_team, to_team) if team]
+    if team_ids:
+        notify_team_admins_for_teams(
+            db,
+            team_ids=team_ids,
+            title=title,
+            message=message,
+            link="/team-admin/dashboard#transfers",
+        )
 
 
 def _add_years(base_date: date, years: int) -> date:
@@ -1173,6 +1195,7 @@ def request_player_transfer(
 ) -> PlayerTransferRequest:
     player = db.get(Player, player_id)
     to_team = db.get(Team, to_team_id)
+    source_team = player.team if player and player.team else None
     accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
     if not player or not player.team or player.team_id not in accessible_team_ids:
         raise RegistrationError("You can only transfer players from your own teams.")
@@ -1203,6 +1226,17 @@ def request_player_transfer(
     db.add(request)
     db.commit()
     db.refresh(request)
+    if source_team:
+        _notify_transfer_team_admins(
+            db,
+            from_team=source_team,
+            to_team=to_team,
+            title="Transfer request sent",
+            message=(
+                f"{player.full_name} is being transferred from {source_team.team_name} to {to_team.team_name}. "
+                f"Open {TRANSFER_ACCESS_PATH} to review transferred players."
+            ),
+        )
     return request
 
 
@@ -1270,6 +1304,16 @@ def request_player_from_team(
     db.add(request)
     db.commit()
     db.refresh(request)
+    _notify_transfer_team_admins(
+        db,
+        from_team=from_team,
+        to_team=to_team,
+        title="Player transfer requested",
+        message=(
+            f"{player.full_name} has been requested from {from_team.team_name} to {to_team.team_name}. "
+            f"Open {TRANSFER_ACCESS_PATH} to review transferred players."
+        ),
+    )
     return request
 
 

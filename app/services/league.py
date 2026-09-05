@@ -174,10 +174,15 @@ def broadcast_notifications(
     if not _has_table(db, "notifications"):
         return
     notifications: list[Notification] = []
-    for user_id in user_ids:
-        notifications.append(
-            create_notification(db, user_id=user_id, title=title, message=message, link=link, commit=False)
+    for user_id in dict.fromkeys(user_ids):
+        notification = Notification(
+            user_id=user_id,
+            title=title.strip(),
+            message=message.strip(),
+            link=link.strip() if link else None,
         )
+        db.add(notification)
+        notifications.append(notification)
     db.commit()
     for notification in notifications:
         user = db.get(User, notification.user_id)
