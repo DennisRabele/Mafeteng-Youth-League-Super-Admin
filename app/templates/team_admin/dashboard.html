@@ -534,7 +534,7 @@
                 <select name="from_team_id" required>
                   <option value="">Select team</option>
                   {% for team in all_teams %}
-                    <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+                    <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
                   {% endfor %}
                 </select>
               </label>
@@ -542,7 +542,7 @@
                 <select name="to_team_id" required>
                   <option value="">Select your team</option>
                   {% for team in approved_teams %}
-                    <option value="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+                    <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
                   {% endfor %}
                 </select>
               </label>
@@ -799,15 +799,147 @@
             }
 
             const playerId = match[1];
-            playerIdInput.value = playerId;
             const selectedPlayer = form.playerSearchResults?.find((player) => String(player.player_id) === playerId);
             const fromTeamSelect = form.querySelector('select[name="from_team_id"]');
             if (selectedPlayer && fromTeamSelect) {
-              fromTeamSelect.value = String(selectedPlayer.team_id);
+              if (form.action.includes('/team-admin/player-requests')) {
+                if (String(selectedPlayer.team_id) !== String(fromTeamSelect.value)) {
+                  playerIdInput.value = '';
+                  return;
+                }
+              } else {
+                fromTeamSelect.value = String(selectedPlayer.team_id);
+              }
             }
+            playerIdInput.value = playerId;
+          }
+
+          function initRequestPlayerSearch(form, playerNameInput) {
+            if (form.dataset.requestPlayerSearchBound === 'true') {
+              return;
+            }
+            form.dataset.requestPlayerSearchBound = 'true';
+
+            const playerIdInput = form.querySelector('input[name="player_id"]');
+            const toTeamSelect = form.querySelector('select[name="to_team_id"]');
+            const fromTeamSelect = form.querySelector('select[name="from_team_id"]');
+            const datalist = form.querySelector('#request-players-list');
+
+            function clearPlayerOptions() {
+              form.playerSearchResults = [];
+              if (datalist) {
+                datalist.innerHTML = '';
+              }
+            }
+
+            function filterFromTeamsByCategory() {
+              if (!fromTeamSelect || !toTeamSelect) {
+                return;
+              }
+
+              const selectedToTeam = toTeamSelect.selectedOptions[0];
+              const categoryId = selectedToTeam?.dataset.categoryId || '';
+              const selectedToTeamId = toTeamSelect.value;
+              Array.from(fromTeamSelect.options).forEach((option) => {
+                if (!option.value) {
+                  option.hidden = false;
+                  option.disabled = false;
+                  return;
+                }
+
+                const matchesCategory = !categoryId || option.dataset.categoryId === categoryId;
+                const matchesOtherTeam = !selectedToTeamId || option.value !== selectedToTeamId;
+                const visible = matchesCategory && matchesOtherTeam;
+                option.hidden = !visible;
+                option.disabled = !visible;
+              });
+
+              const selectedOption = fromTeamSelect.selectedOptions[0];
+              if (selectedOption && (selectedOption.hidden || selectedOption.disabled)) {
+                fromTeamSelect.value = '';
+              }
+            }
+
+            async function refreshPlayerOptions() {
+              if (!datalist || !fromTeamSelect) {
+                return;
+              }
+
+              const fromTeamId = fromTeamSelect.value;
+              if (!fromTeamId) {
+                playerIdInput.value = '';
+                clearPlayerOptions();
+                return;
+              }
+
+              const params = new URLSearchParams({ team_id: fromTeamId });
+              const selectedToTeam = toTeamSelect?.selectedOptions[0];
+              const categoryId = selectedToTeam?.dataset.categoryId || '';
+              const searchTerm = playerNameInput.value.trim();
+              if (searchTerm) {
+                params.set('name', searchTerm);
+              }
+              if (categoryId) {
+                params.set('category_id', categoryId);
+              }
+
+              try {
+                const response = await fetch(`/api/search-players-by-name?${params.toString()}`);
+                const data = await response.json();
+                form.playerSearchResults = data.players || [];
+                datalist.innerHTML = '';
+                form.playerSearchResults.forEach((player) => {
+                  const option = document.createElement('option');
+                  option.value = `${player.player_name} (${player.player_id})`;
+                  option.label = `${player.player_name} - ${player.team_name} (${player.age_group})`;
+                  datalist.appendChild(option);
+                });
+              } catch (error) {
+                console.error('Error searching players:', error);
+              }
+            }
+
+            if (toTeamSelect) {
+              toTeamSelect.addEventListener('change', () => {
+                filterFromTeamsByCategory();
+                playerIdInput.value = '';
+                clearPlayerOptions();
+              });
+            }
+
+            if (fromTeamSelect) {
+              fromTeamSelect.addEventListener('change', () => {
+                playerIdInput.value = '';
+                refreshPlayerOptions();
+              });
+            }
+
+            playerNameInput.addEventListener('input', refreshPlayerOptions);
+            playerNameInput.addEventListener('change', function() {
+              applySelectedPlayer(form, this.value);
+            });
+            playerNameInput.addEventListener('blur', function() {
+              if (this.value && !this.dataset.processed) {
+                const match = this.value.match(/\((\d+)\)$/);
+                const playerIdInput = form.querySelector('input[name="player_id"]');
+                if (match && playerIdInput && !playerIdInput.value) {
+                  applySelectedPlayer(form, this.value);
+                  this.dataset.processed = 'true';
+                }
+              }
+            });
+
+            filterFromTeamsByCategory();
+            clearPlayerOptions();
           }
 
           playerNameInputs.forEach(playerNameInput => {
+            const form = playerNameInput.closest('form');
+            if (form && form.action.includes('/team-admin/player-requests')) {
+              initRequestPlayerSearch(form, playerNameInput);
+              return;
+            }
+
             playerNameInput.addEventListener('input', async function(e) {
               const searchTerm = e.target.value.trim();
               const form = this.closest('form');
@@ -835,25 +967,6 @@
                 });
               } catch (error) {
                 console.error('Error searching players:', error);
-              }
-            });
-            
-            // Parse player ID from selected value on change
-            playerNameInput.addEventListener('change', function() {
-              const form = this.closest('form');
-              applySelectedPlayer(form, this.value);
-            });
-            
-            // Also parse on blur in case change doesn't fire reliably
-            playerNameInput.addEventListener('blur', function() {
-              if (this.value && !this.dataset.processed) {
-                const match = this.value.match(/\((\d+)\)$/);
-                const form = this.closest('form');
-                const playerIdInput = form.querySelector('input[name="player_id"]');
-                if (match && playerIdInput && !playerIdInput.value) {
-                  applySelectedPlayer(form, this.value);
-                  this.dataset.processed = 'true';
-                }
               }
             });
           });

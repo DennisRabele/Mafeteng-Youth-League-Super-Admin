@@ -3219,21 +3219,31 @@ def request_player_route(
 
 
 @router.get("/api/search-players-by-name")
-def search_players_by_name(name: str, db: Session = Depends(get_db)):
+def search_players_by_name(
+    name: str = "",
+    team_id: int | None = None,
+    category_id: int | None = None,
+    db: Session = Depends(get_db),
+):
     """API endpoint to search for players by name and return their teams."""
-    if not name or len(name.strip()) < 2:
+    if not name.strip() and team_id is None and category_id is None:
         return {"players": []}
-    
-    # Search for players with similar names
-    search_term = f"%{name.strip()}%"
-    players = db.scalars(
+
+    player_query = (
         select(Player)
-        .where(Player.full_name.ilike(search_term))
         .where(Player.status == ApprovalStatus.APPROVED.value)
         .where(Player.is_on_loan.is_(False))
-        .options(selectinload(Player.team))
-        .limit(20)
-    ).all()
+        .options(selectinload(Player.team).selectinload(Team.category))
+    )
+    if name.strip():
+        player_query = player_query.where(Player.full_name.ilike(f"%{name.strip()}%"))
+    if team_id is not None or category_id is not None:
+        player_query = player_query.join(Team, Player.team_id == Team.team_id)
+    if team_id is not None:
+        player_query = player_query.where(Team.team_id == team_id)
+    if category_id is not None:
+        player_query = player_query.where(Team.category_id == category_id)
+    players = db.scalars(player_query.limit(20)).all()
     
     result = {
         "players": [
@@ -3242,6 +3252,7 @@ def search_players_by_name(name: str, db: Session = Depends(get_db)):
                 "player_name": p.full_name,
                 "team_id": p.team_id,
                 "team_name": p.team.team_name,
+                "category_id": p.team.category_id if p.team else None,
                 "age_group": p.age_group,
                 "photo_path": p.photo_path,
             }

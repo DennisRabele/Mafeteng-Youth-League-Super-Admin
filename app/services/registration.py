@@ -1203,6 +1203,8 @@ def request_player_transfer(
         raise RegistrationError("Selected destination team was not found.")
     if to_team.team_id in accessible_team_ids:
         raise RegistrationError("Destination team must belong to another Team Admin.")
+    if source_team and source_team.category_id != to_team.category_id:
+        raise RegistrationError("Selected destination team must be in the same category as the player's team.")
     transfer_type = _validate_text(transfer_type, field_name="Transfer type")
     player_details = _validate_text(player_details, field_name="Player details")
     transfer_conditions = _validate_text(transfer_conditions, field_name="Transfer conditions")
@@ -1268,6 +1270,10 @@ def request_player_from_team(
         raise RegistrationError("You cannot request a player from your own team.")
     if from_team.status != ApprovalStatus.APPROVED.value or to_team.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Both teams must be approved before a transfer request can be sent.")
+    if from_team.category_id != to_team.category_id:
+        raise RegistrationError("Selected teams must belong to the same category.")
+    if player.team.category_id != to_team.category_id:
+        raise RegistrationError("Selected player must belong to the same category as your team.")
     if registration_period not in (1, 2, 3):
         raise RegistrationError("Registration period must be 1, 2, or 3 years.")
     request_type = _validate_text(request_type, field_name="Request type")
