@@ -586,7 +586,7 @@
             <div class="transfer-list">
               {% if approved_transfers_for_registration %}
                 {% for transfer in approved_transfers_for_registration %}
-                  <article style="margin-bottom: 2rem; padding: 1.5rem; background: white; border: 1px solid #4caf50; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                  <article id="transfer-registration-{{ transfer.transfer_id }}" style="margin-bottom: 2rem; padding: 1.5rem; background: white; border: 1px solid #4caf50; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: box-shadow 0.2s ease, border-color 0.2s ease;">
                     
                     <!-- Player Info Header -->
                     <div style="display: grid; grid-template-columns: 100px 1fr; gap: 1.5rem; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #eee;">
@@ -977,6 +977,19 @@
               resultAwayScore: document.getElementById('result-away-score'),
               resultStatusNote: document.querySelector('[data-result-status-note]'),
             };
+          }
+
+          function loadTransferRegistration(transferId) {
+            const card = document.getElementById(`transfer-registration-${transferId}`);
+            if (!card) {
+              return;
+            }
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            card.style.boxShadow = '0 0 0 3px rgba(76, 175, 80, 0.35), 0 8px 20px rgba(0, 0, 0, 0.12)';
+            card.style.borderColor = '#4caf50';
+            window.setTimeout(() => {
+              card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+            }, 1800);
           }
 
           function syncResultUploadState() {
@@ -1437,6 +1450,39 @@
             </tr>
             {% else %}
             <tr><td colspan="8" class="empty">No teams submitted yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+
+      <div class="panel-heading" style="margin-top: 2rem;">
+        <div>
+          <h2>Transfer Registrations</h2>
+          <p class="section-copy">Tap <strong>Load Transfers</strong> beside a player to jump to the matching transfer registration card below.</p>
+        </div>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <table>
+          <thead>
+            <tr><th>Player</th><th>From Team</th><th>To Team</th><th>Type</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {% for transfer in approved_transfers_for_registration %}
+            <tr data-row data-status="{{ transfer.status }}">
+              <td>{{ transfer.player.full_name }}</td>
+              <td>{{ transfer.from_team.team_name }}</td>
+              <td>{{ transfer.to_team.team_name }}</td>
+              <td>{{ transfer.transfer_type }}</td>
+              <td><span class="status {{ transfer.status }}">{{ transfer.status }}</span></td>
+              <td><button class="button button-primary small" type="button" onclick="loadTransferRegistration('{{ transfer.transfer_id }}')">Load Transfers</button></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">No transfer registrations yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
