@@ -539,11 +539,7 @@
               </label>
               <label style="grid-column: 1 / 2;">Player Name (Type Name)
                 <input name="player_name" type="text" placeholder="Type player name to search" required list="request-players-list">
-                <datalist id="request-players-list">
-                  {% for player in all_registered_players %}
-                    <option value="{{ player.full_name }} ({{ player.player_id }})">
-                  {% endfor %}
-                </datalist>
+                <datalist id="request-players-list"></datalist>
                 <input name="player_id" type="hidden" required>
               </label>
               <label style="grid-column: 2 / 3;">Request Type
