@@ -495,12 +495,14 @@
                         <p style="margin: 0; font-size: 0.9rem; color: #666;">{{ transfer.created_at.strftime('%Y-%m-%d') }}</p>
                       </div>
                       <div>
-                        {% if transfer.status == 'approved' %}
-                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #4caf50; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">✓ Approved</span>
+                        {% if transfer.completed_at %}
+                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #4caf50; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">Completed</span>
+                        {% elif transfer.status == 'approved' %}
+                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #ff9800; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">Approved-Pending Registration</span>
                         {% elif transfer.status == 'rejected' %}
-                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #f44336; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">✗ Rejected</span>
+                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #f44336; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">Rejected</span>
                         {% else %}
-                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #ff9800; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">⏳ Pending</span>
+                          <span style="display: inline-block; padding: 0.4rem 0.8rem; background: #ff9800; color: white; border-radius: 3px; font-size: 0.9rem; font-weight: bold;">Pending Transfer</span>
                         {% endif %}
                       </div>
                       {% if transfer.rejection_reason %}
@@ -1575,9 +1577,9 @@
                 {% if transfer.completed_at %}
                   <span class="status approved">Completed</span>
                 {% elif transfer.status == 'approved' %}
-                  <span class="status approved">Registered</span>
+                  <span class="status approved">Approved-Pending Registration</span>
                 {% else %}
-                  <span class="status pending">Pending</span>
+                  <span class="status pending">Pending Transfer</span>
                 {% endif %}
               </td>
               <td><button class="button button-primary small" type="button" onclick="loadTransferRegistration('{{ transfer.transfer_id }}')">Load Transfers</button></td>
