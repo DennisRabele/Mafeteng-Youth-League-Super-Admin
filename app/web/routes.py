@@ -3171,6 +3171,7 @@ def request_player_route(
     approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     player_id_raw = (player_id or "").strip()
     from_team_id_raw = (from_team_id or "").strip()
+    player_name_raw = (player_name or "").strip()
 
     try:
         parsed_player_id = int(player_id_raw)
@@ -3199,6 +3200,70 @@ def request_player_route(
                 )
             },
         )
+
+    from_team = db.scalar(
+        select(Team)
+        .options(selectinload(Team.category))
+        .where(Team.team_id == parsed_from_team_id)
+    )
+    if not from_team:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {
+                "error": (
+                    f"From Team id {parsed_from_team_id} was not found. "
+                    f"Submitted player name was '{player_name_raw or '-'}' and player_id was '{player_id_raw}'."
+                )
+            },
+        )
+
+    player = db.get(Player, parsed_player_id)
+    if not player:
+        fallback_name = re.sub(r"\s*\(\d+\)\s*$", "", player_name_raw).strip()
+        if fallback_name:
+            exact_team_player = db.scalar(
+                select(Player)
+                .options(selectinload(Player.team).selectinload(Team.category))
+                .where(Player.team_id == parsed_from_team_id)
+                .where(func.lower(Player.full_name) == fallback_name.casefold())
+            )
+            if exact_team_player:
+                player = exact_team_player
+                parsed_player_id = exact_team_player.player_id
+            else:
+                same_name_players = db.scalars(
+                    select(Player)
+                    .options(selectinload(Player.team))
+                    .where(func.lower(Player.full_name) == fallback_name.casefold())
+                ).all()
+                if same_name_players:
+                    team_names = ", ".join(
+                        sorted({p.team.team_name for p in same_name_players if p.team})
+                    )
+                    return _render(
+                        request,
+                        "team_admin/action_result.html",
+                        {
+                            "error": (
+                                f"Player '{fallback_name}' was found in: {team_names}. "
+                                f"It was not found in selected From Team '{from_team.team_name}' (team id {from_team.team_id}). "
+                                f"Submitted player_id='{player_id_raw}'."
+                            )
+                        },
+                    )
+
+        if not player:
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {
+                    "error": (
+                        f"Player id {player_id_raw} was not found in selected From Team '{from_team.team_name}' "
+                        f"(team id {from_team.team_id}). Submitted player name was '{player_name_raw or '-'}'."
+                    )
+                },
+            )
     
     # Get the requesting team (to_team)
     if to_team_id:
@@ -3221,8 +3286,8 @@ def request_player_route(
         request_player_from_team(
             db,
             team_admin_id=team_admin.team_admin_id,
-            player_id=parsed_player_id,
-            from_team_id=parsed_from_team_id,
+            player_id=player.player_id,
+            from_team_id=from_team.team_id,
             to_team_id=to_team.team_id,
             request_type=request_type,
             request_details=request_details,
