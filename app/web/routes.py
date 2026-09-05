@@ -1922,8 +1922,8 @@ def team_admin_dashboard(
         .order_by(PlayerTransferRequest.transfer_id.desc())
     ).all()
     
-    # Get approved transfers pending registration (for receiving team)
-    approved_transfers_for_registration = db.scalars(
+    # Get transfer history for the team admin's clubs, including completed loan/permanent transfers.
+    transfer_history = db.scalars(
         select(PlayerTransferRequest)
         .options(
             selectinload(PlayerTransferRequest.player),
@@ -1931,9 +1931,11 @@ def team_admin_dashboard(
             selectinload(PlayerTransferRequest.to_team),
         )
         .where(
-            PlayerTransferRequest.to_team_id.in_(approved_team_ids),
-            PlayerTransferRequest.status == ApprovalStatus.APPROVED.value,
-            PlayerTransferRequest.completed_at.is_(None),
+            or_(
+                PlayerTransferRequest.from_team_id.in_(approved_team_ids),
+                PlayerTransferRequest.to_team_id.in_(approved_team_ids),
+            ),
+            PlayerTransferRequest.status != ApprovalStatus.REJECTED.value,
         )
         .order_by(PlayerTransferRequest.transfer_id.desc())
     ).all()
@@ -2033,7 +2035,7 @@ def team_admin_dashboard(
             "all_registered_players": all_registered_players,
             "outgoing_transfers": outgoing_transfers,
             "incoming_transfers": incoming_transfers,
-            "approved_transfers_for_registration": approved_transfers_for_registration,
+            "transfer_history": transfer_history,
             "approved_transfers_for_unregistration": approved_transfers_for_unregistration,
             "transfer_status": TransferStatus,
             "fixtures": fixtures,
