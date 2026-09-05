@@ -1458,68 +1458,6 @@
         </div>
       </div>
 
-      <div class="panel-heading" style="margin-top: 2rem;">
-        <div>
-          <h2>Transfer History</h2>
-          <p class="section-copy">Tap <strong>Load Transfers</strong> beside a player to expand the full transfer record, including completed loan and permanent transfers.</p>
-        </div>
-      </div>
-      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
-        <table>
-          <thead>
-            <tr><th>Player</th><th>From Team</th><th>To Team</th><th>Type</th><th>Status</th><th>Action</th></tr>
-          </thead>
-          <tbody>
-            {% for transfer in transfer_history %}
-            <tr data-row data-status="{{ transfer.status }}">
-              <td>{{ transfer.player.full_name }}</td>
-              <td>{{ transfer.from_team.team_name }}</td>
-              <td>{{ transfer.to_team.team_name }}</td>
-              <td>{{ transfer.transfer_type }}</td>
-              <td>
-                {% if transfer.completed_at %}
-                  <span class="status approved">Completed</span>
-                {% elif transfer.status == 'approved' %}
-                  <span class="status approved">Registered</span>
-                {% else %}
-                  <span class="status pending">Pending</span>
-                {% endif %}
-              </td>
-              <td><button class="button button-primary small" type="button" onclick="loadTransferRegistration('{{ transfer.transfer_id }}')">Load Transfers</button></td>
-            </tr>
-            <tr id="transfer-details-{{ transfer.transfer_id }}" hidden>
-              <td colspan="6" style="padding: 0;">
-                <div style="margin: 0.75rem 0 1rem 0; padding: 1rem; border: 1px solid #d9e7d9; background: #f7fbf7; border-radius: 4px;">
-                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem;">
-                    <div><strong>Player:</strong> {{ transfer.player.full_name }}</div>
-                    <div><strong>Transfer Status:</strong> {{ transfer.status }}</div>
-                    <div><strong>From Team:</strong> {{ transfer.from_team.team_name }}</div>
-                    <div><strong>To Team:</strong> {{ transfer.to_team.team_name }}</div>
-                    <div><strong>Transfer Type:</strong> {{ transfer.transfer_type }}</div>
-                    <div><strong>Loan Period:</strong> {{ transfer.loan_period or '-' }}</div>
-                    <div><strong>Requested:</strong> {{ transfer.created_at.strftime('%Y-%m-%d') if transfer.created_at else '-' }}</div>
-                    <div><strong>Completed:</strong> {{ transfer.completed_at.strftime('%Y-%m-%d') if transfer.completed_at else '-' }}</div>
-                  </div>
-                  <div style="margin-top: 0.75rem;">
-                    <strong>Conditions:</strong>
-                    <div style="margin-top: 0.25rem;">{{ transfer.transfer_conditions }}</div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6" class="empty">No transfer history yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        <div class="table-pager">
-          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
-          <span data-page-label>Page 1 of 1</span>
-          <button class="button button-primary small" type="button" data-page-next>Next</button>
-        </div>
-      </div>
-    </section>
-
     <section class="panel dashboard-section" id="my-players" data-dashboard-section="my-players" hidden>
       <div class="panel-heading">
         <h2>My Players</h2>
@@ -1599,6 +1537,67 @@
             </tr>
             {% else %}
             <tr><td colspan="6" class="empty">No renewal registrations yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="table-pager">
+          <button class="button button-muted small" type="button" data-page-prev>Previous</button>
+          <span data-page-label>Page 1 of 1</span>
+          <button class="button button-primary small" type="button" data-page-next>Next</button>
+        </div>
+      </div>
+
+      <div class="panel-heading" style="margin-top: 2rem;">
+        <div>
+          <h2>Transfer History</h2>
+          <p class="section-copy">Tap <strong>Load Transfers</strong> beside a player to expand the full transfer record, including completed loan and permanent transfers.</p>
+        </div>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+        <table>
+          <thead>
+            <tr><th>Player</th><th>From Team</th><th>To Team</th><th>Type</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {% for transfer in transfer_history %}
+            <tr data-row data-status="{{ transfer.status }}">
+              <td>{{ transfer.player.full_name }}</td>
+              <td>{{ transfer.from_team.team_name }}</td>
+              <td>{{ transfer.to_team.team_name }}</td>
+              <td>{{ transfer.transfer_type }}</td>
+              <td>
+                {% if transfer.completed_at %}
+                  <span class="status approved">Completed</span>
+                {% elif transfer.status == 'approved' %}
+                  <span class="status approved">Registered</span>
+                {% else %}
+                  <span class="status pending">Pending</span>
+                {% endif %}
+              </td>
+              <td><button class="button button-primary small" type="button" onclick="loadTransferRegistration('{{ transfer.transfer_id }}')">Load Transfers</button></td>
+            </tr>
+            <tr id="transfer-details-{{ transfer.transfer_id }}" hidden>
+              <td colspan="6" style="padding: 0;">
+                <div style="margin: 0.75rem 0 1rem 0; padding: 1rem; border: 1px solid #d9e7d9; background: #f7fbf7; border-radius: 4px;">
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem;">
+                    <div><strong>Player:</strong> {{ transfer.player.full_name }}</div>
+                    <div><strong>Transfer Status:</strong> {{ transfer.status }}</div>
+                    <div><strong>From Team:</strong> {{ transfer.from_team.team_name }}</div>
+                    <div><strong>To Team:</strong> {{ transfer.to_team.team_name }}</div>
+                    <div><strong>Transfer Type:</strong> {{ transfer.transfer_type }}</div>
+                    <div><strong>Loan Period:</strong> {{ transfer.loan_period or '-' }}</div>
+                    <div><strong>Requested:</strong> {{ transfer.created_at.strftime('%Y-%m-%d') if transfer.created_at else '-' }}</div>
+                    <div><strong>Completed:</strong> {{ transfer.completed_at.strftime('%Y-%m-%d') if transfer.completed_at else '-' }}</div>
+                  </div>
+                  <div style="margin-top: 0.75rem;">
+                    <strong>Conditions:</strong>
+                    <div style="margin-top: 0.25rem;">{{ transfer.transfer_conditions }}</div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">No transfer history yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
