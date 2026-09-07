@@ -2695,7 +2695,6 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
             .where(
                 Player.team_id == team.team_id,
                 Player.status == ApprovalStatus.APPROVED.value,
-                Player.is_on_loan.is_(False),
             )
             .order_by(Player.full_name.asc(), Player.player_id.asc())
         ).all()
@@ -3345,8 +3344,6 @@ def search_players_by_name(
 
     player_query = (
         select(Player)
-        .where(Player.status == ApprovalStatus.APPROVED.value)
-        .where(Player.is_on_loan.is_(False))
         .options(selectinload(Player.team).selectinload(Team.category))
     )
     if name.strip():
@@ -3358,6 +3355,20 @@ def search_players_by_name(
     if category_id is not None:
         player_query = player_query.where(Team.category_id == category_id)
     players = db.scalars(player_query.limit(20)).all()
+    if team_id is not None:
+        players = [
+            player
+            for player in players
+            if player.status == ApprovalStatus.APPROVED.value
+            and not (player.is_on_loan and player.original_team_id == team_id)
+        ]
+    else:
+        players = [
+            player
+            for player in players
+            if player.status == ApprovalStatus.APPROVED.value
+            and not (player.is_on_loan and player.original_team_id == player.team_id)
+        ]
     
     result = {
         "players": [
