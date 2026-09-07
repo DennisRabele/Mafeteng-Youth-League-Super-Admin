@@ -2698,7 +2698,15 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
             )
             .order_by(Player.full_name.asc(), Player.player_id.asc())
         ).all()
-        players = [player for player in players if player_matches_exact_category(player, fixture.category.category_name)]
+        players = [
+            player
+            for player in players
+            if (
+                not (player.is_on_loan and player.original_team_id == team.team_id)
+                or (player.is_on_loan and player.original_team_id is not None and player.original_team_id != team.team_id)
+            )
+            and player_matches_exact_category(player, fixture.category.category_name)
+        ]
         return [
             {
                 "player_id": player.player_id,
