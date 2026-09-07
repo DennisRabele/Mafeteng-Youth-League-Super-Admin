@@ -2420,6 +2420,59 @@
         </div>
       </div>
       <div class="panel-heading" style="margin-top: 1.5rem;">
+        <h2>Club Statistics</h2>
+      </div>
+      <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
+        <div class="table-scroll-x">
+        <table class="responsive-card-table">
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Club</th>
+              <th>Category</th>
+              <th>Goals</th>
+              <th>Assists</th>
+              <th>Goal Types</th>
+              <th>Clubs Played For</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in player_statistics.club_rows %}
+            <tr data-row data-category="{{ row.category_name }}" data-team-id="{{ row.team.team_id if row.team else '' }}" data-team-ids="{{ row.team_ids | join(',') }}">
+              <td data-label="Player">
+                {% if row.player_names %}
+                  {{ row.player_names | join('; ') }}
+                {% else %}
+                  {{ row.player.full_name }}
+                {% endif %}
+              </td>
+              <td data-label="Club">{{ row.club_label or (row.team.team_name if row.team else '-') }}</td>
+              <td data-label="Category">{{ row.category_name or '-' }}</td>
+              <td data-label="Goals">{{ row.goals }}</td>
+              <td data-label="Assists">{{ row.assists }}</td>
+              <td data-label="Goal Types">
+                {% if row.goal_types %}
+                  {{ row.goal_types | tojson }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td data-label="Clubs Played For">
+                {% if row.clubs_played_for %}
+                  {{ row.clubs_played_for | join(', ') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty">No club statistics yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+      <div class="panel-heading" style="margin-top: 1.5rem;">
         <h2>All Player Statistics</h2>
       </div>
       <div class="dashboard-chip-row">
@@ -2456,7 +2509,7 @@
           </thead>
           <tbody>
             {% for row in player_statistics_all.players %}
-            <tr data-row data-category="{{ row.category_name }}" data-team-id="{{ row.team.team_id if row.team else '' }}">
+            <tr data-row data-category="{{ row.category_name }}" data-team-id="{{ row.team.team_id if row.team else '' }}" data-team-ids="{{ row.team_ids | join(',') }}">
               <td data-label="Player">
                 {% if row.player_names %}
                   {{ row.player_names | join('; ') }}
@@ -2464,7 +2517,7 @@
                   {{ row.player.full_name }}
                 {% endif %}
               </td>
-              <td data-label="Club">{{ row.team.team_name if row.team else '-' }}</td>
+              <td data-label="Club">{{ row.club_label or (row.team.team_name if row.team else '-') }}</td>
               <td data-label="Category">{{ row.category_name or '-' }}</td>
               <td data-label="Goals">{{ row.goals }}</td>
               <td data-label="Assists">{{ row.assists }}</td>

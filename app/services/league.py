@@ -1247,21 +1247,26 @@ def get_player_statistics(
         query = query.where(PlayerStatistic.team_id.in_(list(team_ids)))
     statistics = db.scalars(query).all()
 
-    player_groups: dict[tuple[str, str], dict[str, object]] = {}
+    club_groups: dict[tuple[str, int, str], dict[str, object]] = {}
+    total_groups: dict[tuple[str, str], dict[str, object]] = {}
 
-    def _record_statistic(statistic: PlayerStatistic) -> None:
-        player = statistic.player
-        team = statistic.team
-        if not player or not team:
-            return
-        identity_key = _player_identity_key(player)
-        category_name = statistic.category_name or (team.category.category_name if team.category else "")
-        group_key = (identity_key, category_name)
-        group = player_groups.setdefault(
+    def _ensure_group(
+        group_map: dict,
+        group_key,
+        *,
+        player: Player,
+        team: Team | None,
+        category_name: str,
+        club_label: str,
+    ) -> dict[str, object]:
+        group = group_map.setdefault(
             group_key,
             {
                 "players": {},
                 "primary_player": player,
+                "team": team,
+                "team_ids": set(),
+                "club_label": club_label,
                 "category_name": category_name,
                 "goals": 0,
                 "assists": 0,
@@ -1272,17 +1277,47 @@ def get_player_statistics(
         group["players"][player.player_id] = player
         if player.player_id > group["primary_player"].player_id:
             group["primary_player"] = player
+        if team:
+            group["team"] = team
+            group["team_ids"].add(team.team_id)
+        return group
 
-        category_entry = group["category_totals"][category_name]
-        if statistic.stat_type == "goal":
-            group["goals"] += 1
-            goal_type = statistic.goal_type or "Penalty"
-            group["goal_types"][goal_type] += 1
-            category_entry["goals"] += 1
-            category_entry["goal_types"][goal_type] += 1
-        elif statistic.stat_type == "assist":
-            group["assists"] += 1
-            category_entry["assists"] += 1
+    def _record_statistic(statistic: PlayerStatistic) -> None:
+        player = statistic.player
+        team = statistic.team
+        if not player or not team:
+            return
+        identity_key = _player_identity_key(player)
+        category_name = statistic.category_name or (team.category.category_name if team.category else "")
+
+        club_group = _ensure_group(
+            club_groups,
+            (identity_key, team.team_id, category_name),
+            player=player,
+            team=team,
+            category_name=category_name,
+            club_label=team.team_name,
+        )
+        total_group = _ensure_group(
+            total_groups,
+            (identity_key, category_name),
+            player=player,
+            team=player.team,
+            category_name=category_name,
+            club_label="All Clubs",
+        )
+
+        for group in (club_group, total_group):
+            category_entry = group["category_totals"][category_name]
+            if statistic.stat_type == "goal":
+                group["goals"] += 1
+                goal_type = statistic.goal_type or "Penalty"
+                group["goal_types"][goal_type] += 1
+                category_entry["goals"] += 1
+                category_entry["goal_types"][goal_type] += 1
+            elif statistic.stat_type == "assist":
+                group["assists"] += 1
+                category_entry["assists"] += 1
 
     for statistic in statistics:
         _record_statistic(statistic)
@@ -1331,75 +1366,48 @@ def get_player_statistics(
                 identifiers.append(identifier)
         return identifiers
 
-    performance_rows = []
-    for group in player_groups.values():
-        primary_player = group["primary_player"]
-        team = primary_player.team
-        category_name = team.category.category_name if team and team.category else ""
-        performance_rows.append(
-            {
-                "player": primary_player,
-                "team": team,
-                "category_name": group["category_name"],
-                "player_names": _collect_player_names(group),
-                "system_ids": _system_ids(group),
-                "clubs_played_for": _collect_clubs(group),
-                "goals": group["goals"],
-                "assists": group["assists"],
-                "goal_types": _format_goal_types(group),
-                "category_totals": _format_category_totals(group),
-                "primary_system_id": primary_player.player_code or f"PLAYER-{primary_player.player_id}",
-                "photo_path": primary_player.photo_path,
-            }
-        )
+    def _build_rows(group_map: dict) -> list[dict[str, object]]:
+        rows = []
+        for group in group_map.values():
+            primary_player = group["primary_player"]
+            team = group["team"] or primary_player.team
+            rows.append(
+                {
+                    "player": primary_player,
+                    "team": team,
+                    "team_ids": sorted(group["team_ids"]),
+                    "club_label": group["club_label"],
+                    "category_name": group["category_name"],
+                    "player_names": _collect_player_names(group),
+                    "system_ids": _system_ids(group),
+                    "clubs_played_for": _collect_clubs(group),
+                    "goals": group["goals"],
+                    "assists": group["assists"],
+                    "goal_types": _format_goal_types(group),
+                    "category_totals": _format_category_totals(group),
+                    "primary_system_id": primary_player.player_code or f"PLAYER-{primary_player.player_id}",
+                    "photo_path": primary_player.photo_path,
+                }
+            )
+        return rows
 
-    scorer_rows = sorted(
-        (
-            {
-                "player": row["player"],
-                "team": row["team"],
-                "category_name": row["category_name"],
-                "player_names": row["player_names"],
-                "system_id": row["primary_system_id"],
-                "system_ids": row["system_ids"],
-                "photo_path": row["photo_path"],
-                "clubs_played_for": row["clubs_played_for"],
-                "goals": row["goals"],
-                "assists": row["assists"],
-                "goal_types": row["goal_types"],
-                "category_totals": row["category_totals"],
-            }
-            for row in performance_rows
-            if row["goals"] > 0
-        ),
+    club_rows = sorted(
+        _build_rows(club_groups),
+        key=lambda row: (row["team"].team_name.lower() if row["team"] else "", row["player"].full_name.lower()),
+    )
+    total_rows = sorted(
+        _build_rows(total_groups),
         key=lambda row: (-row["goals"], -row["assists"], row["player"].full_name.lower()),
     )
-    assister_rows = sorted(
-        (
-            {
-                "player": row["player"],
-                "team": row["team"],
-                "category_name": row["category_name"],
-                "player_names": row["player_names"],
-                "system_id": row["primary_system_id"],
-                "system_ids": row["system_ids"],
-                "photo_path": row["photo_path"],
-                "clubs_played_for": row["clubs_played_for"],
-                "goals": row["goals"],
-                "assists": row["assists"],
-                "goal_types": row["goal_types"],
-                "category_totals": row["category_totals"],
-            }
-            for row in performance_rows
-            if row["assists"] > 0
-        ),
-        key=lambda row: (-row["assists"], -row["goals"], row["player"].full_name.lower()),
-    )
-    detailed_rows = sorted(
-        performance_rows,
-        key=lambda row: (-row["goals"], -row["assists"], row["player"].full_name.lower()),
-    )
-    return {"players": detailed_rows, "scorers": scorer_rows, "assisters": assister_rows}
+    scorer_rows = [row for row in total_rows if row["goals"] > 0]
+    assister_rows = [row for row in total_rows if row["assists"] > 0]
+
+    return {
+        "players": total_rows,
+        "club_rows": club_rows,
+        "scorers": scorer_rows,
+        "assisters": assister_rows,
+    }
 
 
 def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> dict[str, list[dict[str, object]]]:

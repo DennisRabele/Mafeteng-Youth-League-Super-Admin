@@ -147,11 +147,14 @@
       const rowCategory = row.dataset.category || "all";
       const normalizedRowCategory = normalizeCategoryValue(rowCategory);
       const rowMetric = row.dataset.metric || "all";
-      const rowTeam = row.dataset.teamId || "all";
+      const rowTeamIds = (row.dataset.teamIds || row.dataset.teamId || "all")
+        .split(",")
+        .map((value) => String(value).trim())
+        .filter(Boolean);
       const matchesStatus = statusFilter === "all" || rowStatus === statusFilter;
       const matchesCategory = normalizedCategoryFilter === "all" || normalizedRowCategory === normalizedCategoryFilter;
       const matchesMetric = metricFilter === "all" || rowMetric === metricFilter;
-      const matchesTeam = teamFilter === "all" || rowTeam === teamFilter;
+      const matchesTeam = teamFilter === "all" || rowTeamIds.includes(String(teamFilter));
       row.dataset.filterHidden = String(!(matchesStatus && matchesCategory && matchesMetric && matchesTeam));
     });
     section.querySelectorAll("[data-filter-chip]").forEach((chip) => {
