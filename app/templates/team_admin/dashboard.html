@@ -1496,6 +1496,8 @@
                 {{ player.full_name }}
                 {% if is_source_loan %}
                   <span class="loan-marker">On Loan</span>
+                {% elif is_receiving_loan and player.status == 'pending' %}
+                  <span class="loan-marker loanee">Loanee-Pending Approval</span>
                 {% elif is_receiving_loan %}
                   <span class="loan-marker loanee">Loanee</span>
                 {% endif %}
@@ -1515,6 +1517,8 @@
               <td>
                 {% if is_source_loan %}
                   <span class="status pending">On Loan</span>
+                {% elif is_receiving_loan and player.status == 'pending' %}
+                  <span class="status pending">Loanee-Pending Approval</span>
                 {% elif is_receiving_loan %}
                   <span class="status approved">Loanee</span>
                 {% elif player.registration_is_expired %}

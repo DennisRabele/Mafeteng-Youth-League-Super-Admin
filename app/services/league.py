@@ -410,6 +410,10 @@ def create_match_day_squad(
     for player_id in player_ids:
         player = player_map[player_id]
         if player.status != ApprovalStatus.APPROVED.value:
+            if player.is_on_loan and player.original_team_id is not None and player.original_team_id != team.team_id:
+                raise RegistrationError(
+                    f"{player.full_name} is a loanee pending approval for {team.team_name} and cannot be selected yet."
+                )
             raise RegistrationError(f"{player.full_name} is not approved for selection.")
         if not player_can_play_for_category(player, team.category.category_name):
             raise RegistrationError(
