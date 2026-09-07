@@ -58,6 +58,8 @@ from app.services.league import (
 )
 from app.services.registration import (
     RegistrationError,
+    determine_age_group,
+    determine_player_club_category,
     approve_player,
     approve_renewal,
     approve_team,
@@ -88,6 +90,7 @@ from app.services.registration import (
     reset_password,
     unregister_transferred_player,
     age_on,
+    suggested_registration_period,
     verify_email_code,
     verify_password_recovery_code,
     player_can_play_for_category,
@@ -2875,30 +2878,14 @@ def create_team_route(
 def create_player_route(
     request: Request,
     team_id: int = Form(...),
-    full_name: str = Form(...),
-    gender: str = Form(...),
-    dob: str = Form(...),
-    nationality: str = Form(...),
-    player_email: str | None = Form(None),
-    player_address: str | None = Form(None),
-    parent_name: str = Form(...),
-    parent_contact: str = Form(...),
-    school_name: str | None = Form(None),
-    position: str | None = Form(None),
-    registration_period: int = Form(1),
-    passport_photo: UploadFile | None = File(None),
-    player_agreement_form: UploadFile | None = File(None),
-    identity_document_type: str = Form("Birth Certificate"),
-    identity_document: UploadFile | None = File(None),
-    passport_document: UploadFile | None = File(None),
-    birth_certificate: UploadFile | None = File(None),
-    national_id_document: UploadFile | None = File(None),
-    parent_consent_picture: UploadFile | None = File(None),
-    medical_certificate: UploadFile | None = File(None),
+    full_name: list[str] = Form(...),
+    gender: list[str] = Form(...),
+    dob: list[str] = Form(...),
+    position: list[str] = Form(...),
+    passport_photo: list[UploadFile] = File(...),
+    identity_document: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
-    import re
-    
     team_admin = _require_team_admin(request, db)
     team = db.get(Team, team_id)
     if not team or not team_admin_has_access_to_team(db, team_admin.team_admin_id, team.team_id):
@@ -2907,123 +2894,133 @@ def create_player_route(
             notice="You can only register players for your own approved teams.",
             notice_kind="error",
         )
-    
-    # Validate full_name - only letters and spaces
-    if not re.match(r"^[A-Za-z\s'\-]+$", full_name.strip()):
+    if not full_name or len(full_name) != len(dob) or len(full_name) != len(gender) or len(full_name) != len(position) or len(full_name) != len(passport_photo) or len(full_name) != len(identity_document):
         return _team_admin_dashboard_redirect(
             section="player-form",
-            notice="Player full name can only contain letters and spaces.",
+            notice="Each player must have one full name, date of birth, gender, position, photo, and identity document.",
             notice_kind="error",
         )
-    
-    # Validate parent_name - only letters and spaces
-    if not re.match(r"^[A-Za-z\s'\-]+$", parent_name.strip()):
+    if len(full_name) < 10:
         return _team_admin_dashboard_redirect(
             section="player-form",
-            notice="Parent/Guardian name can only contain letters and spaces.",
+            notice="Please enter at least 10 players before submitting new registrations.",
             notice_kind="error",
         )
-    
-    # Validate nationality - only letters and spaces
-    if not re.match(r"^[A-Za-z\s'\-]+$", nationality.strip()):
-        return _team_admin_dashboard_redirect(
-            section="player-form",
-            notice="Nationality can only contain letters and spaces.",
-            notice_kind="error",
-        )
-    
-    # Validate parent_contact - only numbers and symbols (+, -, space)
-    if not re.match(r"^[0-9+\-\s]+$", parent_contact.strip()):
-        return _team_admin_dashboard_redirect(
-            section="player-form",
-            notice="Parent contact can only contain numbers, +, -, or spaces.",
-            notice_kind="error",
-        )
+
+    allowed_positions = {"Goalkeeper", "Defender", "Midfielder", "Forward"}
+    normalized_players: list[dict[str, object]] = []
+    team_category_name = team.category.category_name if team.category else None
+    uploaded_paths: list[str] = []
+    registered_players: list[Player] = []
     try:
-        dob_value = datetime.strptime(dob.strip(), "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return _team_admin_dashboard_redirect(
-            section="player-form",
-            notice="Date of birth must be entered in YYYY-MM-DD format.",
-            notice_kind="error",
-        )
-    try:
-        photo_path = _safe_upload(passport_photo, "player-photos")
-        # Parent/Guardian Consent Form is now the main agreement form
-        agreement_form_path = _safe_upload(parent_consent_picture, "player-agreements")
-        if not agreement_form_path:
-            # Fallback to player_agreement_form if parent_consent_picture not provided
-            agreement_form_path = _safe_upload(player_agreement_form, "player-agreements")
-        if not agreement_form_path:
-            return _team_admin_dashboard_redirect(
-                section="player-form",
-                notice="Parent/Guardian consent form was not uploaded.",
-                notice_kind="error",
+        for index, (player_name, dob_text, player_gender, player_position) in enumerate(
+            zip(full_name, dob, gender, position),
+            start=1,
+        ):
+            clean_name = player_name.strip()
+            if not clean_name:
+                raise RegistrationError(f"Player {index} full name is required.")
+            if not re.match(r"^[A-Za-z\s'\-]+$", clean_name):
+                raise RegistrationError(f"Player {index} full name can only contain letters, spaces, apostrophes, and hyphens.")
+
+            clean_gender = player_gender.strip()
+            if clean_gender not in {"Male", "Female"}:
+                raise RegistrationError(f"Player {index} gender must be Male or Female.")
+
+            clean_position = player_position.strip()
+            if clean_position not in allowed_positions:
+                raise RegistrationError(f"Player {index} position must be one of: Goalkeeper, Defender, Midfielder, Forward.")
+
+            try:
+                dob_value = datetime.strptime(dob_text.strip(), "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                raise RegistrationError(f"Player {index} date of birth must use the calendar date picker.")
+
+            age_group = determine_age_group(dob_value)
+            eligible_category = determine_player_club_category(clean_gender, dob_value)
+            max_period = suggested_registration_period(dob_value)
+            if not age_group or not eligible_category or not max_period:
+                raise RegistrationError(f"Player {index} is not eligible for any youth age category.")
+            if not team_category_name or team_category_name.casefold() != eligible_category.casefold():
+                raise RegistrationError(
+                    f"Player {index} qualifies for {eligible_category}, but the selected team is registered as {team_category_name or 'unconfigured'}."
+                )
+
+            normalized_players.append(
+                {
+                    "full_name": clean_name,
+                    "dob": dob_value,
+                    "gender": clean_gender,
+                    "position": clean_position,
+                    "registration_period": max_period,
+                }
             )
-        documents: list[tuple[str, str]] = []
 
-        # Add Parent/Guardian Consent Form to documents list
-        if agreement_form_path:
-            documents.append(("Parent/Guardian Consent Form", agreement_form_path))
+        for index, player_data in enumerate(normalized_players):
+            photo_path = _safe_upload(passport_photo[index], "player-photos")
+            identity_path = _safe_upload(identity_document[index], "player-documents")
+            if photo_path:
+                uploaded_paths.append(photo_path)
+            if identity_path:
+                uploaded_paths.append(identity_path)
+            if not photo_path:
+                raise RegistrationError(f"Player {index + 1} photo is required.")
+            if not identity_path:
+                raise RegistrationError(f"Player {index + 1} identity document is required.")
 
-        identity_file_path = _safe_upload(identity_document, "player-documents")
-        if identity_file_path:
-            documents.append((identity_document_type.strip() or "Identity Document", identity_file_path))
+            registered_players.append(
+                register_player(
+                    db,
+                    team_id=team_id,
+                    full_name=player_data["full_name"],
+                    gender=player_data["gender"],
+                    dob=player_data["dob"],
+                    nationality=None,
+                    position=player_data["position"],
+                    agreement_form_path=identity_path,
+                    photo_path=photo_path,
+                    documents=[("Identity Document", identity_path)],
+                    registration_period=player_data["registration_period"],
+                    commit=False,
+                )
+            )
 
-        for document_type, upload in [
-            ("Passport", passport_document),
-            ("Birth Certificate", birth_certificate),
-            ("National ID", national_id_document),
-            ("Medical Certificate", medical_certificate),
-        ]:
-            file_path = _safe_upload(upload, "player-documents")
-            if file_path:
-                documents.append((document_type, file_path))
+        db.commit()
+        for player in registered_players:
+            db.refresh(player)
 
-        register_player(
-            db,
-            team_id=team_id,
-            full_name=full_name,
-            gender=gender,
-            dob=dob_value,
-            nationality=nationality,
-            email=player_email,
-            residential_address=player_address,
-            parent_name=parent_name,
-            parent_contact=parent_contact,
-            school_name=school_name,
-            position=position,
-            registration_period=registration_period,
-            agreement_form_path=agreement_form_path,
-            photo_path=photo_path,
-            documents=documents,
-        )
         _announce_submission(
             db,
             recipient_email=team_admin.user.email,
-            title="Player registration submitted",
-            message=f"Player registration for {full_name} has been submitted and is awaiting approval.",
+            title="Player registrations submitted",
+            message=f"{len(registered_players)} new player registrations have been submitted and are awaiting approval.",
             link="/team-admin/account",
-            super_admin_title="Player registration submitted",
-            super_admin_message=f"{full_name} was submitted for approval under {team.team_name}.",
+            super_admin_title="Player registrations submitted",
+            super_admin_message=f"{len(registered_players)} new player registrations were submitted for approval under {team.team_name}.",
             super_admin_link="/super-admin#players",
         )
     except RegistrationError as exc:
+        db.rollback()
+        for path in dict.fromkeys(uploaded_paths):
+            delete_upload(path)
         return _team_admin_dashboard_redirect(
             section="player-form",
             notice=str(exc),
             notice_kind="error",
         )
     except Exception:
+        db.rollback()
+        for path in dict.fromkeys(uploaded_paths):
+            delete_upload(path)
         return _team_admin_dashboard_redirect(
             section="player-form",
-            notice="Player registration could not be completed right now. Please try again.",
+            notice="Player registrations could not be completed right now. Please try again.",
             notice_kind="error",
         )
 
     return _team_admin_dashboard_redirect(
         section="player-form",
-        notice=f"Player registration for {full_name} was submitted successfully and is now pending approval.",
+        notice=f"{len(registered_players)} player registrations were submitted successfully and are now pending approval.",
     )
 
 

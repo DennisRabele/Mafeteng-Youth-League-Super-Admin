@@ -1021,18 +1021,20 @@ def register_player(
     full_name: str,
     gender: str,
     dob: date,
-    nationality: str,
-    email: str | None,
-    residential_address: str | None,
-    parent_name: str,
-    parent_contact: str,
-    school_name: str | None,
-    position: str | None,
+    nationality: str | None = None,
+    email: str | None = None,
+    residential_address: str | None = None,
+    parent_name: str | None = None,
+    parent_contact: str | None = None,
+    school_name: str | None = None,
+    position: str | None = None,
     agreement_form_path: str | None,
     photo_path: str | None,
-    documents: list[tuple[str, str]],
-    registration_period: int = 1,
+    documents: list[tuple[str, str]] | None = None,
+    registration_period: int | None = None,
+    commit: bool = True,
 ) -> Player:
+    documents = list(documents or [])
     team = db.get(Team, team_id)
     if not team:
         raise RegistrationError("Selected team does not exist.")
@@ -1041,13 +1043,29 @@ def register_player(
 
     full_name = _validate_person_name(full_name, "Player full name")
     gender = _validate_text(gender, field_name="Gender")
-    nationality = _validate_person_name(nationality, "Nationality")
-    parent_name = _validate_person_name(parent_name, "Parent/Guardian name")
-    parent_contact = _validate_phone(parent_contact, "Parent contact")
+    nationality = (
+        _validate_person_name(nationality, "Nationality")
+        if nationality and nationality.strip()
+        else "Unknown"
+    )
     if agreement_form_path is not None:
         agreement_form_path = _normalize_text(agreement_form_path) or None
+    if agreement_form_path is None and documents:
+        agreement_form_path = documents[0][1]
     if agreement_form_path is None:
-        raise RegistrationError("Parent/Guardian Consent Form is required.")
+        raise RegistrationError("Identity document is required.")
+
+    if photo_path is None or not _normalize_text(photo_path):
+        raise RegistrationError("Player photo is required.")
+
+    if parent_name or parent_contact:
+        if not parent_name or not parent_contact:
+            raise RegistrationError("Parent/Guardian name and contact must be provided together.")
+        parent_name = _validate_person_name(parent_name, "Parent/Guardian name")
+        parent_contact = _validate_phone(parent_contact, "Parent contact")
+    else:
+        parent_name = None
+        parent_contact = None
 
     age_group = determine_age_group(dob)
     eligible_category = determine_player_club_category(gender, dob)
@@ -1067,6 +1085,8 @@ def register_player(
             f"This player qualifies for {eligible_category}, but the selected team is registered as {team_category_name}. Registration cannot continue."
         )
 
+    if registration_period is None:
+        registration_period = max_registration_period
     if registration_period not in (1, 2, 3):
         raise RegistrationError("Registration period must be 1, 2, or 3 years.")
     if registration_period > max_registration_period:
@@ -1075,7 +1095,7 @@ def register_player(
         )
 
     parent = None
-    if parent_name.strip() and parent_contact.strip():
+    if parent_name and parent_contact:
         parent = Parent(name=parent_name.strip(), contact=parent_contact.strip())
         db.add(parent)
         db.flush()
@@ -1135,8 +1155,11 @@ def register_player(
             )
         )
 
-    db.commit()
-    db.refresh(player)
+    if commit:
+        db.commit()
+        db.refresh(player)
+    else:
+        db.flush()
     return player
 
 
