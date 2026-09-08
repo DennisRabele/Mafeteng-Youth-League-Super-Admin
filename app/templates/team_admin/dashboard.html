@@ -2310,6 +2310,29 @@
               setMatchDayError("");
             };
 
+            const updateFixturePreview = (fixture) => {
+              const dateNode = document.querySelector("[data-matchday-fixture-date]");
+              const venueNode = document.querySelector("[data-matchday-fixture-venue]");
+              const timeNode = document.querySelector("[data-matchday-fixture-time]");
+              const homeNameNode = document.querySelector("[data-matchday-home-name]");
+              const awayNameNode = document.querySelector("[data-matchday-away-name]");
+              const homeNoteNode = document.querySelector("[data-matchday-home-note]");
+              const awayNoteNode = document.querySelector("[data-matchday-away-note]");
+              const homeLogoNode = document.querySelector("[data-matchday-home-logo]");
+              const awayLogoNode = document.querySelector("[data-matchday-away-logo]");
+              const homeTeamName = fixture?.home_team?.team_name || "Select a fixture";
+              const awayTeamName = fixture?.away_team?.team_name || "Select a fixture";
+              if (dateNode) dateNode.textContent = fixture?.fixture_date || "Select a fixture";
+              if (venueNode) venueNode.textContent = fixture?.venue || "Venue will appear here";
+              if (timeNode) timeNode.textContent = fixture?.dashboard_time || "Kickoff time will appear here";
+              if (homeNameNode) homeNameNode.textContent = homeTeamName;
+              if (awayNameNode) awayNameNode.textContent = awayTeamName;
+              if (homeNoteNode) homeNoteNode.textContent = fixture ? `Home team: ${homeTeamName}` : "Home team details will load here.";
+              if (awayNoteNode) awayNoteNode.textContent = fixture ? `Away team: ${awayTeamName}` : "Away team details will load here.";
+              renderTeamLogo(homeLogoNode, homeTeamName, fixture?.home_team?.logo || "");
+              renderTeamLogo(awayLogoNode, awayTeamName, fixture?.away_team?.logo || "");
+            };
+
             const renderTeamLogo = (container, teamName, logoUrl) => {
               if (!container) {
                 return;
