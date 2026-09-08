@@ -109,7 +109,7 @@ from app.services.email import (
     send_notification_email,
     send_verification_code,
 )
-from app.services.storage import delete_upload, save_upload
+from app.services.storage import delete_upload, is_cloudinary_upload_url, save_upload
 
 
 router = APIRouter()
@@ -132,12 +132,41 @@ def _render(request: Request, template: str, context: dict):
     context.setdefault("app_name", settings.app_name)
     context.setdefault("app_mode", app_mode)
     context.setdefault("assets", assets)
+    context.setdefault("cloudinary_upload_config", _cloudinary_upload_config())
     return templates.TemplateResponse(request, template, context)
 
 
 def _load_assets() -> dict[str, str]:
     return {
         "league_logo": "/static/images/logo.jpg",
+    }
+
+
+def _cloudinary_upload_folder(folder: str) -> str:
+    prefix = settings.cloudinary_folder_prefix.strip().strip("/")
+    cloudinary_folder = {
+        "player-photos": "player-photos",
+        "player-documents": "player-documents",
+    }.get(folder)
+    if not cloudinary_folder:
+        raise ValueError(f"Unsupported upload folder: {folder}")
+    return f"{prefix}/{cloudinary_folder}" if prefix else cloudinary_folder
+
+
+def _cloudinary_upload_config() -> dict[str, object]:
+    cloud_name = settings.cloudinary_cloud_name.strip()
+    if not cloud_name:
+        return {"enabled": False}
+    return {
+        "enabled": True,
+        "cloud_name": cloud_name,
+        "upload_url": f"https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload",
+        "player_photos_preset": settings.cloudinary_player_photos_upload_preset,
+        "player_documents_preset": settings.cloudinary_player_documents_upload_preset,
+        "player_photos_folder": _cloudinary_upload_folder("player-photos"),
+        "player_documents_folder": _cloudinary_upload_folder("player-documents"),
+        "max_image_bytes": 3 * 1024 * 1024,
+        "max_document_bytes": 5 * 1024 * 1024,
     }
 
 
@@ -192,6 +221,31 @@ def _safe_upload(upload: UploadFile | None, folder: str) -> str | None:
         raise RegistrationError(
             "A file upload could not be completed right now. Please try again."
         ) from exc
+
+
+def _resolve_player_upload(
+    *,
+    urls: list[str] | None,
+    uploads: list[UploadFile] | None,
+    index: int,
+    folder: str,
+    label: str,
+) -> str:
+    if urls and index < len(urls):
+        candidate = urls[index].strip()
+        if candidate:
+            if not is_cloudinary_upload_url(candidate, folder):
+                raise RegistrationError(
+                    f"Player {index + 1} {label} must be uploaded to Cloudinary."
+                )
+            return candidate
+
+    if uploads and index < len(uploads):
+        uploaded = _safe_upload(uploads[index], folder)
+        if uploaded:
+            return uploaded
+
+    raise RegistrationError(f"Player {index + 1} {label} is required.")
 
 
 def _redirect(location: str) -> RedirectResponse:
@@ -2882,8 +2936,10 @@ def create_player_route(
     gender: list[str] = Form(...),
     dob: list[str] = Form(...),
     position: list[str] = Form(...),
-    passport_photo: list[UploadFile] = File(...),
-    identity_document: list[UploadFile] = File(...),
+    passport_photo_url: list[str] | None = Form(None),
+    identity_document_url: list[str] | None = Form(None),
+    passport_photo: list[UploadFile] | None = File(None),
+    identity_document: list[UploadFile] | None = File(None),
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
@@ -2894,16 +2950,42 @@ def create_player_route(
             notice="You can only register players for your own approved teams.",
             notice_kind="error",
         )
-    if not full_name or len(full_name) != len(dob) or len(full_name) != len(gender) or len(full_name) != len(position) or len(full_name) != len(passport_photo) or len(full_name) != len(identity_document):
+    if not full_name or len(full_name) != len(dob) or len(full_name) != len(gender) or len(full_name) != len(position):
         return _team_admin_dashboard_redirect(
             section="player-form",
             notice="Each player must have one full name, date of birth, gender, position, photo, and identity document.",
             notice_kind="error",
         )
-    if len(full_name) < 10:
+    direct_photo_urls = [value.strip() for value in (passport_photo_url or []) if value and value.strip()]
+    direct_document_urls = [value.strip() for value in (identity_document_url or []) if value and value.strip()]
+    if direct_photo_urls and len(direct_photo_urls) != len(full_name):
         return _team_admin_dashboard_redirect(
             section="player-form",
-            notice="Please enter at least 10 players before submitting new registrations.",
+            notice="Each player photo must be uploaded or selected once.",
+            notice_kind="error",
+        )
+    if direct_document_urls and len(direct_document_urls) != len(full_name):
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Each identity document must be uploaded or selected once.",
+            notice_kind="error",
+        )
+    if passport_photo and len(passport_photo) != len(full_name):
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Each player must have one photo file selected.",
+            notice_kind="error",
+        )
+    if identity_document and len(identity_document) != len(full_name):
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Each player must have one identity document file selected.",
+            notice_kind="error",
+        )
+    if len(full_name) < 2:
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Please enter at least 2 players before submitting new registrations.",
             notice_kind="error",
         )
 
@@ -2957,16 +3039,24 @@ def create_player_route(
             )
 
         for index, player_data in enumerate(normalized_players):
-            photo_path = _safe_upload(passport_photo[index], "player-photos")
-            identity_path = _safe_upload(identity_document[index], "player-documents")
+            photo_path = _resolve_player_upload(
+                urls=direct_photo_urls,
+                uploads=passport_photo,
+                index=index,
+                folder="player-photos",
+                label="photo",
+            )
+            identity_path = _resolve_player_upload(
+                urls=direct_document_urls,
+                uploads=identity_document,
+                index=index,
+                folder="player-documents",
+                label="identity document",
+            )
             if photo_path:
                 uploaded_paths.append(photo_path)
             if identity_path:
                 uploaded_paths.append(identity_path)
-            if not photo_path:
-                raise RegistrationError(f"Player {index + 1} photo is required.")
-            if not identity_path:
-                raise RegistrationError(f"Player {index + 1} identity document is required.")
 
             registered_players.append(
                 register_player(

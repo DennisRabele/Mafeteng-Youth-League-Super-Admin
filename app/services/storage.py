@@ -191,6 +191,22 @@ def _delete_from_cloudinary(path: str) -> bool:
     return True
 
 
+def is_cloudinary_upload_url(path: str | None, folder: str | None = None) -> bool:
+    if not path:
+        return False
+
+    parsed = _parse_cloudinary_public_id(path)
+    if not parsed:
+        return False
+
+    if folder is None:
+        return True
+
+    expected_folder = _cloudinary_folder(folder)
+    _, public_id = parsed
+    return public_id == expected_folder or public_id.startswith(f"{expected_folder}/")
+
+
 def delete_upload(path: str | None, folder: str | None = None) -> bool:
     if not path:
         return False

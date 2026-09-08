@@ -47,6 +47,12 @@ class Settings:
     cloudinary_cloud_name: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
     cloudinary_api_key: str = os.getenv("CLOUDINARY_API_KEY", "")
     cloudinary_api_secret: str = os.getenv("CLOUDINARY_API_SECRET", "")
+    cloudinary_player_photos_upload_preset: str = os.getenv(
+        "CLOUDINARY_PLAYER_PHOTOS_UPLOAD_PRESET", "player_photos"
+    )
+    cloudinary_player_documents_upload_preset: str = os.getenv(
+        "CLOUDINARY_PLAYER_DOCUMENTS_UPLOAD_PRESET", "player_documents"
+    )
     cloudinary_folder_prefix: str = os.getenv(
         "CLOUDINARY_FOLDER_PREFIX", "Mafeteng Youth League"
     ).strip().strip("/")
