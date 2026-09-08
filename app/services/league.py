@@ -579,7 +579,7 @@ def create_fixture(
         raise RegistrationError("Fixtures can only be created between clubs of the same club type.")
     if fixture_leg not in {1, 2}:
         raise RegistrationError("Choose whether this is the first or second leg.")
-    season = db.scalar(select(Season).order_by(Season.start_date.desc()))
+    season = db.scalar(select(Season).where(Season.is_open.is_(True)).order_by(Season.start_date.desc()))
     if not season:
         raise RegistrationError("No active season is available for fixture creation.")
 
@@ -1269,6 +1269,7 @@ def get_player_statistics(
     *,
     team_ids: Iterable[int] | None = None,
 ) -> dict[str, list[dict[str, object]]]:
+    active_season = db.scalar(select(Season).where(Season.is_open.is_(True)).order_by(Season.start_date.desc()))
     query = (
         select(PlayerStatistic)
         .options(
@@ -1278,6 +1279,8 @@ def get_player_statistics(
         )
         .order_by(PlayerStatistic.created_at.desc(), PlayerStatistic.statistic_id.desc())
     )
+    if active_season:
+        query = query.join(Fixture, PlayerStatistic.fixture_id == Fixture.fixture_id).where(Fixture.season_id == active_season.season_id)
     if team_ids is not None:
         query = query.where(PlayerStatistic.team_id.in_(list(team_ids)))
     statistics = db.scalars(query).all()
@@ -1478,6 +1481,9 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
             "points": 0,
         }
 
+    active_season = db.scalar(select(Season).where(Season.is_open.is_(True)).order_by(Season.start_date.desc()))
+    if not active_season:
+        return {}
     matches = db.scalars(
         select(Match)
         .join(Fixture, Fixture.fixture_id == Match.fixture_id)
@@ -1486,7 +1492,7 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
             selectinload(Match.fixture).selectinload(Fixture.home_team).selectinload(Team.category),
             selectinload(Match.fixture).selectinload(Fixture.away_team).selectinload(Team.category),
         )
-        .where(Match.home_score.is_not(None), Match.away_score.is_not(None))
+        .where(Match.home_score.is_not(None), Match.away_score.is_not(None), Fixture.season_id == active_season.season_id)
     ).all()
 
     def _head_to_head_metrics(competition: str, tied_team_ids: list[int]) -> dict[int, dict[str, int]]:

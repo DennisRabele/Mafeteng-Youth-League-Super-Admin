@@ -21,6 +21,7 @@ from app.models import (
     Player,
     PlayerDocument,
     PlayerRegistrationRequest,
+    PlayerRegistrationWindow,
     PlayerTransferRequest,
     QRPlayerCard,
     Season,
@@ -54,6 +55,31 @@ TEAM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9]+(?:[A-Za-z0-9\s'\-&]*[A-Za-z0-9])?
 PHONE_PATTERN = re.compile(r"^[0-9+\-\s]+$")
 logger = logging.getLogger(__name__)
 TRANSFER_ACCESS_PATH = "My clubs -> Register Players -> transferred players"
+
+
+def get_open_season(db: Session) -> Season | None:
+    return db.scalar(select(Season).where(Season.is_open.is_(True)).order_by(Season.start_date.desc()))
+
+
+def assert_player_registration_window(db: Session, team: Team) -> Season:
+    season = get_open_season(db)
+    if not season:
+        raise RegistrationError("Player registration is closed because no season is currently open.")
+    if not team.category or team.category.season_id != season.season_id:
+        raise RegistrationError(f"{team.team_name} is not registered in the open season, {season.season_name}.")
+    window = db.scalar(select(PlayerRegistrationWindow).where(
+        PlayerRegistrationWindow.season_id == season.season_id,
+        PlayerRegistrationWindow.category_id == team.category_id,
+        PlayerRegistrationWindow.club_type == team.club_type,
+    ))
+    if not window:
+        raise RegistrationError(f"Player registration dates have not been set for {team.category.category_name} - {team.club_type}.")
+    today = date.today()
+    if today < window.opening_date or today > window.closing_date:
+        raise RegistrationError(
+            f"Player registration for {team.category.category_name} - {team.club_type} is open from {window.opening_date.isoformat()} to {window.closing_date.isoformat()}."
+        )
+    return season
 
 
 def _normalize_text(value: str | None) -> str:
@@ -1054,6 +1080,7 @@ def register_player(
         raise RegistrationError("Selected team does not exist.")
     if team.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Players can only be submitted for approved teams.")
+    assert_player_registration_window(db, team)
 
     full_name = _validate_person_name(full_name, "Player full name")
     gender = _validate_text(gender, field_name="Gender")
@@ -1189,6 +1216,7 @@ def renew_player_registration(
     accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
     if not player or not player.team or player.team_id not in accessible_team_ids:
         raise RegistrationError("You can only renew players from your own teams.")
+    assert_player_registration_window(db, player.team)
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Only approved players can be renewed.")
     if player.is_on_loan:
@@ -1252,10 +1280,14 @@ def request_player_transfer(
         raise RegistrationError("You can only transfer players from your own teams.")
     if not to_team:
         raise RegistrationError("Selected destination team was not found.")
+    assert_player_registration_window(db, source_team)
+    assert_player_registration_window(db, to_team)
     if to_team.team_id in accessible_team_ids:
         raise RegistrationError("Destination team must belong to another Team Admin.")
     if source_team and source_team.category_id != to_team.category_id:
         raise RegistrationError("Selected destination team must be in the same category as the player's team.")
+    if source_team and source_team.club_type != to_team.club_type:
+        raise RegistrationError("Selected destination team must be the same club type as the player's team.")
     transfer_type = _validate_text(transfer_type, field_name="Transfer type")
     player_details = _validate_text(player_details, field_name="Player details")
     transfer_conditions = _validate_text(transfer_conditions, field_name="Transfer conditions")
@@ -1337,6 +1369,8 @@ def request_player_from_team(
         )
     if not to_team:
         raise RegistrationError(f"To Team id {to_team_id} was not found.")
+    assert_player_registration_window(db, from_team)
+    assert_player_registration_window(db, to_team)
     if to_team.team_id not in accessible_team_ids:
         raise RegistrationError(
             f"To Team '{to_team.team_name}' (team id {to_team.team_id}) is not approved for Team Admin id {team_admin_id}."
@@ -1460,6 +1494,10 @@ def complete_transfer_registration(
         raise RegistrationError("Transfer request was not found for your team.")
     if request.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Transfer must be approved before registration.")
+    destination_team = db.get(Team, request.to_team_id)
+    if not destination_team:
+        raise RegistrationError("Transfer destination team was not found.")
+    assert_player_registration_window(db, destination_team)
     agreement_form_path = _normalize_text(agreement_form_path) or None
     if not agreement_form_path:
         raise RegistrationError("Parent/Guardian Consent Form is required for transfer registration.")

@@ -104,6 +104,9 @@
         <div class="alert" style="background:#eef5ff; border-color:#2d6cdf; margin-bottom: 1rem;" data-selected-player-team-banner>
           Choose an approved club below to prefill the registration form.
         </div>
+        <div class="alert {% if active_season %}success{% else %}error{% endif %}" style="margin-bottom:1rem;">
+          <strong>Season:</strong> {{ active_season.season_name if active_season else 'No open season' }}. {% if registration_windows %}Registration periods: {% for window in registration_windows %}{{ window.category.category_name }} - {{ window.club_type }}: {{ window.opening_date }} to {{ window.closing_date }}{% if not loop.last %}; {% endif %}{% endfor %}.{% else %}No player registration periods are currently set.{% endif %}
+        </div>
 
         <!-- Registration Type Selection Screen -->
         <div id="registration-type-selector" class="registration-type-selector" style="display: block;">
@@ -2975,6 +2978,7 @@
     <section class="panel dashboard-section" id="league-tables" data-dashboard-section="league-tables" hidden>
       <div class="panel-heading">
         <h2>League Tables</h2>
+        <p class="section-copy">Season: {{ active_season.season_name if active_season else 'No open season' }}</p>
         <div class="panel-heading-actions">
           <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download Cards</button>
         </div>
@@ -3047,6 +3051,7 @@
     <section class="panel dashboard-section" id="player-statistics" data-dashboard-section="player-statistics" hidden>
       <div class="panel-heading">
         <h2>Player Statistics</h2>
+        <p class="section-copy">Season: {{ active_season.season_name if active_season else 'No open season' }}</p>
         <div class="panel-heading-actions">
           <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/player-statistics/export?category=all&team_id=all'">Download Top Stats</button>
         </div>

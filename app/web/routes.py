@@ -25,12 +25,14 @@ from app.models import (
     Player,
     PlayerRegistrationRequest,
     PlayerRequest,
+    PlayerRegistrationWindow,
     PlayerTransferRequest,
     SuperAdmin,
     Team,
     TeamAdmin,
     TransferStatus,
     ResultVerification,
+    Season,
     User,
     UserRole,
 )
@@ -95,6 +97,7 @@ from app.services.registration import (
     verify_password_recovery_code,
     player_can_play_for_category,
     player_matches_exact_category,
+    get_open_season,
 )
 from app.services.team_access import (
     load_team_admin_approved_team_ids,
@@ -1522,7 +1525,14 @@ def super_admin_dashboard(
         .where(Team.status == ApprovalStatus.APPROVED.value)
         .order_by(Team.category_id, Team.team_name)
     ).all()
-    categories = db.scalars(select(Category).order_by(Category.category_name)).all()
+    seasons = db.scalars(select(Season).order_by(Season.start_date.desc())).all()
+    active_season = get_open_season(db)
+    categories = db.scalars(select(Category).where(Category.season_id == active_season.season_id).order_by(Category.category_name)).all() if active_season else []
+    registration_windows = db.scalars(
+        select(PlayerRegistrationWindow)
+        .options(selectinload(PlayerRegistrationWindow.category), selectinload(PlayerRegistrationWindow.season))
+        .order_by(PlayerRegistrationWindow.opening_date)
+    ).all()
     category_map: dict[int, Category] = {category.category_id: category for category in categories}
     for team in approved_fixture_teams:
         if team.category and team.category.category_id not in category_map:
@@ -1594,6 +1604,9 @@ def super_admin_dashboard(
             "teams_list": teams_list,
             "approved_fixture_teams": approved_fixture_teams,
             "categories": categories,
+            "seasons": seasons,
+            "active_season": active_season,
+            "registration_windows": registration_windows,
             "fixtures": fixtures,
             "fixture_filters": {
                 "category": fixture_category,
@@ -1867,7 +1880,15 @@ def team_admin_dashboard(
     restore_expired_loans(db)
     process_player_registration_lifecycle(db)
     purge_expired_match_day_squads(db)
-    categories = db.scalars(select(Category).order_by(Category.category_name)).all()
+    seasons = db.scalars(select(Season).order_by(Season.start_date.desc())).all()
+    active_season = get_open_season(db)
+    categories = db.scalars(select(Category).where(Category.season_id == active_season.season_id).order_by(Category.category_name)).all() if active_season else []
+    registration_windows = db.scalars(
+        select(PlayerRegistrationWindow)
+        .options(selectinload(PlayerRegistrationWindow.category))
+        .where(PlayerRegistrationWindow.season_id == active_season.season_id)
+        .order_by(PlayerRegistrationWindow.opening_date)
+    ).all() if active_season else []
     teams = load_team_admin_teams(db, team_admin.team_admin_id)
     approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
     owned_approved_teams = load_team_admin_owned_approved_teams(db, team_admin.team_admin_id)
@@ -2098,6 +2119,9 @@ def team_admin_dashboard(
             "dashboard_notice_kind": notice_kind or "success",
             "now": datetime.utcnow(),
             "categories": categories,
+            "seasons": seasons,
+            "active_season": active_season,
+            "registration_windows": registration_windows,
             "teams": teams,
             "approved_teams": approved_teams,
             "approved_team": approved_team,
@@ -2584,6 +2608,91 @@ def export_super_admin_player_statistics(
             "player_statistics": player_statistics,
         },
     )
+
+
+@router.post("/super-admin/seasons")
+def create_season_route(
+    request: Request,
+    season_name: str = Form(...),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    try:
+        starts = date.fromisoformat(start_date)
+        ends = date.fromisoformat(end_date)
+        if not season_name.strip() or ends < starts:
+            raise RegistrationError("Enter a season name and valid start and end dates.")
+        if db.scalar(select(Season).where(Season.season_name == season_name.strip())):
+            raise RegistrationError("A season with this name already exists.")
+        db.query(Season).update({Season.is_open: False})
+        season = Season(season_name=season_name.strip(), start_date=starts, end_date=ends, is_open=True)
+        db.add(season)
+        db.flush()
+        category_names = ["Male U13", "Male U15", "Male U17", "Female U13", "Female U15", "Female U17", "Female U20"]
+        db.add_all([Category(season_id=season.season_id, category_name=name) for name in category_names])
+        db.commit()
+    except (ValueError, RegistrationError) as exc:
+        return _super_admin_dashboard_redirect(section="seasons", notice=str(exc), notice_kind="error")
+    return _super_admin_dashboard_redirect(section="seasons", notice=f"{season.season_name} is now open.")
+
+
+@router.post("/super-admin/seasons/{season_id}/open")
+def open_season_route(season_id: int, request: Request, db: Session = Depends(get_db)):
+    _require_super_admin(request, db)
+    season = db.get(Season, season_id)
+    if not season:
+        return _super_admin_dashboard_redirect(section="seasons", notice="Season was not found.", notice_kind="error")
+    db.query(Season).update({Season.is_open: False})
+    season.is_open = True
+    db.commit()
+    return _super_admin_dashboard_redirect(section="seasons", notice=f"{season.season_name} is now open.")
+
+
+@router.post("/super-admin/seasons/{season_id}/close")
+def close_season_route(season_id: int, request: Request, db: Session = Depends(get_db)):
+    _require_super_admin(request, db)
+    season = db.get(Season, season_id)
+    if not season:
+        return _super_admin_dashboard_redirect(section="seasons", notice="Season was not found.", notice_kind="error")
+    season.is_open = False
+    db.commit()
+    return _super_admin_dashboard_redirect(section="seasons", notice=f"{season.season_name} is now closed for player registration.")
+
+
+@router.post("/super-admin/registration-windows")
+def save_registration_window_route(
+    request: Request,
+    category_id: int = Form(...),
+    club_type: str = Form(...),
+    opening_date: str = Form(...),
+    closing_date: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    try:
+        season = get_open_season(db)
+        category = db.get(Category, category_id)
+        starts = date.fromisoformat(opening_date)
+        ends = date.fromisoformat(closing_date)
+        if not season or not category or category.season_id != season.season_id:
+            raise RegistrationError("Choose a category from the open season.")
+        if club_type not in {"School Club", "DiFA Club"} or ends < starts:
+            raise RegistrationError("Choose a club type and valid opening and closing dates.")
+        window = db.scalar(select(PlayerRegistrationWindow).where(
+            PlayerRegistrationWindow.season_id == season.season_id,
+            PlayerRegistrationWindow.category_id == category_id,
+            PlayerRegistrationWindow.club_type == club_type,
+        ))
+        if window:
+            window.opening_date, window.closing_date = starts, ends
+        else:
+            db.add(PlayerRegistrationWindow(season_id=season.season_id, category_id=category_id, club_type=club_type, opening_date=starts, closing_date=ends))
+        db.commit()
+    except (ValueError, RegistrationError) as exc:
+        return _super_admin_dashboard_redirect(section="seasons", notice=str(exc), notice_kind="error")
+    return _super_admin_dashboard_redirect(section="seasons", notice="Registration period saved.")
 
 
 @router.post("/super-admin/fixtures")

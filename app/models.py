@@ -141,10 +141,26 @@ class Season(Base):
     season_name: Mapped[str] = mapped_column(String(120), nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    is_open: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     categories: Mapped[list[Category]] = relationship(back_populates="season")
     fixtures: Mapped[list[Fixture]] = relationship(back_populates="season")
     team_seasons: Mapped[list[TeamSeason]] = relationship(back_populates="season")
+
+
+class PlayerRegistrationWindow(Base):
+    __tablename__ = "player_registration_windows"
+    __table_args__ = (UniqueConstraint("season_id", "category_id", "club_type"),)
+
+    registration_window_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.season_id"), nullable=False)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.category_id"), nullable=False)
+    club_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    opening_date: Mapped[date] = mapped_column(Date, nullable=False)
+    closing_date: Mapped[date] = mapped_column(Date, nullable=False)
+
+    season: Mapped[Season] = relationship()
+    category: Mapped[Category] = relationship()
 
 
 class Category(Base):

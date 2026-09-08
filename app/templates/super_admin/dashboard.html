@@ -6,6 +6,7 @@
     <span class="menu-label">Menu</span>
     <button class="side-button active" type="button" data-section-target="team-admins">Team Admins</button>
     <button class="side-button" type="button" data-section-target="teams">Teams</button>
+    <button class="side-button" type="button" data-section-target="seasons">Seasons</button>
     <button class="side-button" type="button" data-section-target="players">Players</button>
     <button class="side-button" type="button" data-section-target="renewals">Renewals</button>
     <button class="side-button" type="button" data-section-target="transfers">Transfers</button>
@@ -32,6 +33,7 @@
     <div class="section-switcher">
       <button class="switch-button active" type="button" data-section-target="team-admins">Team Admins</button>
       <button class="switch-button" type="button" data-section-target="teams">Teams</button>
+      <button class="switch-button" type="button" data-section-target="seasons">Seasons</button>
       <button class="switch-button" type="button" data-section-target="players">Players</button>
       <button class="switch-button" type="button" data-section-target="renewals">Renewals</button>
       <button class="switch-button" type="button" data-section-target="transfers">Transfers</button>
@@ -122,6 +124,14 @@
           <button class="button button-primary small" type="button" data-page-next>Next</button>
         </div>
       </div>
+    </section>
+
+    <section class="panel dashboard-section" id="seasons" data-dashboard-section="seasons" hidden>
+      <div class="panel-heading"><div><h2>Seasons And Registration Periods</h2><p class="section-copy">Open one season at a time. Player actions are blocked unless their competition has an open period.</p></div></div>
+      <p class="alert {% if active_season %}success{% else %}error{% endif %}">{% if active_season %}Open season: {{ active_season.season_name }} ({{ active_season.start_date }} to {{ active_season.end_date }}){% else %}No season is currently open.{% endif %}</p>
+      <form class="form-grid two" method="post" action="/super-admin/seasons"><label>Season Name<input name="season_name" required placeholder="e.g. 2027 Youth Development League"></label><label>Start Date<input name="start_date" type="date" required></label><label>End Date<input name="end_date" type="date" required></label><div class="form-actions"><button class="button button-primary" type="submit">Create And Open Season</button></div></form>
+      <div class="table-wrap"><table><thead><tr><th>Season</th><th>Dates</th><th>Status</th><th>Action</th></tr></thead><tbody>{% for season in seasons %}<tr><td>{{ season.season_name }}</td><td>{{ season.start_date }} to {{ season.end_date }}</td><td><span class="status {% if season.is_open %}approved{% else %}rejected{% endif %}">{% if season.is_open %}Open{% else %}Closed{% endif %}</span></td><td>{% if season.is_open %}<form method="post" action="/super-admin/seasons/{{ season.season_id }}/close"><button class="button button-danger small">Close</button></form>{% else %}<form method="post" action="/super-admin/seasons/{{ season.season_id }}/open"><button class="button button-primary small">Open</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+      {% if active_season %}<h3>Player Registration Periods: {{ active_season.season_name }}</h3><form class="form-grid two" method="post" action="/super-admin/registration-windows"><label>Category<select name="category_id" required>{% for category in categories %}<option value="{{ category.category_id }}">{{ category.category_name }}</option>{% endfor %}</select></label><label>Club Type<select name="club_type" required><option>School Club</option><option>DiFA Club</option></select></label><label>Opening Date<input name="opening_date" type="date" required></label><label>Closing Date<input name="closing_date" type="date" required></label><div class="form-actions"><button class="button button-primary" type="submit">Save Or Edit Period</button></div></form><div class="table-wrap"><table><thead><tr><th>Competition</th><th>Opening</th><th>Closing</th></tr></thead><tbody>{% for window in registration_windows %}<tr><td>{{ window.category.category_name }} - {{ window.club_type }}</td><td>{{ window.opening_date }}</td><td>{{ window.closing_date }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No registration periods have been set.</td></tr>{% endfor %}</tbody></table></div>{% endif %}
     </section>
 
     <section class="panel dashboard-section" id="teams" data-dashboard-section="teams" hidden>
@@ -475,7 +485,7 @@
       <div class="panel-heading">
         <div>
           <h2>Fixtures</h2>
-          <p class="section-copy">Create, publish and reschedule fixtures for approved clubs only.</p>
+          <p class="section-copy">Season: {{ active_season.season_name if active_season else 'No open season' }}. Create, publish and reschedule fixtures for approved clubs only.</p>
         </div>
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
           <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
@@ -658,7 +668,7 @@
 
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
       <div class="panel-heading">
-        <h2>All Results</h2>
+        <div><h2>All Results</h2><p class="section-copy">Season: {{ active_season.season_name if active_season else 'No open season' }}</p></div>
         <div class="panel-heading-actions">
           <button class="button button-success small" type="button" onclick="window.location='/super-admin/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
         </div>
@@ -750,6 +760,7 @@
     <section class="panel dashboard-section" id="league-tables" data-dashboard-section="league-tables" hidden>
       <div class="panel-heading">
         <h2>League Tables</h2>
+        <p class="section-copy">Season: {{ active_season.season_name if active_season else 'No open season' }}</p>
         <div class="panel-heading-actions">
           <button class="button button-success small" type="button" onclick="window.location='/super-admin/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download Cards</button>
         </div>
@@ -822,6 +833,7 @@
     <section class="panel dashboard-section" id="player-statistics" data-dashboard-section="player-statistics" hidden>
       <div class="panel-heading">
         <h2>Player Statistics</h2>
+        <p class="section-copy">Season: {{ active_season.season_name if active_season else 'No open season' }}</p>
         <div class="panel-heading-actions">
           <button class="button button-success small" type="button" onclick="window.location='/super-admin/player-statistics/export?category=all&team_id=all'">Download Top Stats</button>
         </div>

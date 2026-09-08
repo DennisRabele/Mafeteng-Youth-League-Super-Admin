@@ -142,6 +142,12 @@ def _ensure_schema_columns() -> None:
                 if column_name not in fixture_columns:
                     connection.execute(text(statement))
 
+    if inspector.has_table("seasons"):
+        season_columns = {column["name"] for column in inspector.get_columns("seasons")}
+        if "is_open" not in season_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE seasons ADD COLUMN is_open BOOLEAN DEFAULT TRUE NOT NULL"))
+
     if inspector.has_table("player_registration_requests"):
         registration_request_columns = {
             column["name"] for column in inspector.get_columns("player_registration_requests")
