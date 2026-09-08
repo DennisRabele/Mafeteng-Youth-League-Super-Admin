@@ -152,7 +152,7 @@
                 </div>
               </section>
 
-              <div class="player-batch-list" data-batch-player-list>
+              <div class="player-batch-list">
                 {% for index in range(2) %}
                   <article class="panel player-entry" data-player-entry style="margin: 0 0 1rem 0;">
                     <div class="panel-heading" style="align-items:flex-start; gap:1rem;">
@@ -254,6 +254,70 @@
             {% else %}
               <p class="empty">An approved team is required before player registration can begin.</p>
             {% endif %}
+          </section>
+        </div>
+
+        <!-- Edit Player Registration Form -->
+        <div id="edit-player-form" class="registration-form" style="display: none;">
+          <button type="button" class="button button-muted" onclick="cancelPlayerEditForm()" style="margin-bottom: 1rem;">â† Back</button>
+          <section class="panel form-section">
+            <div class="panel-heading">
+              <h2>Edit Player Registration</h2>
+            </div>
+            <p style="margin: 0.75rem 0 1rem; color: #7a4b00; font-weight: 600;">Edit a pending or rejected player registration. Rejected players will be resubmitted as pending when you save.</p>
+            <form class="player-registration-form" method="post" action="/team-admin/players/edit" enctype="multipart/form-data" data-batch-player-form data-player-edit-form>
+              <input type="hidden" name="player_id">
+              <input type="hidden" name="team_id">
+              <div class="player-batch-list" data-batch-player-list>
+                <article class="panel player-entry" data-player-entry style="margin: 0 0 1rem 0;">
+                  <div class="panel-heading" style="align-items:flex-start; gap:1rem;">
+                    <h3 data-player-entry-title style="margin:0;">Edit Player</h3>
+                  </div>
+                  <div class="form-grid two">
+                    <label>Team
+                      <input type="text" data-edit-player-team-name readonly>
+                    </label>
+                    <label>Full Name
+                      <input name="full_name" placeholder="Enter full name" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
+                    </label>
+                    <label>Date Of Birth
+                      <input name="dob" type="date" autocomplete="bday" required>
+                    </label>
+                    <label>Gender
+                      <select name="gender" required>
+                        <option value="">Select Gender</option>
+                        <option>Male</option>
+                        <option>Female</option>
+                      </select>
+                    </label>
+                    <label>Position
+                      <select name="position" required>
+                        <option value="">Select Position</option>
+                        <option>Goalkeeper</option>
+                        <option>Defender</option>
+                        <option>Midfielder</option>
+                        <option>Forward</option>
+                      </select>
+                    </label>
+                    <label>Player Photo
+                      <input name="passport_photo" type="file" accept=".jpg,.jpeg,.png,.avi,image/*">
+                      <input type="hidden" name="passport_photo_url">
+                      <a class="button button-muted small" href="#" target="_blank" rel="noopener" data-current-player-photo-link style="display:none; margin-top:0.5rem;">Open current photo</a>
+                    </label>
+                    <label>Identity Document
+                      <input name="identity_document" type="file" accept=".doc,.docx,.pdf,.txt">
+                      <input type="hidden" name="identity_document_url">
+                      <a class="button button-muted small" href="#" target="_blank" rel="noopener" data-current-player-document-link style="display:none; margin-top:0.5rem;">Open current identity document</a>
+                    </label>
+                  </div>
+                </article>
+              </div>
+              <div class="player-form-actions">
+                <button class="button button-muted" type="button" onclick="cancelPlayerEditForm()">Cancel</button>
+                <button class="button button-primary" type="submit">Submit Changes</button>
+              </div>
+              <p class="alert" data-player-edit-status style="display:none; margin-top:1rem;" aria-live="polite"></p>
+            </form>
           </section>
         </div>
 
@@ -773,6 +837,7 @@
           function backToSelector() {
             document.getElementById('registration-type-selector').style.display = 'block';
             document.getElementById('new-player-form').style.display = 'none';
+            document.getElementById('edit-player-form').style.display = 'none';
             document.getElementById('renewal-form').style.display = 'none';
             document.getElementById('transfer-form').style.display = 'none';
           }
@@ -1068,45 +1133,206 @@
             });
           });
 
-          function updateRegistrationPeriodSuggestion(age) {
-            const periodSelect = document.getElementById('registration-period-select');
-            const suggestion = document.getElementById('registration-period-suggestion');
-            if (!periodSelect || !suggestion) return;
+          const cloudinaryUploadConfig = {{ cloudinary_upload_config | tojson }};
+          const playerPhotoExtensions = ['.jpg', '.jpeg', '.png', '.avi'];
+          const playerDocumentExtensions = ['.doc', '.docx', '.pdf', '.txt'];
 
-            const periodOptions = Array.from(periodSelect.options).filter((option) => option.value);
-            if (age === null || Number.isNaN(age)) {
-              periodSelect.disabled = false;
-              periodOptions.forEach((option) => {
-                option.disabled = false;
-              });
-              suggestion.textContent = 'Choose date of birth to see the suggested period.';
-              suggestion.style.color = '#666';
-              return;
+          function getFileExtension(filename) {
+            const value = filename || '';
+            const index = value.lastIndexOf('.');
+            return index >= 0 ? value.slice(index).toLowerCase() : '';
+          }
+
+          function validateUploadFile(file, allowedExtensions, maxBytes, label) {
+            if (!file) {
+              throw new Error(`${label} is required.`);
+            }
+            const extension = getFileExtension(file.name);
+            if (!allowedExtensions.includes(extension)) {
+              throw new Error(`${label} must be one of: ${allowedExtensions.join(', ')}`);
+            }
+            if (maxBytes && file.size > maxBytes) {
+              throw new Error(`${label} must be less than ${Math.round(maxBytes / (1024 * 1024))}MB.`);
+            }
+          }
+
+          async function uploadFileToCloudinary(file, uploadUrl, preset, folder, allowedExtensions, maxBytes, label) {
+            validateUploadFile(file, allowedExtensions, maxBytes, label);
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', preset);
+            if (folder) {
+              formData.append('folder', folder);
             }
 
-            let maxPeriod = null;
-            if (age >= 0 && age <= 13) maxPeriod = Math.min(3, 13 - age + 1);
-            else if (age > 13 && age <= 15) maxPeriod = Math.min(3, 15 - age + 1);
-            else if (age > 15 && age <= 17) maxPeriod = Math.min(3, 17 - age + 1);
-            else if (age > 17 && age <= 20) maxPeriod = Math.min(3, 20 - age + 1);
-
-            if (maxPeriod === null) {
-              periodSelect.disabled = true;
-              periodOptions.forEach((option) => {
-                option.disabled = true;
-              });
-              suggestion.textContent = 'This player is not eligible for a youth registration period.';
-              suggestion.style.color = '#dc3545';
-              return;
-            }
-
-            periodSelect.disabled = false;
-            periodOptions.forEach((option) => {
-              option.disabled = Number(option.value) > maxPeriod;
+            const response = await fetch(uploadUrl, {
+              method: 'POST',
+              body: formData,
             });
-            periodSelect.value = String(maxPeriod);
-            suggestion.textContent = `Suggested registration period: ${maxPeriod} year${maxPeriod === 1 ? '' : 's'}.`;
-            suggestion.style.color = '#2e7d32';
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(payload.error?.message || `${label} upload failed.`);
+            }
+            if (!payload.secure_url) {
+              throw new Error(`${label} upload did not return a secure URL.`);
+            }
+            return payload.secure_url;
+          }
+
+          function setBatchUploadStatus(message, kind = 'info', form = null) {
+            const status = form
+              ? form.querySelector('[data-player-upload-status], [data-player-edit-status]')
+              : document.querySelector('[data-player-upload-status]');
+            if (!status) {
+              return;
+            }
+            status.textContent = message;
+            status.style.display = message ? 'block' : 'none';
+            status.style.borderColor = kind === 'error' ? '#dc3545' : '#2d6cdf';
+            status.style.color = kind === 'error' ? '#dc3545' : '#1f3d7a';
+            status.style.background = kind === 'error' ? '#fff5f5' : '#eef5ff';
+          }
+
+          async function uploadPlayerBatchAssets(form) {
+            if (!cloudinaryUploadConfig || !cloudinaryUploadConfig.enabled) {
+              return false;
+            }
+
+            const entries = Array.from(form.querySelectorAll('[data-player-entry]'));
+            const isEditForm = form.hasAttribute('data-player-edit-form');
+            const lockedInputs = [];
+            try {
+              setBatchUploadStatus('Uploading documents...', 'info', form);
+              for (const entry of entries) {
+                const photoInput = entry.querySelector('input[name="passport_photo"]');
+                const documentInput = entry.querySelector('input[name="identity_document"]');
+                const photoUrlInput = entry.querySelector('input[name="passport_photo_url"]');
+                const documentUrlInput = entry.querySelector('input[name="identity_document_url"]');
+                const photoFile = photoInput && photoInput.files ? photoInput.files[0] : null;
+                const documentFile = documentInput && documentInput.files ? documentInput.files[0] : null;
+
+                let photoUrl = photoUrlInput ? photoUrlInput.value.trim() : '';
+                if (photoFile) {
+                  photoUrl = await uploadFileToCloudinary(
+                    photoFile,
+                    cloudinaryUploadConfig.upload_url,
+                    cloudinaryUploadConfig.player_photos_preset,
+                    cloudinaryUploadConfig.player_photos_folder,
+                    playerPhotoExtensions,
+                    cloudinaryUploadConfig.max_image_bytes,
+                    'Player photo'
+                  );
+                } else if (!photoUrl) {
+                  throw new Error(isEditForm ? 'Player photo is required if no current photo is available.' : 'Player photo is required.');
+                }
+
+                let documentUrl = documentUrlInput ? documentUrlInput.value.trim() : '';
+                if (documentFile) {
+                  documentUrl = await uploadFileToCloudinary(
+                    documentFile,
+                    cloudinaryUploadConfig.upload_url,
+                    cloudinaryUploadConfig.player_documents_preset,
+                    cloudinaryUploadConfig.player_documents_folder,
+                    playerDocumentExtensions,
+                    cloudinaryUploadConfig.max_document_bytes,
+                    'Identity document'
+                  );
+                } else if (!documentUrl) {
+                  throw new Error(isEditForm ? 'Identity document is required if no current document is available.' : 'Identity document is required.');
+                }
+
+                if (photoUrlInput) {
+                  photoUrlInput.value = photoUrl;
+                }
+                if (documentUrlInput) {
+                  documentUrlInput.value = documentUrl;
+                }
+                if (photoFile && photoInput) {
+                  photoInput.disabled = true;
+                  lockedInputs.push(photoInput);
+                }
+                if (documentFile && documentInput) {
+                  documentInput.disabled = true;
+                  lockedInputs.push(documentInput);
+                }
+              }
+              setBatchUploadStatus('Uploads complete. Submitting registrations...', 'info', form);
+              return true;
+            } catch (error) {
+              lockedInputs.forEach((input) => {
+                input.disabled = false;
+              });
+              setBatchUploadStatus(error.message || 'Direct upload failed. Please try again.', 'error', form);
+              throw error;
+            }
+          }
+
+          function initPlayerBatchDirectUpload() {
+            const forms = document.querySelectorAll('[data-batch-player-form]');
+            if (!forms.length || !cloudinaryUploadConfig || !cloudinaryUploadConfig.enabled) {
+              return;
+            }
+            forms.forEach((form) => {
+              if (!form || form.dataset.directUploadBound === 'true') {
+                return;
+              }
+              form.dataset.directUploadBound = 'true';
+              form.addEventListener('submit', async (event) => {
+                if (form.dataset.directUploadReady === 'true') {
+                  form.dataset.directUploadReady = 'false';
+                  return;
+                }
+                event.preventDefault();
+                try {
+                  const uploaded = await uploadPlayerBatchAssets(form);
+                  if (uploaded) {
+                    form.dataset.directUploadReady = 'true';
+                    form.submit();
+                  }
+                } catch (error) {
+                  console.error('Player batch direct upload failed:', error);
+                }
+              });
+            });
+          }
+
+          function calculatePlayerAge(dobValue) {
+            if (!dobValue) {
+              return { age: null, ageGroup: null, suggestedPeriod: null };
+            }
+            const dob = new Date(dobValue);
+            if (Number.isNaN(dob.getTime())) {
+              return { age: null, ageGroup: null, suggestedPeriod: null };
+            }
+
+            const today = new Date();
+            let age = today.getFullYear() - dob.getFullYear();
+            const monthDiff = today.getMonth() - dob.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+              age--;
+            }
+
+            let ageGroup = null;
+            let suggestedPeriod = null;
+            if (age >= 0 && age <= 13) {
+              ageGroup = 'U13';
+              suggestedPeriod = Math.min(3, 13 - age + 1);
+            } else if (age > 13 && age <= 15) {
+              ageGroup = 'U15';
+              suggestedPeriod = Math.min(3, 15 - age + 1);
+            } else if (age > 15 && age <= 17) {
+              ageGroup = 'U17';
+              suggestedPeriod = Math.min(3, 17 - age + 1);
+            } else if (age > 17 && age <= 20) {
+              ageGroup = 'U20';
+              suggestedPeriod = Math.min(3, 20 - age + 1);
+            }
+
+            if (suggestedPeriod !== null) {
+              suggestedPeriod = Math.max(1, suggestedPeriod);
+            }
+
+            return { age, ageGroup, suggestedPeriod };
           }
 
           function updatePlayerCategory(element) {
@@ -1178,150 +1404,6 @@
               status.textContent = '✓ Uploaded';
               status.style.color = '#28a745';
             }
-          }
-
-          const cloudinaryUploadConfig = {{ cloudinary_upload_config | tojson }};
-          const playerPhotoExtensions = ['.jpg', '.jpeg', '.png', '.avi'];
-          const playerDocumentExtensions = ['.doc', '.docx', '.pdf', '.txt'];
-
-          function getFileExtension(filename) {
-            const value = filename || '';
-            const index = value.lastIndexOf('.');
-            return index >= 0 ? value.slice(index).toLowerCase() : '';
-          }
-
-          function validateUploadFile(file, allowedExtensions, maxBytes, label) {
-            if (!file) {
-              throw new Error(`${label} is required.`);
-            }
-            const extension = getFileExtension(file.name);
-            if (!allowedExtensions.includes(extension)) {
-              throw new Error(`${label} must be one of: ${allowedExtensions.join(', ')}`);
-            }
-            if (maxBytes && file.size > maxBytes) {
-              throw new Error(`${label} must be less than ${Math.round(maxBytes / (1024 * 1024))}MB.`);
-            }
-          }
-
-          async function uploadFileToCloudinary(file, uploadUrl, preset, folder, allowedExtensions, maxBytes, label) {
-            validateUploadFile(file, allowedExtensions, maxBytes, label);
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('upload_preset', preset);
-            if (folder) {
-              formData.append('folder', folder);
-            }
-
-            const response = await fetch(uploadUrl, {
-              method: 'POST',
-              body: formData,
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-              throw new Error(payload.error?.message || `${label} upload failed.`);
-            }
-            if (!payload.secure_url) {
-              throw new Error(`${label} upload did not return a secure URL.`);
-            }
-            return payload.secure_url;
-          }
-
-          function setBatchUploadStatus(message, kind = 'info') {
-            const status = document.querySelector('[data-player-upload-status]');
-            if (!status) {
-              return;
-            }
-            status.textContent = message;
-            status.style.display = message ? 'block' : 'none';
-            status.style.borderColor = kind === 'error' ? '#dc3545' : '#2d6cdf';
-            status.style.color = kind === 'error' ? '#dc3545' : '#1f3d7a';
-            status.style.background = kind === 'error' ? '#fff5f5' : '#eef5ff';
-          }
-
-          async function uploadPlayerBatchAssets(form) {
-            if (!cloudinaryUploadConfig || !cloudinaryUploadConfig.enabled) {
-              return false;
-            }
-
-            const entries = Array.from(form.querySelectorAll('[data-player-entry]'));
-            const lockedInputs = [];
-            try {
-              setBatchUploadStatus('Uploading documents...');
-              for (const entry of entries) {
-                const photoInput = entry.querySelector('input[name="passport_photo"]');
-                const documentInput = entry.querySelector('input[name="identity_document"]');
-                const photoUrlInput = entry.querySelector('input[name="passport_photo_url"]');
-                const documentUrlInput = entry.querySelector('input[name="identity_document_url"]');
-                const photoFile = photoInput && photoInput.files ? photoInput.files[0] : null;
-                const documentFile = documentInput && documentInput.files ? documentInput.files[0] : null;
-
-                const photoUrl = await uploadFileToCloudinary(
-                  photoFile,
-                  cloudinaryUploadConfig.upload_url,
-                  cloudinaryUploadConfig.player_photos_preset,
-                  cloudinaryUploadConfig.player_photos_folder,
-                  playerPhotoExtensions,
-                  cloudinaryUploadConfig.max_image_bytes,
-                  'Player photo'
-                );
-                const documentUrl = await uploadFileToCloudinary(
-                  documentFile,
-                  cloudinaryUploadConfig.upload_url,
-                  cloudinaryUploadConfig.player_documents_preset,
-                  cloudinaryUploadConfig.player_documents_folder,
-                  playerDocumentExtensions,
-                  cloudinaryUploadConfig.max_document_bytes,
-                  'Identity document'
-                );
-
-                if (photoUrlInput) {
-                  photoUrlInput.value = photoUrl;
-                }
-                if (documentUrlInput) {
-                  documentUrlInput.value = documentUrl;
-                }
-                if (photoInput) {
-                  photoInput.disabled = true;
-                  lockedInputs.push(photoInput);
-                }
-                if (documentInput) {
-                  documentInput.disabled = true;
-                  lockedInputs.push(documentInput);
-                }
-              }
-              setBatchUploadStatus('Uploads complete. Submitting registrations...');
-              return true;
-            } catch (error) {
-              lockedInputs.forEach((input) => {
-                input.disabled = false;
-              });
-              setBatchUploadStatus(error.message || 'Direct upload failed. Please try again.', 'error');
-              throw error;
-            }
-          }
-
-          function initPlayerBatchDirectUpload() {
-            const form = document.querySelector('[data-batch-player-form]');
-            if (!form || !cloudinaryUploadConfig || !cloudinaryUploadConfig.enabled || form.dataset.directUploadBound === 'true') {
-              return;
-            }
-            form.dataset.directUploadBound = 'true';
-            form.addEventListener('submit', async (event) => {
-              if (form.dataset.directUploadReady === 'true') {
-                form.dataset.directUploadReady = 'false';
-                return;
-              }
-              event.preventDefault();
-              try {
-                const uploaded = await uploadPlayerBatchAssets(form);
-                if (uploaded) {
-                  form.dataset.directUploadReady = 'true';
-                  form.submit();
-                }
-              } catch (error) {
-                console.error('Player batch direct upload failed:', error);
-              }
-            });
           }
 
           function calculatePlayerAge(dobValue) {
@@ -1558,6 +1640,63 @@
             updateAllPlayerEntries();
           }
 
+          function openPlayerEditForm(button) {
+            const formSection = document.getElementById('edit-player-form');
+            const form = formSection ? formSection.querySelector('[data-player-edit-form]') : null;
+            if (!button || !formSection || !form) {
+              return;
+            }
+
+            const fields = {
+              playerId: form.querySelector('input[name="player_id"]'),
+              teamId: form.querySelector('input[name="team_id"]'),
+              fullName: form.querySelector('input[name="full_name"]'),
+              dob: form.querySelector('input[name="dob"]'),
+              gender: form.querySelector('select[name="gender"]'),
+              position: form.querySelector('select[name="position"]'),
+              photoUrl: form.querySelector('input[name="passport_photo_url"]'),
+              docUrl: form.querySelector('input[name="identity_document_url"]'),
+              teamName: form.querySelector('[data-edit-player-team-name]'),
+              photoLink: form.querySelector('[data-current-player-photo-link]'),
+              docLink: form.querySelector('[data-current-player-document-link]'),
+            };
+            if (fields.playerId) fields.playerId.value = button.dataset.playerId || '';
+            if (fields.teamId) fields.teamId.value = button.dataset.playerTeamId || '';
+            if (fields.fullName) fields.fullName.value = button.dataset.playerName || '';
+            if (fields.dob) fields.dob.value = button.dataset.playerDob || '';
+            if (fields.gender) fields.gender.value = button.dataset.playerGender || '';
+            if (fields.position) fields.position.value = button.dataset.playerPosition || '';
+            if (fields.photoUrl) fields.photoUrl.value = button.dataset.playerPhoto || '';
+            if (fields.docUrl) fields.docUrl.value = button.dataset.playerDocument || '';
+            if (fields.teamName) fields.teamName.value = button.dataset.playerTeamName || '';
+            if (fields.photoLink) {
+              const photoPath = button.dataset.playerPhoto || '';
+              fields.photoLink.href = photoPath || '#';
+              fields.photoLink.style.display = photoPath ? 'inline-flex' : 'none';
+            }
+            if (fields.docLink) {
+              const documentPath = button.dataset.playerDocument || '';
+              fields.docLink.href = documentPath || '#';
+              fields.docLink.style.display = documentPath ? 'inline-flex' : 'none';
+            }
+
+            document.getElementById('registration-type-selector').style.display = 'none';
+            document.getElementById('new-player-form').style.display = 'none';
+            document.getElementById('renewal-form').style.display = 'none';
+            document.getElementById('transfer-form').style.display = 'none';
+            formSection.style.display = 'block';
+            updateAllPlayerEntries();
+            formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+
+          function cancelPlayerEditForm() {
+            const formSection = document.getElementById('edit-player-form');
+            if (formSection) {
+              formSection.style.display = 'none';
+            }
+            backToSelector();
+          }
+
           const dashboardNotice = document.querySelector('[data-dashboard-notice]');
 
           function dismissDashboardNotice() {
@@ -1738,6 +1877,7 @@
           <button class="button button-primary small" type="button" data-page-next>Next</button>
         </div>
       </div>
+    </section>
 
     <section class="panel dashboard-section" id="my-players" data-dashboard-section="my-players" hidden>
       <div class="panel-heading">
@@ -1758,7 +1898,7 @@
       <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
         <table>
           <thead>
-            <tr><th>Player</th><th>Player ID</th><th>Team</th><th>Age Group</th><th>Registration</th><th>Status</th><th>Reason</th></tr>
+            <tr><th>Player</th><th>Player ID</th><th>Team</th><th>Age Group</th><th>Registration</th><th>Status</th><th>Reason</th><th>Action</th></tr>
           </thead>
           <tbody>
             {% for player in players %}
@@ -1802,9 +1942,29 @@
                 {% if (is_source_loan or is_receiving_loan) and player.loan_end_date %}<br><small>Returns {{ player.loan_end_date }}</small>{% endif %}
               </td>
               <td>{% if player.status == 'rejected' %}{{ player.rejection_reason or '-' }}{% else %}-{% endif %}</td>
+              <td>
+                {% if player.status in ['pending', 'rejected'] %}
+                  <button
+                    class="button button-secondary small"
+                    type="button"
+                    onclick="openPlayerEditForm(this)"
+                    data-player-id="{{ player.player_id }}"
+                    data-player-team-id="{{ player.team.team_id }}"
+                    data-player-team-name="{{ player.team.team_name }}"
+                    data-player-name="{{ player.full_name }}"
+                    data-player-dob="{{ player.dob.strftime('%Y-%m-%d') if player.dob else '' }}"
+                    data-player-gender="{{ player.gender }}"
+                    data-player-position="{{ player.position or '' }}"
+                    data-player-photo="{{ player.photo_path or '' }}"
+                    data-player-document="{{ player.documents[0].file_path if player.documents else '' }}"
+                  >Edit</button>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
             </tr>
             {% else %}
-            <tr><td colspan="7" class="empty">No players submitted yet.</td></tr>
+            <tr><td colspan="8" class="empty">No players submitted yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -1988,7 +2148,7 @@
       <div class="panel-heading">
         <div>
           <h2>Match Day Squad</h2>
-          <p class="section-copy"><strong>Select a fixture first. The squad sheet will lock to that match and only allow eligible players who can play up into the selected fixture category.</strong></p>
+          <p class="section-copy"><strong>Build the squad from approved clubs. The fixture only fills the exported list details, so add players club by club, then generate the squad once the list is complete.</strong></p>
         </div>
       </div>
       <div class="alert" style="background:#fff2cc; border-color:#d9a300; color:#111; margin-bottom: 1rem;">
@@ -2009,19 +2169,31 @@
                 {% endfor %}
               </select>
             </label>
-            <div class="fixture-empty" style="align-self:end; margin:0;">
-              Squad team is selected automatically from the approved club involved in the chosen fixture.
-            </div>
           </div>
           <div class="squad-builder">
             <div class="squad-builder__head">
-              <h3>Add Player</h3>
-              <span class="section-copy">Added players move into the squad list and cannot be selected again until removed.</span>
+              <h3>Select Club</h3>
+              <span class="section-copy">Only approved clubs appear here. Add players club by club, then generate the squad once the list is complete.</span>
             </div>
             <div class="form-grid three">
+              <label>Club
+                <select id="match-day-club-select">
+                  <option value="">Select club</option>
+                  {% for team in approved_teams %}
+                    <option
+                      value="{{ team.team_id }}"
+                      data-club-name="{{ team.team_name }}"
+                      data-club-logo="{{ team.logo or '' }}"
+                      data-club-category="{{ team.category.category_name if team.category else '' }}"
+                    >
+                      {{ team.team_name }}{% if team.category %} - {{ team.category.category_name }}{% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+              </label>
               <label>Player Name
                 <select id="match-day-player-select" disabled>
-                  <option value="">Select fixture first</option>
+                  <option value="">Select club first</option>
                 </select>
               </label>
               <label>Jersey Number
@@ -2036,6 +2208,7 @@
           <div class="matchday-squad-sheet">
             <div class="matchday-squad-sheet__head">
               <span>Player</span>
+              <span>Club</span>
               <span>Player ID</span>
               <span>Age</span>
               <span>Jersey #</span>
@@ -2046,13 +2219,14 @@
             </div>
           </div>
 
+          <input type="hidden" name="squad_rows_json" id="match-day-squad-rows-json" value="[]">
+
           <div class="form-actions wide">
             <button class="button button-success" type="submit">Generate Match Day Squad</button>
           </div>
         </form>
 
         <script type="application/json" id="match-day-fixture-data">{{ match_day_fixtures_data | tojson }}</script>
-        <script type="application/json" id="match-day-player-data">{{ match_day_players_data | tojson }}</script>
         <script type="application/json" id="match-day-approved-team-ids">{{ approved_team_ids | tojson }}</script>
         <script>
           (function () {
@@ -2060,19 +2234,24 @@
             if (!form) {
               return;
             }
+            return;
             const fixtureSelect = document.getElementById("match-day-fixture-select");
+            const clubSelect = document.getElementById("match-day-club-select");
             const playerSelect = document.getElementById("match-day-player-select");
             const jerseyInput = document.getElementById("match-day-jersey-input");
             const addButton = document.querySelector("[data-add-player]");
             const squadList = document.querySelector("[data-squad-list]");
             const matchDayError = document.querySelector("[data-match-day-error]");
-            const primaryTeamId = String(form.dataset.primaryTeamId || "").trim();
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
-            const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
-            const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
+            const matchDayPlayerApi = "/api/team-admin/match-day-squad-players";
+            const squadPayloadInputLegacy = document.getElementById("match-day-squad-rows-json");
             const selectedPlayerIds = new Set();
             let activeFixture = null;
+            let activeClub = null;
+            let playerRequestToken = 0;
+            const squadPayloadInput = document.getElementById("match-day-squad-rows-json");
             let activeTeamId = null;
+            const primaryTeamId = "";
 
             const extractAgeGroup = (value) => {
               const match = String(value || "").toUpperCase().match(/\bU\d{2}\b/);
@@ -2131,44 +2310,51 @@
               setMatchDayError("");
             };
 
-            const resolveFixtureTeamId = (fixture) => {
-              if (!fixture) {
-                return null;
+            const renderTeamLogo = (container, teamName, logoUrl) => {
+              if (!container) {
+                return;
               }
-              const fixtureTeamIds = [fixture.home_team_id, fixture.away_team_id]
-                .map((value) => String(value || "").trim())
-                .filter(Boolean);
-              if (primaryTeamId && fixtureTeamIds.includes(primaryTeamId)) {
-                return primaryTeamId;
+              container.innerHTML = "";
+              if (logoUrl) {
+                const image = document.createElement("img");
+                image.className = "fixture-logo";
+                image.src = logoUrl;
+                image.alt = teamName || "Team logo";
+                container.appendChild(image);
+                return;
               }
-              const candidateTeamIds = [fixture.home_team_id, fixture.away_team_id]
-                .map((value) => String(value || "").trim())
-                .filter((value) => value && approvedTeamIds.has(value));
-              if (candidateTeamIds.length === 1) {
-                return candidateTeamIds[0];
-              }
-              if (candidateTeamIds.length === 0) {
-                setMatchDayError("team id not parsed from selected fixture.");
-                return null;
-              }
-              setMatchDayError("selected fixture matched more than one approved team.");
-              return null;
+              const fallback = document.createElement("span");
+              fallback.className = "fixture-logo fallback fixture-logo-frame";
+              fallback.textContent = String(teamName || "?").trim().slice(0, 1).toUpperCase() || "?";
+              container.appendChild(fallback);
             };
 
-            const clearSquadList = () => {
-              selectedPlayerIds.clear();
-              squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
-            };
-
-            const updateEmptyState = () => {
-              if (!squadList.querySelector("[data-squad-row]")) {
-                squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
-              }
+            const updateFixturePreview = (fixture) => {
+              const dateNode = document.querySelector("[data-matchday-fixture-date]");
+              const venueNode = document.querySelector("[data-matchday-fixture-venue]");
+              const timeNode = document.querySelector("[data-matchday-fixture-time]");
+              const homeNameNode = document.querySelector("[data-matchday-home-name]");
+              const awayNameNode = document.querySelector("[data-matchday-away-name]");
+              const homeNoteNode = document.querySelector("[data-matchday-home-note]");
+              const awayNoteNode = document.querySelector("[data-matchday-away-note]");
+              const homeLogoNode = document.querySelector("[data-matchday-home-logo]");
+              const awayLogoNode = document.querySelector("[data-matchday-away-logo]");
+              const homeTeamName = fixture?.home_team?.team_name || "Select a fixture";
+              const awayTeamName = fixture?.away_team?.team_name || "Select a fixture";
+              if (dateNode) dateNode.textContent = fixture?.fixture_date || "Select a fixture";
+              if (venueNode) venueNode.textContent = fixture?.venue || "Venue will appear here";
+              if (timeNode) timeNode.textContent = fixture?.dashboard_time || "Kickoff time will appear here";
+              if (homeNameNode) homeNameNode.textContent = homeTeamName;
+              if (awayNameNode) awayNameNode.textContent = awayTeamName;
+              if (homeNoteNode) homeNoteNode.textContent = fixture ? `Home team: ${homeTeamName}` : "Home team details will load here.";
+              if (awayNoteNode) awayNoteNode.textContent = fixture ? `Away team: ${awayTeamName}` : "Away team details will load here.";
+              renderTeamLogo(homeLogoNode, homeTeamName, fixture?.home_team?.logo || "");
+              renderTeamLogo(awayLogoNode, awayTeamName, fixture?.away_team?.logo || "");
             };
 
             const updateAddButtonState = () => {
               const canAdd = Boolean(
-                activeFixture &&
+                activeClub &&
                 playerSelect.value &&
                 jerseyInput.value.trim()
               );
@@ -2216,12 +2402,15 @@
               const jerseyNumber = jerseyInput.value.trim();
               const jerseyValue = Number(jerseyNumber);
               if (!playerId || !selectedOption) {
+                setMatchDayError("Select a player from the dropdown before adding it.");
                 return;
               }
               if (!jerseyNumber || !Number.isInteger(jerseyValue) || jerseyValue < 1 || jerseyValue > 99) {
+                setMatchDayError("Enter a valid jersey number between 1 and 99.");
                 return;
               }
               if (selectedPlayerIds.has(playerId)) {
+                setMatchDayError("That player is already in the squad list.");
                 return;
               }
               const playerName = selectedOption.textContent;
@@ -2257,10 +2446,13 @@
               playerSelect.value = "";
               jerseyInput.value = "";
               refreshPlayerSelect();
+              clearMatchDayError();
             };
 
             const syncFixtureSelection = () => {
+              clearMatchDayError();
               activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
+              activeTeamId = resolveFixtureTeamId(activeFixture);
               clearSquadList();
               jerseyInput.value = "";
               refreshPlayerSelect();
@@ -2274,6 +2466,7 @@
               if (playerSelect.value) {
                 jerseyInput.focus();
               }
+              clearMatchDayError();
               updateAddButtonState();
             });
             jerseyInput.addEventListener("input", updateAddButtonState);
@@ -2284,10 +2477,261 @@
             form.addEventListener("submit", (event) => {
               if (!activeFixture) {
                 event.preventDefault();
+                setMatchDayError("Select a fixture before generating the squad.");
+                return;
+              }
+              if (!activeTeamId) {
+                event.preventDefault();
+                setMatchDayError("team id not parsed from selected fixture.");
                 return;
               }
               if (!squadList.querySelector("[data-squad-row]")) {
                 event.preventDefault();
+                setMatchDayError("Add at least one player to the squad list.");
+                return;
+              }
+            });
+          })();
+        </script>
+
+        <script>
+          (function () {
+            const form = document.querySelector("[data-match-day-squad-form]");
+            if (!form) {
+              return;
+            }
+
+            const fixtureSelect = document.getElementById("match-day-fixture-select");
+            const clubSelect = document.getElementById("match-day-club-select");
+            const playerSelect = document.getElementById("match-day-player-select");
+            const jerseyInput = document.getElementById("match-day-jersey-input");
+            const addButton = document.querySelector("[data-add-player]");
+            const squadList = document.querySelector("[data-squad-list]");
+            const matchDayError = document.querySelector("[data-match-day-error]");
+            const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
+            const matchDayPlayerApi = "/api/team-admin/match-day-squad-players";
+            const squadPayloadInput = document.getElementById("match-day-squad-rows-json");
+            const selectedPlayerIds = new Set();
+            let activeFixture = null;
+            let activeClub = null;
+            let playerRequestToken = 0;
+
+            const setMatchDayError = (message) => {
+              if (!matchDayError) return;
+              const text = String(message || "").trim();
+              matchDayError.textContent = text;
+              matchDayError.hidden = !text;
+            };
+
+            const clearMatchDayError = () => setMatchDayError("");
+
+            const serializeSquadRows = () => {
+              return Array.from(squadList.querySelectorAll("[data-squad-row]")).map((row) => ({
+                club_id: row.querySelector('input[name="club_ids"]')?.value || "",
+                player_id: row.querySelector('input[name="player_ids"]')?.value || row.dataset.playerId || "",
+                jersey_number: row.querySelector('input[name="jersey_numbers"]')?.value || "",
+              }));
+            };
+
+            const syncSquadPayload = () => {
+              if (!squadPayloadInput) {
+                return;
+              }
+              squadPayloadInput.value = JSON.stringify(serializeSquadRows());
+            };
+
+            const clearSquadList = () => {
+              selectedPlayerIds.clear();
+              squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+              syncSquadPayload();
+            };
+
+            const updateAddButtonState = () => {
+              const canAdd = Boolean(activeClub && playerSelect.value && jerseyInput.value.trim());
+              jerseyInput.required = Boolean(playerSelect.value);
+              if (addButton) {
+                addButton.disabled = !canAdd;
+              }
+            };
+
+            const refreshPlayerSelect = async () => {
+              if (!activeClub) {
+                playerSelect.innerHTML = '<option value="">Select club first</option>';
+                playerSelect.disabled = true;
+                jerseyInput.disabled = true;
+                if (addButton) {
+                  addButton.disabled = true;
+                }
+                return;
+              }
+              const requestToken = ++playerRequestToken;
+              playerSelect.innerHTML = '<option value="">Loading players...</option>';
+              playerSelect.disabled = true;
+              jerseyInput.disabled = true;
+              if (addButton) {
+                addButton.disabled = true;
+              }
+              const params = new URLSearchParams({
+                club_id: String(activeClub.value || ""),
+              });
+              try {
+                const response = await fetch(`${matchDayPlayerApi}?${params.toString()}`, {
+                  headers: {
+                    Accept: "application/json",
+                  },
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (requestToken !== playerRequestToken) {
+                  return;
+                }
+                if (!response.ok) {
+                  playerSelect.innerHTML = '<option value="">Select club first</option>';
+                  setMatchDayError(payload.error || "Could not load players for the selected club.");
+                  return;
+                }
+                const players = Array.isArray(payload.players) ? payload.players : [];
+                const eligiblePlayers = players.filter((player) => !selectedPlayerIds.has(String(player.player_code || player.player_id)));
+                if (eligiblePlayers.length === 0) {
+                  playerSelect.innerHTML = '<option value="">No more players to select</option>';
+                  playerSelect.disabled = true;
+                  jerseyInput.disabled = true;
+                  if (addButton) {
+                    addButton.disabled = true;
+                  }
+                  clearMatchDayError();
+                  return;
+                }
+                playerSelect.innerHTML = '<option value="">Select player</option>';
+                eligiblePlayers.forEach((player) => {
+                  const option = document.createElement("option");
+                  option.value = player.player_code || String(player.player_id);
+                  option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group}) - ${player.category_name}`;
+                  option.dataset.playerCode = player.player_code;
+                  option.dataset.playerId = String(player.player_id);
+                  option.dataset.ageGroup = player.age_group;
+                  option.dataset.teamName = player.team_name;
+                  playerSelect.appendChild(option);
+                });
+                playerSelect.disabled = false;
+                jerseyInput.disabled = false;
+                clearMatchDayError();
+                updateAddButtonState();
+              } catch (error) {
+                if (requestToken !== playerRequestToken) {
+                  return;
+                }
+                playerSelect.innerHTML = '<option value="">Select club first</option>';
+                setMatchDayError(`player lookup failed: ${error instanceof Error ? error.message : "unknown error"}`);
+              }
+            };
+
+            const addPlayerRow = () => {
+              const selectedOption = playerSelect.selectedOptions[0];
+              const playerId = selectedOption?.dataset.playerCode || playerSelect.value;
+              const jerseyNumber = jerseyInput.value.trim();
+              const jerseyValue = Number(jerseyNumber);
+              const clubId = activeClub?.value || "";
+              const clubName = activeClub?.dataset.clubName || activeClub?.textContent || "";
+              if (!clubId) {
+                setMatchDayError("club id not parsed from selected club.");
+                return;
+              }
+              if (!playerId || !selectedOption) {
+                setMatchDayError("player id not parsed from selected player.");
+                return;
+              }
+              if (!jerseyNumber || !Number.isInteger(jerseyValue) || jerseyValue < 1 || jerseyValue > 99) {
+                setMatchDayError("Enter a valid jersey number between 1 and 99.");
+                return;
+              }
+              if (selectedPlayerIds.has(playerId)) {
+                setMatchDayError("That player is already in the squad list.");
+                return;
+              }
+              const playerName = selectedOption.textContent;
+              const playerCode = selectedOption.dataset.playerCode || "";
+              const ageGroup = selectedOption.dataset.ageGroup || "";
+              if (squadList.querySelector(".matchday-squad-empty")) {
+                squadList.innerHTML = "";
+              }
+              const row = document.createElement("div");
+              row.className = "matchday-squad-row";
+              row.dataset.squadRow = "true";
+              row.dataset.playerId = playerId;
+              row.innerHTML = `
+                <span class="matchday-squad-cell matchday-squad-cell--name">${playerName}</span>
+                <span class="matchday-squad-cell">${clubName}</span>
+                <span class="matchday-squad-cell">${playerCode}</span>
+                <span class="matchday-squad-cell">${ageGroup}</span>
+                <label class="matchday-squad-cell matchday-squad-cell--jersey">
+                  <input name="jersey_numbers" type="number" min="1" max="99" value="${jerseyValue}" required>
+                </label>
+                <div class="matchday-squad-cell matchday-squad-cell--action">
+                  <button class="button button-muted small" type="button">Remove</button>
+                  <input type="hidden" name="club_ids" value="${clubId}">
+                  <input type="hidden" name="player_ids" value="${playerId}">
+                </div>
+              `;
+              row.querySelector("button")?.addEventListener("click", () => {
+                selectedPlayerIds.delete(playerId);
+                row.remove();
+                if (!squadList.querySelector("[data-squad-row]")) {
+                  squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+                }
+                syncSquadPayload();
+                refreshPlayerSelect();
+              });
+              squadList.appendChild(row);
+              selectedPlayerIds.add(playerId);
+              playerSelect.value = "";
+              playerSelect.selectedIndex = 0;
+              jerseyInput.value = "";
+              syncSquadPayload();
+              refreshPlayerSelect();
+              clearMatchDayError();
+            };
+
+            const syncClubSelection = () => {
+              activeClub = clubSelect?.selectedOptions?.[0] && clubSelect.value ? clubSelect.selectedOptions[0] : null;
+              clearMatchDayError();
+              playerSelect.value = "";
+              jerseyInput.value = "";
+              refreshPlayerSelect();
+            };
+
+            const syncFixtureSelection = () => {
+              activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
+              updateFixturePreview(activeFixture);
+            };
+
+            fixtureSelect?.addEventListener("change", syncFixtureSelection);
+            clubSelect?.addEventListener("change", syncClubSelection);
+            addButton?.addEventListener("click", addPlayerRow);
+            playerSelect?.addEventListener("change", () => {
+              jerseyInput.required = Boolean(playerSelect.value);
+              if (playerSelect.value) {
+                jerseyInput.focus();
+              }
+              clearMatchDayError();
+              updateAddButtonState();
+            });
+            jerseyInput?.addEventListener("input", updateAddButtonState);
+            jerseyInput?.addEventListener("change", updateAddButtonState);
+
+            syncFixtureSelection();
+            syncClubSelection();
+            syncSquadPayload();
+
+            form.addEventListener("submit", (event) => {
+              if (!activeFixture) {
+                event.preventDefault();
+                setMatchDayError("Select a fixture before generating the squad.");
+                return;
+              }
+              syncSquadPayload();
+              if (!serializeSquadRows().length) {
+                event.preventDefault();
+                setMatchDayError("Add at least one player to the squad list.");
                 return;
               }
             });
@@ -2358,7 +2802,7 @@
           <h2>Enter Match Result</h2>
         </div>
         {% if played_fixtures %}
-        <form class="form-grid result-upload-form" method="post" action="/team-admin/results" data-result-form data-approved-team-ids="{{ approved_team_ids | tojson }}" data-result-api="/api/team-admin/result-players">
+        <form class="form-grid result-upload-form" method="post" action="/team-admin/results" data-result-form data-approved-team-ids="{{ approved_team_ids | tojson }}" data-owned-team-ids="{{ owned_approved_team_ids | tojson }}" data-primary-team-id="{{ primary_team_id or '' }}" data-result-api="/api/team-admin/result-players">
           <label class="result-field result-field--full">Played fixture
             <select id="result-fixture-select" name="fixture_id" required>
               <option value="">Select a played fixture</option>
@@ -2419,15 +2863,13 @@
           <div class="result-goal-row" data-goal-row>
             <div class="result-goal-row__title"></div>
             <label>Scorer
-              <select data-player-select="scorer" required></select>
+              <select data-player-select="scorer" name="scorer_player_ids" required></select>
             </label>
-            <input type="hidden" name="scorer_player_ids" value="">
             <label>Assister
-              <select data-player-select="assist">
+              <select data-player-select="assist" name="assist_player_ids">
                 <option value="">No assist</option>
               </select>
             </label>
-            <input type="hidden" name="assist_player_ids" value="">
             <label>Goal type
               <select data-goal-type name="goal_types" required>
                 <option value="Penalty">Penalty</option>
@@ -2499,7 +2941,11 @@
               <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
               <td data-label="Actions">
                 {% if submission.submitted_by_team_admin_id == team_admin.team_admin_id and submission.status != 'approved' %}
-                  <button class="button button-secondary small" type="button" data-edit-result>Edit</button>
+                  <button
+                    class="button button-secondary small"
+                    type="button"
+                    data-edit-result
+                  >Edit</button>
                 {% else %}
                   -
                 {% endif %}
@@ -2917,80 +3363,18 @@
     const goalRows = document.querySelector('[data-result-goal-rows]');
     const goalRowTemplate = document.getElementById('result-goal-row-template');
     const statusNote = document.querySelector('[data-result-status-note]');
+    const resultTypeSelect = document.getElementById('result-type-select');
     const editButtons = Array.from(document.querySelectorAll('[data-edit-result]'));
     const approvedTeamIds = new Set(JSON.parse(form.dataset.approvedTeamIds || '[]').map((value) => String(value)));
+    const ownedTeamIds = new Set(JSON.parse(form.dataset.ownedTeamIds || '[]').map((value) => String(value)));
+    const primaryTeamId = String(form.dataset.primaryTeamId || '');
     const playerCache = new Map();
     let fixturePlayers = null;
     let currentSubmittingTeamId = null;
     let pendingEditPayload = null;
 
-    const goalTypes = ['Penalty', 'Freekick', 'Cornerkick', 'from KickOFF', 'Header', 'Tap In'];
-
-    const showEmptyState = (message) => {
-      goalRows.innerHTML = `<div class="fixture-empty">${message}</div>`;
-    };
-
-    const updateStatusNote = (option) => {
-      if (!statusNote) {
-        return;
-      }
-      const status = option?.dataset.resultStatus || '';
-      const rejectionReason = option?.dataset.rejectionReason || '';
-      if (!status) {
-        statusNote.hidden = true;
-        statusNote.textContent = '';
-        return;
-      }
-      statusNote.hidden = false;
-      if (status === 'approved') {
-        statusNote.textContent = 'This fixture is already system verified. Any matching resubmission will stay verified.';
-      } else if (status === 'pending') {
-        statusNote.textContent = 'A result has already been saved for this fixture. The other team admin must submit the matching scoreline.';
-      } else if (status === 'rejected') {
-        statusNote.textContent = rejectionReason ? `A previous submission was rejected: ${rejectionReason}` : 'A previous submission was rejected.';
-      } else {
-        statusNote.textContent = `Fixture status: ${status}`;
-      }
-    };
-
-    const getSelectedFixtureOption = () => fixtureSelect.selectedOptions[0] || null;
-
-    const getSubmittingTeamId = (option) => {
-      if (!option) {
-        return null;
-      }
-      const homeTeamId = String(option.dataset.homeTeamId || '');
-      const awayTeamId = String(option.dataset.awayTeamId || '');
-      if (approvedTeamIds.has(homeTeamId)) {
-        return homeTeamId;
-      }
-      if (approvedTeamIds.has(awayTeamId)) {
-        return awayTeamId;
-      }
-      return null;
-    };
-
-    const buildPlayerOptions = (players, selectedValue = '', includePlaceholder = true) => {
-      const options = includePlaceholder ? ['<option value="">Select player</option>'] : [];
-      players.forEach((player) => {
-        const labelParts = [player.full_name || player.player_name || 'Player'];
-        if (player.team_name) {
-          labelParts.push(player.team_name);
-        }
-        if (player.category_name) {
-          labelParts.push(player.category_name);
-        }
-        let label = labelParts[0];
-        if (labelParts.length > 1) {
-          label += ` - ${labelParts.slice(1).join(' • ')}`;
-        }
-        if (player.player_code) {
-          label += ` (${player.player_code})`;
-        }
-        options.push(`<option value="${player.player_id}"${String(player.player_id) === String(selectedValue) ? ' selected' : ''}>${label}</option>`);
-      });
-      return options.join('');
-    };
+    const goalTypes = ['Penalty', 'Freekick', 'Cornerkick', 'from KickOFF', 'Header', 'Tap In', 'Own Goal'];
+    const specialResultTypes = new Set(['opponent_did_not_honour', 'opponent_forfeited']);
 
     const parseMaybeJsonString = (value) => {
       if (!value) {
@@ -3021,7 +3405,30 @@
       if (normalized === 'header') return 'Header';
       if (normalized === 'tap in') return 'Tap In';
       if (normalized === 'penalty') return 'Penalty';
+      if (normalized === 'own goal') return 'Own Goal';
       return value || '';
+    };
+
+    const getSelectedResultType = () => resultTypeSelect?.value || 'standard';
+
+    const syncGoalRowSubmissionFields = (row) => {
+      const scorerSelect = row.querySelector('[data-player-select="scorer"]');
+      const assistSelect = row.querySelector('[data-player-select="assist"]');
+      const goalTypeSelect = row.querySelector('[data-goal-type]');
+      const isOwnGoal = goalTypeSelect?.value === 'Own Goal';
+
+      if (scorerSelect) {
+        scorerSelect.disabled = isOwnGoal;
+        if (isOwnGoal) {
+          scorerSelect.value = '';
+        }
+      }
+      if (assistSelect) {
+        assistSelect.disabled = isOwnGoal;
+        if (isOwnGoal) {
+          assistSelect.value = '';
+        }
+      }
     };
 
     const findPlayerIdByName = (players, name) => {
@@ -3045,16 +3452,147 @@
       pendingEditPayload = payload;
     };
 
+    const showEmptyState = (message) => {
+      goalRows.innerHTML = `<div class="fixture-empty">${message}</div>`;
+    };
+
+    const updateStatusNote = (option) => {
+      if (!statusNote) {
+        return;
+      }
+      const status = option?.dataset.resultStatus || '';
+      const rejectionReason = option?.dataset.rejectionReason || '';
+      const selectedResultType = getSelectedResultType();
+      if (!status) {
+        statusNote.hidden = true;
+        statusNote.textContent = '';
+        return;
+      }
+      statusNote.hidden = false;
+      if (status === 'approved') {
+        statusNote.textContent = 'This fixture is already system verified. Any matching resubmission will stay verified.';
+      } else if (status === 'pending') {
+        statusNote.textContent = specialResultTypes.has(selectedResultType)
+          ? 'This special result is waiting for super admin approval.'
+          : 'A result has already been saved for this fixture. The other team admin must submit the matching scoreline.';
+      } else if (status === 'rejected') {
+        statusNote.textContent = rejectionReason ? `A previous submission was rejected: ${rejectionReason}` : 'A previous submission was rejected.';
+      } else {
+        statusNote.textContent = `Fixture status: ${status}`;
+      }
+    };
+
+    const getSelectedFixtureOption = () => fixtureSelect.selectedOptions[0] || null;
+
+    const getSubmittingTeamId = (option) => {
+      if (!option) {
+        return null;
+      }
+      const homeTeamId = String(option.dataset.homeTeamId || '');
+      const awayTeamId = String(option.dataset.awayTeamId || '');
+      if (primaryTeamId && primaryTeamId === homeTeamId) {
+        return homeTeamId;
+      }
+      if (primaryTeamId && primaryTeamId === awayTeamId) {
+        return awayTeamId;
+      }
+      if (ownedTeamIds.has(homeTeamId)) {
+        return homeTeamId;
+      }
+      if (ownedTeamIds.has(awayTeamId)) {
+        return awayTeamId;
+      }
+      if (approvedTeamIds.has(homeTeamId)) {
+        return homeTeamId;
+      }
+      if (approvedTeamIds.has(awayTeamId)) {
+        return awayTeamId;
+      }
+      return null;
+    };
+
+    const getSubmittingSide = (option) => {
+      const submittingTeamId = getSubmittingTeamId(option);
+      if (!option || !submittingTeamId) {
+        return null;
+      }
+      if (String(submittingTeamId) === String(option.dataset.homeTeamId || '')) {
+        return 'home';
+      }
+      if (String(submittingTeamId) === String(option.dataset.awayTeamId || '')) {
+        return 'away';
+      }
+      return null;
+    };
+
+    const buildPlayerOptions = (players, selectedValue = '', includePlaceholder = true) => {
+      const options = includePlaceholder ? ['<option value="">Select player</option>'] : [];
+      players.forEach((player) => {
+        const labelParts = [player.full_name || player.player_name || 'Player'];
+        if (player.team_name) {
+          labelParts.push(player.team_name);
+        }
+        if (player.category_name) {
+          labelParts.push(player.category_name);
+        }
+        let label = labelParts[0];
+        if (labelParts.length > 1) {
+          label += ` - ${labelParts.slice(1).join(' • ')}`;
+        }
+        if (player.player_code) {
+          label += ` (${player.player_code})`;
+        }
+        options.push(`<option value="${player.player_id}"${String(player.player_id) === String(selectedValue) ? ' selected' : ''}>${label}</option>`);
+      });
+      return options.join('');
+    };
+
+    const updateSpecialResultMode = () => {
+      if (!resultTypeSelect) {
+        return;
+      }
+      const option = getSelectedFixtureOption();
+      const submittingTeamId = getSubmittingTeamId(option);
+      const isSpecial = specialResultTypes.has(getSelectedResultType());
+      const isHomeSide = option ? String(submittingTeamId) === String(option.dataset.homeTeamId) : false;
+      if (isSpecial) {
+        homeScoreInput.value = isHomeSide ? '3' : '0';
+        awayScoreInput.value = isHomeSide ? '0' : '3';
+        homeScoreInput.readOnly = true;
+        awayScoreInput.readOnly = true;
+        goalRows.innerHTML = '<div class="fixture-empty">No scorer or assister details are required for this result type. Submit the 3-0 scoreline for super admin approval.</div>';
+      } else {
+        homeScoreInput.readOnly = false;
+        awayScoreInput.readOnly = false;
+      }
+      updateStatusNote(option);
+    };
+
     const populateRows = () => {
       const option = getSelectedFixtureOption();
       const homeScore = Number(homeScoreInput.value || 0);
       const awayScore = Number(awayScoreInput.value || 0);
       const submittingTeamId = getSubmittingTeamId(option);
+      const submittingSide = getSubmittingSide(option);
+      const isSpecial = specialResultTypes.has(getSelectedResultType());
       currentSubmittingTeamId = submittingTeamId;
 
       homeTeamInput.value = option?.dataset.homeTeamName || '';
       awayTeamInput.value = option?.dataset.awayTeamName || '';
       updateStatusNote(option);
+
+      if (isSpecial) {
+        const isHomeSide = submittingSide === 'home';
+        homeScoreInput.value = isHomeSide ? '3' : '0';
+        awayScoreInput.value = isHomeSide ? '0' : '3';
+        homeScoreInput.readOnly = true;
+        awayScoreInput.readOnly = true;
+        goalRows.innerHTML = '<div class="fixture-empty">No scorer or assister details are required for this result type. Submit the 3-0 scoreline for super admin approval.</div>';
+        return;
+      }
+
+      homeScoreInput.readOnly = false;
+      awayScoreInput.readOnly = false;
 
       if (!option) {
         fixturePlayers = null;
@@ -3062,7 +3600,12 @@
         return;
       }
 
-      const expectedCount = String(submittingTeamId) === String(option.dataset.homeTeamId) ? homeScore : awayScore;
+      if (!submittingSide) {
+        showEmptyState('This fixture is not linked to one of your approved clubs.');
+        return;
+      }
+
+      const expectedCount = submittingSide === 'home' ? homeScore : awayScore;
       if (!expectedCount && expectedCount !== 0) {
         showEmptyState('Enter your team score to generate goal rows.');
         return;
@@ -3102,14 +3645,18 @@
         const desiredGoalType = normalizeGoalTypeLabel(editGoalTypes[index] || currentGoalType);
         const row = goalRowTemplate.content.firstElementChild.cloneNode(true);
         row.querySelector('.result-goal-row__title').textContent = `Goal ${index + 1}`;
-        const scorerSelect = row.querySelector('select[name="scorer_player_ids"]');
-        const assistSelect = row.querySelector('select[name="assist_player_ids"]');
-        const goalTypeSelect = row.querySelector('select[name="goal_types"]');
+        const scorerSelect = row.querySelector('[data-player-select="scorer"]');
+        const assistSelect = row.querySelector('[data-player-select="assist"]');
+        const goalTypeSelect = row.querySelector('[data-goal-type]');
         const selectedScorerId = desiredScorerName ? findPlayerIdByName(players, desiredScorerName) : currentScorer;
         const selectedAssistId = desiredAssistName ? findPlayerIdByName(players, desiredAssistName) : currentAssist;
         scorerSelect.innerHTML = buildPlayerOptions(players, selectedScorerId);
         assistSelect.innerHTML = `<option value="">No assist</option>${buildPlayerOptions(players, selectedAssistId, false)}`;
         goalTypeSelect.innerHTML = goalTypes.map((goalType) => `<option value="${goalType}"${goalType === desiredGoalType ? ' selected' : ''}>${goalType}</option>`).join('');
+        scorerSelect.addEventListener('change', () => syncGoalRowSubmissionFields(row));
+        assistSelect.addEventListener('change', () => syncGoalRowSubmissionFields(row));
+        goalTypeSelect.addEventListener('change', () => syncGoalRowSubmissionFields(row));
+        syncGoalRowSubmissionFields(row);
         goalRows.appendChild(row);
       }
     };
@@ -3144,6 +3691,7 @@
       fixturePlayers = null;
       clearPendingEdit();
       showEmptyState('Loading approved players for this fixture...');
+      updateSpecialResultMode();
       await fetchPlayersForFixture(fixtureSelect.value);
     });
 
@@ -3151,12 +3699,23 @@
     awayScoreInput.addEventListener('input', populateRows);
     homeScoreInput.addEventListener('change', populateRows);
     awayScoreInput.addEventListener('change', populateRows);
+    resultTypeSelect?.addEventListener('change', () => {
+      clearPendingEdit();
+      updateSpecialResultMode();
+      populateRows();
+    });
 
     form.addEventListener('submit', (event) => {
       const option = getSelectedFixtureOption();
       const submittingTeamId = getSubmittingTeamId(option);
-      const expectedCount = String(submittingTeamId) === String(option?.dataset.homeTeamId || '') ? Number(homeScoreInput.value || 0) : Number(awayScoreInput.value || 0);
-      if (!fixtureSelect.value || (expectedCount > 0 && !goalRows.querySelector('[data-goal-row]'))) {
+      const submittingSide = getSubmittingSide(option);
+      const isSpecial = specialResultTypes.has(getSelectedResultType());
+      const expectedCount = submittingSide === 'home'
+        ? Number(homeScoreInput.value || 0)
+        : submittingSide === 'away'
+          ? Number(awayScoreInput.value || 0)
+          : 0;
+      if (!fixtureSelect.value || !submittingTeamId || (!isSpecial && expectedCount > 0 && !goalRows.querySelector('[data-goal-row]'))) {
         event.preventDefault();
       }
     });
@@ -3172,6 +3731,9 @@
         const scorerNames = splitLines(row.dataset.scorerNames);
         const assistNames = splitLines(row.dataset.assistNames);
         const goalTypesFromRow = splitLines(row.dataset.goalTypes);
+        if (resultTypeSelect) {
+          resultTypeSelect.value = row.dataset.resultType || 'standard';
+        }
         setPendingEdit({
           scorers: scorerNames,
           assists: assistNames,
@@ -3199,6 +3761,7 @@
     if (initialOption) {
       homeScoreInput.value = initialOption.dataset.homeScore || '';
       awayScoreInput.value = initialOption.dataset.awayScore || '';
+      updateSpecialResultMode();
       updateStatusNote(initialOption);
       fetchPlayersForFixture(fixtureSelect.value);
     } else {

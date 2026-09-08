@@ -29,12 +29,6 @@
       </div>
     </div>
 
-    {% if dashboard_notice %}
-      <div class="alert {{ dashboard_notice_kind or 'success' }}" style="margin-bottom: 1rem;">
-        {{ dashboard_notice }}
-      </div>
-    {% endif %}
-
     <div class="section-switcher">
       <button class="switch-button active" type="button" data-section-target="team-admins">Team Admins</button>
       <button class="switch-button" type="button" data-section-target="teams">Teams</button>
@@ -250,7 +244,6 @@
               <th>Gender</th>
               <th>Age</th>
               <th>Age Group</th>
-              <th>Parent</th>
               <th>Documents</th>
               <th>Status</th>
               <th>Attended By</th>
@@ -273,7 +266,6 @@
               <td>{{ player.gender }}</td>
               <td>{{ player.calculated_age if player.calculated_age is not none else '-' }}</td>
               <td>{{ player.age_group }}</td>
-              <td>{% if player.parent %}{{ player.parent.name }}{% endif %}</td>
               <td>
                 <div class="doc-list">
                   {% for document in player.documents %}
@@ -300,7 +292,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="12" class="empty">No player registrations.</td></tr>
+            <tr><td colspan="11" class="empty">No player registrations.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -1079,8 +1071,6 @@
 </section>
 
 <script>
-  const initialSuperAdminSection = {{ dashboard_section | default('team-admins') | tojson }};
-
   function filterSuperAdminTable(tableId, status) {
     const section = document.getElementById(tableId);
     const rows = section ? section.querySelectorAll('table tbody tr[data-row]') : [];
@@ -1170,23 +1160,6 @@
       card.hidden = !(matchesBucket && matchesCategory && matchesFrom && matchesTo);
     });
   }
-
-  function openSuperAdminSection(sectionId) {
-    const target = document.getElementById(sectionId);
-    if (!target) {
-      return;
-    }
-
-    document.querySelectorAll('.dashboard-section').forEach((section) => {
-      section.hidden = section.id !== sectionId;
-    });
-    document.querySelectorAll('[data-section-target]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.sectionTarget === sectionId);
-    });
-    if (sectionId === 'fixtures') {
-      filterSuperAdminFixtures();
-    }
-  }
   
   function filterPlayersByTeam() {
     const teamId = document.getElementById('team-filter').value;
@@ -1207,10 +1180,6 @@
 
   syncFixtureTeamFilters();
   filterSuperAdminFixtures();
-
-  if (initialSuperAdminSection) {
-    openSuperAdminSection(initialSuperAdminSection);
-  }
 
   function filterPlayersByCategory() {
     filterPlayersByTeam();
