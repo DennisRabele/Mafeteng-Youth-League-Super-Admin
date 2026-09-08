@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block content %}
 <section class="app-layout">
@@ -106,15 +106,15 @@
             <p style="color: #666; margin-bottom: 2rem;">Choose what you want to do:</p>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
               <button type="button" class="button button-primary large" onclick="selectRegistrationType('new')" style="padding: 1.5rem;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">➕</div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">âž•</div>
                 New Player
               </button>
               <button type="button" class="button button-primary large" onclick="selectRegistrationType('renewal')" style="padding: 1.5rem;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔄</div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">ðŸ”„</div>
                 Renewal
               </button>
               <button type="button" class="button button-primary large" onclick="selectRegistrationType('transfer')" style="padding: 1.5rem;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔀</div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">ðŸ”€</div>
                 Transfer
               </button>
             </div>
@@ -123,7 +123,7 @@
 
         <!-- New Player Registration Form -->
         <div id="new-player-form" class="registration-form" style="display: none;">
-          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">← Back</button>
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">â† Back</button>
           <section class="panel form-section">
             <div class="panel-heading">
               <h2>New Player Registration</h2>
@@ -256,74 +256,9 @@
             {% endif %}
           </section>
         </div>
-
-        <!-- Edit Player Registration Form -->
-        <div id="edit-player-form" class="registration-form" style="display: none;">
-          <button type="button" class="button button-muted" onclick="cancelPlayerEditForm()" style="margin-bottom: 1rem;">â† Back</button>
-          <section class="panel form-section">
-            <div class="panel-heading">
-              <h2>Edit Player Registration</h2>
-            </div>
-            <p style="margin: 0.75rem 0 1rem; color: #7a4b00; font-weight: 600;">Edit a pending or rejected player registration. Rejected players will be resubmitted as pending when you save.</p>
-            <form class="player-registration-form" method="post" action="/team-admin/players/edit" enctype="multipart/form-data" data-batch-player-form data-player-edit-form>
-              <input type="hidden" name="player_id">
-              <input type="hidden" name="team_id">
-              <div class="player-batch-list" data-batch-player-list>
-                <article class="panel player-entry" data-player-entry style="margin: 0 0 1rem 0;">
-                  <div class="panel-heading" style="align-items:flex-start; gap:1rem;">
-                    <h3 data-player-entry-title style="margin:0;">Edit Player</h3>
-                  </div>
-                  <div class="form-grid two">
-                    <label>Team
-                      <input type="text" data-edit-player-team-name readonly>
-                    </label>
-                    <label>Full Name
-                      <input name="full_name" placeholder="Enter full name" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
-                    </label>
-                    <label>Date Of Birth
-                      <input name="dob" type="date" autocomplete="bday" required>
-                    </label>
-                    <label>Gender
-                      <select name="gender" required>
-                        <option value="">Select Gender</option>
-                        <option>Male</option>
-                        <option>Female</option>
-                      </select>
-                    </label>
-                    <label>Position
-                      <select name="position" required>
-                        <option value="">Select Position</option>
-                        <option>Goalkeeper</option>
-                        <option>Defender</option>
-                        <option>Midfielder</option>
-                        <option>Forward</option>
-                      </select>
-                    </label>
-                    <label>Player Photo
-                      <input name="passport_photo" type="file" accept=".jpg,.jpeg,.png,.avi,image/*">
-                      <input type="hidden" name="passport_photo_url">
-                      <a class="button button-muted small" href="#" target="_blank" rel="noopener" data-current-player-photo-link style="display:none; margin-top:0.5rem;">Open current photo</a>
-                    </label>
-                    <label>Identity Document
-                      <input name="identity_document" type="file" accept=".doc,.docx,.pdf,.txt">
-                      <input type="hidden" name="identity_document_url">
-                      <a class="button button-muted small" href="#" target="_blank" rel="noopener" data-current-player-document-link style="display:none; margin-top:0.5rem;">Open current identity document</a>
-                    </label>
-                  </div>
-                </article>
-              </div>
-              <div class="player-form-actions">
-                <button class="button button-muted" type="button" onclick="cancelPlayerEditForm()">Cancel</button>
-                <button class="button button-primary" type="submit">Submit Changes</button>
-              </div>
-              <p class="alert" data-player-edit-status style="display:none; margin-top:1rem;" aria-live="polite"></p>
-            </form>
-          </section>
-        </div>
-
         <!-- Renewal Registration Form -->
         <div id="renewal-form" class="registration-form" style="display: none;">
-          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">← Back</button>
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">â† Back</button>
           <section class="panel form-section">
             <div class="panel-heading">
               <h2>Renewal Registration</h2>
@@ -359,13 +294,13 @@
 
         <!-- Transfer Registration Forms -->
         <div id="transfer-form" class="registration-form" style="display: none;">
-          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">← Back</button>
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">â† Back</button>
           
           <!-- Request Transfer Section -->
           <section class="panel form-section" style="margin-bottom: 2rem;">
             <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
               <h2 style="margin: 0;">Request Transfer (Send)</h2>
-              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">▼</button>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">â–¼</button>
             </div>
             <div class="section-content" style="display: none;">
             <form class="form-grid" method="post" action="/team-admin/transfers">
@@ -424,7 +359,7 @@
           <section class="panel form-section" style="margin-bottom: 2rem;">
             <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
               <h2 style="margin: 0;">Incoming Transfer Requests</h2>
-              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">▼</button>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">â–¼</button>
             </div>
             <div class="section-content" style="display: none;">
             <div class="transfer-list">
@@ -482,25 +417,25 @@
                       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                         <form class="form-grid" method="post" action="/team-admin/transfers/{{ transfer.transfer_id }}/respond">
                           <label style="grid-column: 1 / -1;">Approve Transfer
-                            <button class="button button-primary" type="submit" name="decision" value="approved" style="width: 100%; margin-top: 0.5rem;">✓ Approve</button>
+                            <button class="button button-primary" type="submit" name="decision" value="approved" style="width: 100%; margin-top: 0.5rem;">âœ“ Approve</button>
                           </label>
                         </form>
                         <form class="form-grid" method="post" action="/team-admin/transfers/{{ transfer.transfer_id }}/respond">
                           <label style="grid-column: 1 / -1;">Rejection Reason
                             <textarea name="rejection_reason" required placeholder="Explain why you're rejecting this transfer..." style="min-height: 60px;"></textarea>
                           </label>
-                          <button class="button button-muted" type="submit" name="decision" value="rejected" style="width: 100%; margin-top: 0.5rem;">✗ Reject</button>
+                          <button class="button button-muted" type="submit" name="decision" value="rejected" style="width: 100%; margin-top: 0.5rem;">âœ— Reject</button>
                         </form>
                       </div>
                     {% elif transfer.status == 'approved' %}
                       <div class="form-grid">
                         <div style="grid-column: 1 / -1; padding: 1rem; background: #e8f5e9; border-radius: 4px; margin-bottom: 1rem;">
-                          <p style="margin: 0; color: #2e7d32;"><strong>✓ Transfer Approved</strong></p>
+                          <p style="margin: 0; color: #2e7d32;"><strong>âœ“ Transfer Approved</strong></p>
                           <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #2e7d32;">The player has been released for the requesting team. Registration continues from their Register Transferred Players section.</p>
                         </div>
                         <label style="grid-column: 1 / -1; display: none;">Parent/Guardian Consent Form (Download, Sign, Upload)
                           <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; margin-top: 0.5rem;">
-                            <a href="/team-admin/parent-consent-template" target="_blank" class="button button-danger" style="padding: 0.5rem 1rem;">⬇ Download Form</a>
+                            <a href="/team-admin/parent-consent-template" target="_blank" class="button button-danger" style="padding: 0.5rem 1rem;">â¬‡ Download Form</a>
                             <input name="player_consent_form" type="file" accept=".pdf,.doc,.docx,.txt,image/*" required style="padding: 0.5rem;">
                           </div>
                         </label>
@@ -510,7 +445,7 @@
                       </div>
                     {% elif transfer.status == 'rejected' %}
                       <div style="padding: 1rem; background: #ffebee; border-radius: 4px;">
-                        <p style="margin: 0; color: #c62828;"><strong>✗ Transfer Rejected</strong></p>
+                        <p style="margin: 0; color: #c62828;"><strong>âœ— Transfer Rejected</strong></p>
                         <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #c62828;">{{ transfer.rejection_reason }}</p>
                       </div>
                     {% endif %}
@@ -527,7 +462,7 @@
           <section class="panel form-section" style="margin-bottom: 2rem;">
             <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
               <h2 style="margin: 0;">Outgoing Transfer Requests Status</h2>
-              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">▼</button>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">â–¼</button>
             </div>
             <div class="section-content" style="display: none;">
             <div class="transfer-list">
@@ -537,7 +472,7 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: center;">
                       <div>
                         <h4 style="margin: 0 0 0.3rem 0;">{{ transfer.player.full_name }}</h4>
-                        <p style="margin: 0; font-size: 0.9rem; color: #666;">{{ transfer.from_team.team_name }} → {{ transfer.to_team.team_name }}</p>
+                        <p style="margin: 0; font-size: 0.9rem; color: #666;">{{ transfer.from_team.team_name }} â†’ {{ transfer.to_team.team_name }}</p>
                       </div>
                       <div>
                         <p style="margin: 0;"><strong>Type:</strong> {{ transfer.transfer_type }}</p>
@@ -574,7 +509,7 @@
           <section class="panel form-section" style="margin-bottom: 2rem;">
             <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleSection(this)">
               <h2 style="margin: 0;">Request Player from Another Team</h2>
-              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">▼</button>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">â–¼</button>
             </div>
             <div class="section-content" style="display: none;">
             <form class="form-grid" method="post" action="/team-admin/player-requests">
@@ -637,7 +572,7 @@
                 <h2 style="margin: 0;">Unregister and Register Transfered Players</h2>
                 <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.95rem;">Approved transfers are automatically released from the old team. Verify player and transfer details, then upload the new team's Parent/Guardian Consent Form.</p>
               </div>
-              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; flex-shrink: 0;">▼</button>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; flex-shrink: 0;">â–¼</button>
             </div>
             <div class="section-content" style="display: none;">
             <div class="transfer-list">
@@ -699,7 +634,7 @@
                       <h4 style="margin-bottom: 0.5rem;">Existing Documents</h4>
                       <div style="padding: 0.5rem; background: #f9f9f9; border-radius: 3px;">
                         {% for document in transfer.player.documents %}
-                          <p style="margin: 0.3rem 0;"><a href="{{ document.file_path }}" target="_blank">✓ {{ document.document_type }}</a></p>
+                          <p style="margin: 0.3rem 0;"><a href="{{ document.file_path }}" target="_blank">âœ“ {{ document.document_type }}</a></p>
                         {% else %}
                           <p style="margin: 0; color: #999;">No documents on file</p>
                         {% endfor %}
@@ -709,13 +644,13 @@
                     <!-- Registration Form -->
                     <form method="post" action="/team-admin/transfers/{{ transfer.transfer_id }}/register-transferred-player" enctype="multipart/form-data">
                       <div style="padding: 1rem; background: #e8f5e9; border-radius: 4px; margin-bottom: 1rem;">
-                        <p style="margin: 0; color: #2e7d32;"><strong>✓ Transfer Approved by Both Teams</strong></p>
+                        <p style="margin: 0; color: #2e7d32;"><strong>âœ“ Transfer Approved by Both Teams</strong></p>
                         <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #2e7d32;">Complete registration by uploading Parent/Guardian Consent Form for the new team.</p>
                       </div>
                       
                       <label style="display: block; margin-bottom: 1rem;">Parent/Guardian Consent Form (Download, Sign, Upload)
                         <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; margin-top: 0.5rem;">
-                          <a href="/team-admin/parent-consent-template" target="_blank" class="button button-danger" style="padding: 0.5rem 1rem;">⬇ Download Form</a>
+                          <a href="/team-admin/parent-consent-template" target="_blank" class="button button-danger" style="padding: 0.5rem 1rem;">â¬‡ Download Form</a>
                           <input name="consent_form" type="file" accept=".pdf,.doc,.docx,.txt,image/*" required style="padding: 0.5rem;">
                         </div>
                       </label>
@@ -740,7 +675,7 @@
                 <h2 style="margin: 0;">Released Transfer Status</h2>
                 <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.95rem;">Approved outgoing transfers are released automatically. Loans stay visible but blurred until the loan period ends.</p>
               </div>
-              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; flex-shrink: 0;">▼</button>
+              <button type="button" class="toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; flex-shrink: 0;">â–¼</button>
             </div>
             <div class="section-content" style="display: none;">
             <div class="transfer-list">
@@ -785,7 +720,7 @@
                     <!-- Unregistration Form -->
                     <div>
                       <div style="padding: 1rem; background: #fff3cd; border-radius: 4px; margin-bottom: 1rem;">
-                        <p style="margin: 0; color: #856404;"><strong>⚠ Confirm Unregistration</strong></p>
+                        <p style="margin: 0; color: #856404;"><strong>âš  Confirm Unregistration</strong></p>
                         {% if transfer.transfer_type == 'Loan Transfer' %}
                           <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #856404;">This player will be marked as on loan and will return to your roster after the loan period ({{ transfer.loan_period }}).</p>
                         {% else %}
@@ -815,7 +750,7 @@
             if (content && content.classList.contains('section-content')) {
               const isHidden = content.style.display === 'none';
               content.style.display = isHidden ? 'block' : 'none';
-              btn.textContent = isHidden ? '▲' : '▼';
+              btn.textContent = isHidden ? 'â–²' : 'â–¼';
             }
           }
 
@@ -1181,7 +1116,7 @@
 
           function setBatchUploadStatus(message, kind = 'info', form = null) {
             const status = form
-              ? form.querySelector('[data-player-upload-status], [data-player-edit-status]')
+              ? form.querySelector('[data-player-upload-status]')
               : document.querySelector('[data-player-upload-status]');
             if (!status) {
               return;
@@ -1199,7 +1134,6 @@
             }
 
             const entries = Array.from(form.querySelectorAll('[data-player-entry]'));
-            const isEditForm = form.hasAttribute('data-player-edit-form');
             const lockedInputs = [];
             try {
               setBatchUploadStatus('Uploading documents...', 'info', form);
@@ -1401,7 +1335,7 @@
           function updateConsentStatus(element) {
             const status = document.getElementById('consent-status');
             if (element.files && element.files.length > 0) {
-              status.textContent = '✓ Uploaded';
+              status.textContent = 'âœ“ Uploaded';
               status.style.color = '#28a745';
             }
           }
@@ -1639,64 +1573,6 @@
             }
             updateAllPlayerEntries();
           }
-
-          function openPlayerEditForm(button) {
-            const formSection = document.getElementById('edit-player-form');
-            const form = formSection ? formSection.querySelector('[data-player-edit-form]') : null;
-            if (!button || !formSection || !form) {
-              return;
-            }
-
-            const fields = {
-              playerId: form.querySelector('input[name="player_id"]'),
-              teamId: form.querySelector('input[name="team_id"]'),
-              fullName: form.querySelector('input[name="full_name"]'),
-              dob: form.querySelector('input[name="dob"]'),
-              gender: form.querySelector('select[name="gender"]'),
-              position: form.querySelector('select[name="position"]'),
-              photoUrl: form.querySelector('input[name="passport_photo_url"]'),
-              docUrl: form.querySelector('input[name="identity_document_url"]'),
-              teamName: form.querySelector('[data-edit-player-team-name]'),
-              photoLink: form.querySelector('[data-current-player-photo-link]'),
-              docLink: form.querySelector('[data-current-player-document-link]'),
-            };
-            if (fields.playerId) fields.playerId.value = button.dataset.playerId || '';
-            if (fields.teamId) fields.teamId.value = button.dataset.playerTeamId || '';
-            if (fields.fullName) fields.fullName.value = button.dataset.playerName || '';
-            if (fields.dob) fields.dob.value = button.dataset.playerDob || '';
-            if (fields.gender) fields.gender.value = button.dataset.playerGender || '';
-            if (fields.position) fields.position.value = button.dataset.playerPosition || '';
-            if (fields.photoUrl) fields.photoUrl.value = button.dataset.playerPhoto || '';
-            if (fields.docUrl) fields.docUrl.value = button.dataset.playerDocument || '';
-            if (fields.teamName) fields.teamName.value = button.dataset.playerTeamName || '';
-            if (fields.photoLink) {
-              const photoPath = button.dataset.playerPhoto || '';
-              fields.photoLink.href = photoPath || '#';
-              fields.photoLink.style.display = photoPath ? 'inline-flex' : 'none';
-            }
-            if (fields.docLink) {
-              const documentPath = button.dataset.playerDocument || '';
-              fields.docLink.href = documentPath || '#';
-              fields.docLink.style.display = documentPath ? 'inline-flex' : 'none';
-            }
-
-            document.getElementById('registration-type-selector').style.display = 'none';
-            document.getElementById('new-player-form').style.display = 'none';
-            document.getElementById('renewal-form').style.display = 'none';
-            document.getElementById('transfer-form').style.display = 'none';
-            formSection.style.display = 'block';
-            updateAllPlayerEntries();
-            formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-
-          function cancelPlayerEditForm() {
-            const formSection = document.getElementById('edit-player-form');
-            if (formSection) {
-              formSection.style.display = 'none';
-            }
-            backToSelector();
-          }
-
           const dashboardNotice = document.querySelector('[data-dashboard-notice]');
 
           function dismissDashboardNotice() {
@@ -1867,7 +1743,7 @@
               <td>{% if team.status == 'rejected' %}{{ team.rejection_reason or '-' }}{% else %}-{% endif %}</td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty">No teams submitted yet.</td></tr>
+            <tr><td colspan="7" class="empty">No teams submitted yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -1942,29 +1818,10 @@
                 {% if (is_source_loan or is_receiving_loan) and player.loan_end_date %}<br><small>Returns {{ player.loan_end_date }}</small>{% endif %}
               </td>
               <td>{% if player.status == 'rejected' %}{{ player.rejection_reason or '-' }}{% else %}-{% endif %}</td>
-              <td>
-                {% if player.status in ['pending', 'rejected'] %}
-                  <button
-                    class="button button-secondary small"
-                    type="button"
-                    onclick="openPlayerEditForm(this)"
-                    data-player-id="{{ player.player_id }}"
-                    data-player-team-id="{{ player.team.team_id }}"
-                    data-player-team-name="{{ player.team.team_name }}"
-                    data-player-name="{{ player.full_name }}"
-                    data-player-dob="{{ player.dob.strftime('%Y-%m-%d') if player.dob else '' }}"
-                    data-player-gender="{{ player.gender }}"
-                    data-player-position="{{ player.position or '' }}"
-                    data-player-photo="{{ player.photo_path or '' }}"
-                    data-player-document="{{ player.documents[0].file_path if player.documents else '' }}"
-                  >Edit</button>
-                {% else %}
-                  -
-                {% endif %}
-              </td>
+              <td>-</td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty">No players submitted yet.</td></tr>
+            <tr><td colspan="7" class="empty">No players submitted yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -2400,7 +2257,7 @@
               eligiblePlayers.forEach((player) => {
                 const option = document.createElement("option");
                 option.value = player.player_id;
-                option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group}) • ${player.category_name}`;
+                option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group}) â€¢ ${player.category_name}`;
                 option.dataset.playerCode = player.player_code;
                 option.dataset.ageGroup = player.age_group;
                 option.dataset.teamName = player.team_name;
@@ -3560,7 +3417,7 @@
         }
         let label = labelParts[0];
         if (labelParts.length > 1) {
-          label += ` - ${labelParts.slice(1).join(' • ')}`;
+          label += ` - ${labelParts.slice(1).join(' â€¢ ')}`;
         }
         if (player.player_code) {
           label += ` (${player.player_code})`;
@@ -3793,5 +3650,6 @@
   })();
 </script>
 {% endblock %}
+
 
 

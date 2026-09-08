@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+﻿from datetime import date, datetime, timedelta
 import logging
 import re
 from functools import lru_cache
@@ -33,7 +33,6 @@ from app.models import (
     ResultVerification,
     User,
     UserRole,
-    PlayerDocument,
 )
 from app.services.league import (
     create_fixture,
@@ -247,14 +246,6 @@ def _resolve_player_upload(
             return uploaded
 
     raise RegistrationError(f"Player {index + 1} {label} is required.")
-
-
-def _player_primary_document_path(player: Player) -> str | None:
-    if not player.documents:
-        return None
-    first_document = min(player.documents, key=lambda document: document.document_id)
-    return first_document.file_path
-
 
 def _redirect(location: str) -> RedirectResponse:
     return RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
@@ -3131,165 +3122,6 @@ def create_player_route(
     )
 
 
-@router.post("/team-admin/players/edit")
-def edit_player_route(
-    request: Request,
-    player_id: int = Form(...),
-    team_id: int = Form(...),
-    full_name: str = Form(...),
-    gender: str = Form(...),
-    dob: str = Form(...),
-    position: str = Form(...),
-    passport_photo_url: str | None = Form(None),
-    identity_document_url: str | None = Form(None),
-    passport_photo: UploadFile | None = File(None),
-    identity_document: UploadFile | None = File(None),
-    db: Session = Depends(get_db),
-):
-    team_admin = _require_team_admin(request, db)
-    team = db.get(Team, team_id)
-    player = db.get(Player, player_id)
-    if not team or not player or player.team_id != team.team_id or not team_admin_has_access_to_team(db, team_admin.team_admin_id, team.team_id):
-        return _team_admin_dashboard_redirect(
-            section="my-players",
-            notice="You can only edit players from your own approved teams.",
-            notice_kind="error",
-        )
-    if player.status not in {ApprovalStatus.PENDING.value, ApprovalStatus.REJECTED.value}:
-        return _team_admin_dashboard_redirect(
-            section="my-players",
-            notice="Only pending or rejected player registrations can be edited.",
-            notice_kind="error",
-        )
-
-    old_photo_path = player.photo_path
-    old_document_path = _player_primary_document_path(player)
-    uploaded_paths: list[str] = []
-    try:
-        clean_name = full_name.strip()
-        if not clean_name:
-            raise RegistrationError("Player full name is required.")
-        if not re.match(r"^[A-Za-z\s'\-]+$", clean_name):
-            raise RegistrationError("Player full name can only contain letters, spaces, apostrophes, and hyphens.")
-
-        clean_gender = gender.strip()
-        if clean_gender not in {"Male", "Female"}:
-            raise RegistrationError("Player gender must be Male or Female.")
-
-        clean_position = position.strip()
-        allowed_positions = {"Goalkeeper", "Defender", "Midfielder", "Forward"}
-        if clean_position not in allowed_positions:
-            raise RegistrationError("Player position must be one of: Goalkeeper, Defender, Midfielder, Forward.")
-
-        try:
-            dob_value = datetime.strptime(dob.strip(), "%Y-%m-%d").date()
-        except (ValueError, TypeError):
-            raise RegistrationError("Player date of birth must use the calendar date picker.")
-
-        age_group = determine_age_group(dob_value)
-        eligible_category = determine_player_club_category(clean_gender, dob_value)
-        max_period = suggested_registration_period(dob_value)
-        if not age_group or not eligible_category or not max_period:
-            raise RegistrationError("Player is not eligible for any youth age category.")
-
-        team_category_name = team.category.category_name if team.category else None
-        if not team_category_name or team_category_name.casefold() != eligible_category.casefold():
-            raise RegistrationError(
-                f"This player qualifies for {eligible_category}, but the selected team is registered as {team_category_name or 'unconfigured'}."
-            )
-
-        photo_path = (passport_photo_url or "").strip() or None
-        if passport_photo and passport_photo.filename:
-            photo_path = _safe_upload(passport_photo, "player-photos")
-            if photo_path:
-                uploaded_paths.append(photo_path)
-        if not photo_path:
-            raise RegistrationError("Player photo is required.")
-
-        identity_path = (identity_document_url or "").strip() or None
-        if identity_document and identity_document.filename:
-            identity_path = _safe_upload(identity_document, "player-documents")
-            if identity_path:
-                uploaded_paths.append(identity_path)
-        if not identity_path:
-            raise RegistrationError("Player identity document is required.")
-
-        db.query(PlayerDocument).filter(PlayerDocument.player_id == player.player_id).delete(synchronize_session=False)
-
-        player.full_name = clean_name
-        player.gender = clean_gender
-        player.dob = dob_value
-        player.position = clean_position
-        player.photo_path = photo_path
-        player.age_group = age_group
-        player.registration_period = max_period
-        player.status = ApprovalStatus.PENDING.value
-        player.rejection_reason = None
-        player.approved_by_super_admin_id = None
-        player.approved_at = None
-        player.registration_reminder_sent_at = None
-        db.add(
-            PlayerDocument(
-                player_id=player.player_id,
-                document_type="Identity Document",
-                file_path=identity_path,
-            )
-        )
-        db.add(
-            PlayerRegistrationRequest(
-                player_id=player.player_id,
-                team_id=team.team_id,
-                requested_by_team_admin_id=team_admin.team_admin_id,
-                registration_type="new",
-                agreement_form_path=identity_path,
-                registration_period=max_period,
-                status=ApprovalStatus.PENDING.value,
-                rejection_reason=None,
-            )
-        )
-        db.commit()
-        db.refresh(player)
-
-        if old_photo_path and old_photo_path != photo_path:
-            delete_upload(old_photo_path)
-        if old_document_path and old_document_path != identity_path:
-            delete_upload(old_document_path)
-
-        _announce_submission(
-            db,
-            recipient_email=team_admin.user.email,
-            title="Player registration updated",
-            message=f"{player.full_name}'s registration changes have been submitted and are now awaiting approval.",
-            link="/team-admin/account",
-            super_admin_title="Player registration updated",
-            super_admin_message=f"{player.full_name}'s registration was edited and resubmitted for approval under {team.team_name}.",
-            super_admin_link="/super-admin#players",
-        )
-    except RegistrationError as exc:
-        db.rollback()
-        for path in dict.fromkeys(uploaded_paths):
-            delete_upload(path)
-        return _team_admin_dashboard_redirect(
-            section="my-players",
-            notice=str(exc),
-            notice_kind="error",
-        )
-    except Exception:
-        db.rollback()
-        for path in dict.fromkeys(uploaded_paths):
-            delete_upload(path)
-        return _team_admin_dashboard_redirect(
-            section="my-players",
-            notice="Player registration could not be updated right now. Please try again.",
-            notice_kind="error",
-        )
-
-    return _team_admin_dashboard_redirect(
-        section="my-players",
-        notice=f"{player.full_name}'s registration changes were submitted successfully and are now pending approval.",
-    )
-
-
 @router.post("/team-admin/players/renewals")
 def renew_player_route(
     request: Request,
@@ -3768,7 +3600,7 @@ PARENT/GUARDIAN CONSENT FORM
 PLAYER INFORMATION
 Player Full Name: _________________________________
 Date of Birth: _________________________________
-Gender: ☐ Male  ☐ Female
+Gender: â˜ Male  â˜ Female
 Identity Document Number: _________________________________
 Nationality: _________________________________
 
@@ -3810,3 +3642,4 @@ Team Representative Signature: _________________________ Date: _____________
             "Content-Disposition": "attachment; filename=parent-guardian-consent-form.txt"
         },
     )
+
