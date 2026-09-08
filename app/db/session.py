@@ -320,18 +320,23 @@ def _seed_super_admin(db: Session) -> None:
 
 
 def _seed_season_and_categories(db: Session) -> None:
+    default_start_date = date(2026, 7, 1)
+    default_end_date = date(2027, 6, 30)
     season = db.scalar(
         select(Season).where(Season.season_name == settings.default_season_name)
     )
     if not season:
-        current_year = date.today().year
         season = Season(
             season_name=settings.default_season_name,
-            start_date=date(current_year, 1, 1),
-            end_date=date(current_year, 12, 31),
+            start_date=default_start_date,
+            end_date=default_end_date,
         )
         db.add(season)
         db.flush()
+    else:
+        # Keep the original seeded season aligned with the competition calendar.
+        season.start_date = default_start_date
+        season.end_date = default_end_date
 
     category_names = [
         "Male U13",
