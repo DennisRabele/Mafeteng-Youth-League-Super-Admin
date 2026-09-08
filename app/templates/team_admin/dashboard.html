@@ -1246,7 +1246,7 @@
             const entries = Array.from(form.querySelectorAll('[data-player-entry]'));
             const lockedInputs = [];
             try {
-              setBatchUploadStatus('Uploading player files directly to Cloudinary...');
+              setBatchUploadStatus('Uploading documents...');
               for (const entry of entries) {
                 const photoInput = entry.querySelector('input[name="passport_photo"]');
                 const documentInput = entry.querySelector('input[name="identity_document"]');
@@ -1289,7 +1289,7 @@
                   lockedInputs.push(documentInput);
                 }
               }
-              setBatchUploadStatus('Uploads complete. Submitting registration...');
+              setBatchUploadStatus('Uploads complete. Submitting registrations...');
               return true;
             } catch (error) {
               lockedInputs.forEach((input) => {

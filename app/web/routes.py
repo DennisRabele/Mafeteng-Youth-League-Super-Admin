@@ -1650,6 +1650,7 @@ def reject_team_admin_route(
 ):
     _require_super_admin(request, db)
     try:
+        # Team admin records are deleted on rejection, so there is no row to display.
         reject_team_admin(db, team_admin_id, rejection_reason)
     except RegistrationError as exc:
         return _super_admin_dashboard_redirect(
@@ -1688,9 +1689,10 @@ def reject_team_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
-        reject_team(db, team_id, rejection_reason)
+        super_admin_id = _get_super_admin_id(user)
+        reject_team(db, team_id, rejection_reason, super_admin_id)
     except RegistrationError as exc:
         return _super_admin_dashboard_redirect(
             section="teams",
@@ -1725,9 +1727,10 @@ def reject_player_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
-        reject_player(db, player_id, rejection_reason)
+        super_admin_id = _get_super_admin_id(user)
+        reject_player(db, player_id, rejection_reason, super_admin_id)
     except RegistrationError as exc:
         return _redirect(
             f"/super-admin?{urlencode({'dashboard_section': 'players', 'notice': str(exc), 'notice_kind': 'error'})}"
@@ -1762,9 +1765,10 @@ def reject_renewal_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
-        reject_renewal(db, registration_id, rejection_reason)
+        super_admin_id = _get_super_admin_id(user)
+        reject_renewal(db, registration_id, rejection_reason, super_admin_id)
     except RegistrationError as exc:
         return _super_admin_dashboard_redirect(
             section="renewals",
@@ -1802,9 +1806,10 @@ def reject_transfer_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
-        reject_transfer_registration(db, registration_id, rejection_reason)
+        super_admin_id = _get_super_admin_id(user)
+        reject_transfer_registration(db, registration_id, rejection_reason, super_admin_id)
     except RegistrationError as exc:
         return _super_admin_dashboard_redirect(
             section="transfers",
