@@ -166,6 +166,7 @@ class Team(Base):
     team_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     team_admin_id: Mapped[int] = mapped_column(ForeignKey("team_admins.team_admin_id"))
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.category_id"))
+    club_type: Mapped[str] = mapped_column(String(30), nullable=False, default="DiFA Club")
     team_name: Mapped[str] = mapped_column(String(150), nullable=False)
     logo: Mapped[str | None] = mapped_column(String(500))
     team_code: Mapped[str | None] = mapped_column(String(50))

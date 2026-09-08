@@ -863,6 +863,7 @@ def register_team(
     team_admin_id: int,
     team_name: str | None,
     category_id: int,
+    club_type: str,
     contact_information: str,
     team_address: str,
     training_ground: str,
@@ -873,6 +874,9 @@ def register_team(
     category = db.get(Category, category_id)
     if not category:
         raise RegistrationError("Selected category does not exist.")
+    normalized_club_type = (club_type or "").strip()
+    if normalized_club_type not in {"School Club", "DiFA Club"}:
+        raise RegistrationError("Choose either School Club or DiFA Club.")
     normalized_team_name = _normalize_text(team_name)
     normalized_team_code = _normalize_team_code(team_code)
     contact_information = _validate_phone(contact_information, "Contact information")
@@ -890,6 +894,8 @@ def register_team(
             raise RegistrationError("This team must be approved before another registration can use its code.")
         if team.category_id != category_id:
             raise RegistrationError("Selected category must match the team code you entered.")
+        if team.club_type != normalized_club_type:
+            raise RegistrationError("Selected club type must match the team code you entered.")
         if normalized_team_name:
             normalized_team_name = _validate_team_name(normalized_team_name)
             if team.team_name.strip().casefold() != normalized_team_name.casefold():
@@ -905,6 +911,7 @@ def register_team(
         duplicate_team = db.scalar(
             select(Team).where(
                 Team.category_id == category_id,
+                Team.club_type == normalized_club_type,
                 func.lower(Team.team_name) == normalized_team_name.casefold(),
             )
         )
@@ -914,6 +921,7 @@ def register_team(
     team = Team(
         team_admin_id=team_admin_id,
         category_id=category_id,
+        club_type=normalized_club_type,
         team_name=normalized_team_name,
         contact_information=contact_information,
         team_address=team_address,

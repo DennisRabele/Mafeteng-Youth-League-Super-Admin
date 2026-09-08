@@ -62,6 +62,12 @@
               {% endfor %}
             </select>
           </label>
+          <label>Club Type
+            <select name="club_type" required>
+              <option value="School Club">School Club</option>
+              <option value="DiFA Club">DiFA Club</option>
+            </select>
+          </label>
           <label>Contact Information
             <input name="contact_information" required>
           </label>
@@ -2977,8 +2983,8 @@
         <label class="filter-select">Category
           <select id="league-table-category" data-dashboard-category-filter="league-tables" onchange="filterDashboardPanels('league-tables', this.value, event)">
             <option value="all">All Categories</option>
-            {% for category in categories %}
-              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% for competition_name in league_tables.keys() %}
+              <option value="{{ competition_name }}">{{ competition_name }}</option>
             {% endfor %}
           </select>
         </label>
@@ -3045,6 +3051,21 @@
           <button class="button button-success small" type="button" onclick="window.location='/team-admin/dashboard/player-statistics/export?category=all&team_id=all'">Download Top Stats</button>
         </div>
       </div>
+      {% for competition_name, competition_stats in player_statistics.competitions.items() %}
+      <div class="panel" style="margin-bottom: 1.5rem;">
+        <h3 style="margin-top: 0;">{{ competition_name }}</h3>
+        <div class="table-wrap fit-table"><div class="table-scroll-x"><table class="responsive-card-table"><thead><tr><th colspan="3">Top Goal Scorers</th></tr><tr><th>Player</th><th>Club</th><th>Goals</th></tr></thead><tbody>
+          {% for row in competition_stats.scorers %}<tr><td>{{ row.player_names | join('; ') if row.player_names else row.player.full_name }}</td><td>{{ row.team.team_name if row.team else '-' }}</td><td>{{ row.goals }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No goal scorers yet.</td></tr>{% endfor %}
+        </tbody></table></div></div>
+        <div class="table-wrap fit-table"><div class="table-scroll-x"><table class="responsive-card-table"><thead><tr><th colspan="3">Top Assisters</th></tr><tr><th>Player</th><th>Club</th><th>Assists</th></tr></thead><tbody>
+          {% for row in competition_stats.assisters %}<tr><td>{{ row.player_names | join('; ') if row.player_names else row.player.full_name }}</td><td>{{ row.team.team_name if row.team else '-' }}</td><td>{{ row.assists }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No assisters yet.</td></tr>{% endfor %}
+        </tbody></table></div></div>
+        <div class="table-wrap fit-table"><div class="table-scroll-x"><table class="responsive-card-table"><thead><tr><th colspan="4">General Performers</th></tr><tr><th>Player</th><th>Club</th><th>Goals</th><th>Assists</th></tr></thead><tbody>
+          {% for row in competition_stats.club_rows %}<tr><td>{{ row.player_names | join('; ') if row.player_names else row.player.full_name }}</td><td>{{ row.club_label or (row.team.team_name if row.team else '-') }}</td><td>{{ row.goals }}</td><td>{{ row.assists }}</td></tr>{% else %}<tr><td colspan="4" class="empty">No player statistics yet.</td></tr>{% endfor %}
+        </tbody></table></div></div>
+      </div>
+      {% else %}<p class="empty">No player statistics available yet.</p>{% endfor %}
+      {% if false %}
       <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
         <div class="table-scroll-x">
         <table class="responsive-card-table">
@@ -3263,6 +3284,7 @@
         </table>
         </div>
       </div>
+      {% endif %}
     </section>
 
     <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden>

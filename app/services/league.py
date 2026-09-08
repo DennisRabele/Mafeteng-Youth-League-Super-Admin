@@ -575,6 +575,8 @@ def create_fixture(
         raise RegistrationError("Both teams must be approved before a fixture can be created.")
     if home_team.category_id != category_id or away_team.category_id != category_id:
         raise RegistrationError("Selected teams must belong to the chosen category.")
+    if home_team.club_type != away_team.club_type:
+        raise RegistrationError("Fixtures can only be created between clubs of the same club type.")
     if fixture_leg not in {1, 2}:
         raise RegistrationError("Choose whether this is the first or second leg.")
     season = db.scalar(select(Season).order_by(Season.start_date.desc()))
@@ -1322,26 +1324,27 @@ def get_player_statistics(
             return
         identity_key = _player_identity_key(player)
         category_name = statistic.category_name or (team.category.category_name if team.category else "")
+        competition_name = f"{category_name} - {team.club_type}"
 
         club_group = _ensure_group(
             club_groups,
-            (identity_key, team.team_id, category_name),
+            (identity_key, team.team_id, competition_name),
             player=player,
             team=team,
-            category_name=category_name,
+            category_name=competition_name,
             club_label=team.team_name,
         )
         total_group = _ensure_group(
             total_groups,
-            (identity_key, category_name),
+            (identity_key, competition_name),
             player=player,
             team=player.team,
-            category_name=category_name,
+            category_name=competition_name,
             club_label="All Clubs",
         )
 
         for group in (club_group, total_group):
-            category_entry = group["category_totals"][category_name]
+            category_entry = group["category_totals"][competition_name]
             if statistic.stat_type == "goal":
                 group["goals"] += 1
                 goal_type = statistic.goal_type or "Penalty"
@@ -1435,22 +1438,35 @@ def get_player_statistics(
     scorer_rows = [row for row in total_rows if row["goals"] > 0]
     assister_rows = [row for row in total_rows if row["assists"] > 0]
 
+    competitions: dict[str, dict[str, list[dict[str, object]]]] = {}
+    for competition in sorted({row["category_name"] for row in total_rows}, key=str.lower):
+        competitions[competition] = {
+            "players": [row for row in total_rows if row["category_name"] == competition],
+            "club_rows": [row for row in club_rows if row["category_name"] == competition],
+            "scorers": [row for row in scorer_rows if row["category_name"] == competition],
+            "assisters": [row for row in assister_rows if row["category_name"] == competition],
+        }
+
     return {
         "players": total_rows,
         "club_rows": club_rows,
         "scorers": scorer_rows,
         "assisters": assister_rows,
+        "competitions": competitions,
     }
 
 
 def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> dict[str, list[dict[str, object]]]:
+    def competition_name(team: Team) -> str:
+        return f"{team.category.category_name} - {team.club_type}"
+
     team_query = select(Team).options(selectinload(Team.category)).where(Team.status == ApprovalStatus.APPROVED.value)
     if team_ids is not None:
         team_query = team_query.where(Team.team_id.in_(list(team_ids)))
     teams = db.scalars(team_query).all()
     standings: dict[str, dict[int, dict[str, object]]] = defaultdict(dict)
     for team in teams:
-        standings[team.category.category_name][team.team_id] = {
+        standings[competition_name(team)][team.team_id] = {
             "team": team,
             "played": 0,
             "wins": 0,
@@ -1473,7 +1489,7 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
         .where(Match.home_score.is_not(None), Match.away_score.is_not(None))
     ).all()
 
-    def _head_to_head_metrics(category_name: str, tied_team_ids: list[int]) -> dict[int, dict[str, int]]:
+    def _head_to_head_metrics(competition: str, tied_team_ids: list[int]) -> dict[int, dict[str, int]]:
         stats = {
             team_id: {"points": 0, "goals_for": 0, "goals_against": 0, "goal_difference": 0}
             for team_id in tied_team_ids
@@ -1481,9 +1497,9 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
         tied_team_set = set(tied_team_ids)
         for match in matches:
             fixture = match.fixture
-            if not fixture or not fixture.category or fixture.category.category_name != category_name:
+            if not fixture or not fixture.home_team or competition_name(fixture.home_team) != competition:
                 continue
-            if not fixture.home_team or not fixture.away_team:
+            if not fixture.away_team or competition_name(fixture.away_team) != competition:
                 continue
             home_team_id = fixture.home_team.team_id
             away_team_id = fixture.away_team.team_id
@@ -1515,13 +1531,15 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
         fixture = match.fixture
         if not fixture or not fixture.home_team or not fixture.away_team:
             continue
-        category_name = fixture.category.category_name
-        if fixture.home_team.team_id not in standings[category_name]:
+        competition = competition_name(fixture.home_team)
+        if competition_name(fixture.away_team) != competition:
             continue
-        if fixture.away_team.team_id not in standings[category_name]:
+        if fixture.home_team.team_id not in standings[competition]:
             continue
-        home = standings[category_name][fixture.home_team.team_id]
-        away = standings[category_name][fixture.away_team.team_id]
+        if fixture.away_team.team_id not in standings[competition]:
+            continue
+        home = standings[competition][fixture.home_team.team_id]
+        away = standings[competition][fixture.away_team.team_id]
         home_score = match.home_score or 0
         away_score = match.away_score or 0
 
@@ -1551,7 +1569,7 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
             row["goal_difference"] = row["goals_for"] - row["goals_against"]
 
     ordered: dict[str, list[dict[str, object]]] = {}
-    for category_name, rows in standings.items():
+    for competition, rows in standings.items():
         ranked_rows = sorted(
             rows.values(),
             key=lambda row: (-int(row["points"]), str(row["team"].team_name).lower()),
@@ -1565,7 +1583,7 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
             point_group = ranked_rows[index:group_end]
             if len(point_group) > 1:
                 tied_team_ids = [row["team"].team_id for row in point_group]
-                head_to_head = _head_to_head_metrics(category_name, tied_team_ids)
+                head_to_head = _head_to_head_metrics(competition, tied_team_ids)
                 for row in point_group:
                     metrics = head_to_head[row["team"].team_id]
                     row["head_to_head_points"] = metrics["points"]
@@ -1589,7 +1607,7 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
             index = group_end
         for position, row in enumerate(ranked_rows, start=1):
             row["position"] = position
-        ordered[category_name] = ranked_rows
+        ordered[competition] = ranked_rows
     return ordered
 
 

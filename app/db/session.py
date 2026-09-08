@@ -103,6 +103,7 @@ def _ensure_schema_columns() -> None:
         "home_ground": "ALTER TABLE teams ADD COLUMN home_ground VARCHAR(150)",
         "rejection_reason": "ALTER TABLE teams ADD COLUMN rejection_reason TEXT",
         "approved_by_super_admin_id": "ALTER TABLE teams ADD COLUMN approved_by_super_admin_id INTEGER REFERENCES super_admins(admin_id)",
+        "club_type": "ALTER TABLE teams ADD COLUMN club_type VARCHAR(30) DEFAULT 'DiFA Club' NOT NULL",
     }
     with engine.begin() as connection:
         for column_name, statement in missing_team_columns.items():

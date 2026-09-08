@@ -493,20 +493,26 @@
               {% endfor %}
             </select>
           </label>
+          <label>Club Type
+            <select id="fixture-club-type-select" class="super-admin-category-select" required onchange="syncFixtureTeamFilters()">
+              <option value="School Club">School Club</option>
+              <option value="DiFA Club">DiFA Club</option>
+            </select>
+          </label>
           <label>Venue
             <input name="venue" required>
           </label>
           <label>Home Team
             <select name="home_team_id" id="fixture-home-team-select" class="super-admin-category-select" required>
               {% for team in approved_fixture_teams %}
-                <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+                <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}" data-club-type="{{ team.club_type }}">{{ team.team_name }} - {{ team.category.category_name }} - {{ team.club_type }}</option>
               {% endfor %}
             </select>
           </label>
           <label>Away Team
             <select name="away_team_id" id="fixture-away-team-select" class="super-admin-category-select" required>
               {% for team in approved_fixture_teams %}
-                <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+                <option value="{{ team.team_id }}" data-category-id="{{ team.category_id }}" data-club-type="{{ team.club_type }}">{{ team.team_name }} - {{ team.category.category_name }} - {{ team.club_type }}</option>
               {% endfor %}
             </select>
           </label>
@@ -601,6 +607,7 @@
             </div>
             <div class="fixture-meta">
               <span class="fixture-badge">{{ fixture_category }}</span>
+              <span class="fixture-badge">{{ fixture_home_team.club_type if fixture_home_team else '-' }}</span>
               <span class="fixture-badge">Leg {{ fixture.fixture_leg if fixture.fixture_leg else 'Legacy' }}</span>
               <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
             </div>
@@ -751,8 +758,8 @@
         <label class="filter-select">Category
           <select id="league-table-category" data-dashboard-category-filter="league-tables" onchange="filterDashboardPanels('league-tables', this.value, event)">
             <option value="all">All Categories</option>
-            {% for category in categories %}
-              <option value="{{ category.category_name }}">{{ category.category_name }}</option>
+            {% for competition_name in league_tables.keys() %}
+              <option value="{{ competition_name }}">{{ competition_name }}</option>
             {% endfor %}
           </select>
         </label>
@@ -819,6 +826,15 @@
           <button class="button button-success small" type="button" onclick="window.location='/super-admin/player-statistics/export?category=all&team_id=all'">Download Top Stats</button>
         </div>
       </div>
+      {% for competition_name, competition_stats in player_statistics.competitions.items() %}
+      <div class="panel" style="margin-bottom: 1.5rem;">
+        <h3 style="margin-top: 0;">{{ competition_name }}</h3>
+        <div class="table-wrap fit-table"><div class="table-scroll-x"><table class="responsive-card-table"><thead><tr><th colspan="3">Top Goal Scorers</th></tr><tr><th>Player</th><th>Club</th><th>Goals</th></tr></thead><tbody>{% for row in competition_stats.scorers %}<tr><td>{{ row.player_names | join('; ') if row.player_names else row.player.full_name }}</td><td>{{ row.team.team_name if row.team else '-' }}</td><td>{{ row.goals }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No goal scorers yet.</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="table-wrap fit-table"><div class="table-scroll-x"><table class="responsive-card-table"><thead><tr><th colspan="3">Top Assisters</th></tr><tr><th>Player</th><th>Club</th><th>Assists</th></tr></thead><tbody>{% for row in competition_stats.assisters %}<tr><td>{{ row.player_names | join('; ') if row.player_names else row.player.full_name }}</td><td>{{ row.team.team_name if row.team else '-' }}</td><td>{{ row.assists }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No assisters yet.</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="table-wrap fit-table"><div class="table-scroll-x"><table class="responsive-card-table"><thead><tr><th colspan="4">General Performers</th></tr><tr><th>Player</th><th>Club</th><th>Goals</th><th>Assists</th></tr></thead><tbody>{% for row in competition_stats.club_rows %}<tr><td>{{ row.player_names | join('; ') if row.player_names else row.player.full_name }}</td><td>{{ row.club_label or (row.team.team_name if row.team else '-') }}</td><td>{{ row.goals }}</td><td>{{ row.assists }}</td></tr>{% else %}<tr><td colspan="4" class="empty">No player statistics yet.</td></tr>{% endfor %}</tbody></table></div></div>
+      </div>
+      {% else %}<p class="empty">No player statistics available yet.</p>{% endfor %}
+      {% if false %}
       <div class="table-wrap fit-table" data-paginated-table data-page-size="8">
         <div class="table-scroll-x">
         <table class="responsive-card-table">
@@ -1037,6 +1053,7 @@
         </table>
         </div>
       </div>
+      {% endif %}
     </section>
 
     <section class="panel dashboard-section" id="notifications" data-dashboard-section="notifications" hidden>
@@ -1101,6 +1118,8 @@
   function syncFixtureTeamFilters() {
     const categorySelect = document.getElementById('fixture-category-select');
     const categoryId = categorySelect ? categorySelect.value : 'all';
+    const clubTypeSelect = document.getElementById('fixture-club-type-select');
+    const clubType = clubTypeSelect ? clubTypeSelect.value : 'all';
     const homeSelect = document.getElementById('fixture-home-team-select');
     const awaySelect = document.getElementById('fixture-away-team-select');
 
@@ -1112,9 +1131,11 @@
       let firstVisibleOption = null;
       options.forEach((option) => {
         const matchesCategory = categoryId === 'all' || option.dataset.categoryId === categoryId;
-        option.hidden = !matchesCategory;
-        option.disabled = !matchesCategory;
-        if (matchesCategory && !firstVisibleOption) {
+        const matchesClubType = clubType === 'all' || option.dataset.clubType === clubType;
+        const matchesCompetition = matchesCategory && matchesClubType;
+        option.hidden = !matchesCompetition;
+        option.disabled = !matchesCompetition;
+        if (matchesCompetition && !firstVisibleOption) {
           firstVisibleOption = option;
         }
       });
