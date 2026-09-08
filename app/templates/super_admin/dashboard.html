@@ -510,6 +510,12 @@
               {% endfor %}
             </select>
           </label>
+          <label>Fixture Leg
+            <select name="fixture_leg" class="super-admin-category-select" required>
+              <option value="1">First Leg</option>
+              <option value="2">Second Leg</option>
+            </select>
+          </label>
           <label>Fixture Date & Time
             <input name="fixture_date" type="datetime-local" required>
           </label>
@@ -595,6 +601,7 @@
             </div>
             <div class="fixture-meta">
               <span class="fixture-badge">{{ fixture_category }}</span>
+              <span class="fixture-badge">Leg {{ fixture.fixture_leg if fixture.fixture_leg else 'Legacy' }}</span>
               <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
             </div>
           </div>

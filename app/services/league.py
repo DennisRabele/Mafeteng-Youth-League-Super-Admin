@@ -556,6 +556,7 @@ def create_fixture(
     category_id: int,
     home_team_id: int,
     away_team_id: int,
+    fixture_leg: int,
     fixture_date: datetime,
     venue: str,
     status: str = FixtureStatus.PUBLISHED.value,
@@ -574,15 +575,43 @@ def create_fixture(
         raise RegistrationError("Both teams must be approved before a fixture can be created.")
     if home_team.category_id != category_id or away_team.category_id != category_id:
         raise RegistrationError("Selected teams must belong to the chosen category.")
+    if fixture_leg not in {1, 2}:
+        raise RegistrationError("Choose whether this is the first or second leg.")
     season = db.scalar(select(Season).order_by(Season.start_date.desc()))
     if not season:
         raise RegistrationError("No active season is available for fixture creation.")
+
+    existing_pair_fixtures = db.scalars(
+        select(Fixture).where(
+            Fixture.season_id == season.season_id,
+            Fixture.category_id == category_id,
+            or_(
+                (Fixture.home_team_id == home_team_id) & (Fixture.away_team_id == away_team_id),
+                (Fixture.home_team_id == away_team_id) & (Fixture.away_team_id == home_team_id),
+            ),
+        )
+    ).all()
+    if len(existing_pair_fixtures) >= 2:
+        raise RegistrationError("These two teams already have their maximum two fixtures for this season.")
+
+    recorded_legs = {
+        fixture.fixture_leg
+        for fixture in existing_pair_fixtures
+        if fixture.fixture_leg in {1, 2}
+    }
+    # Existing fixtures created before leg tracking still count toward the two-leg limit.
+    recorded_legs.update(range(1, len(existing_pair_fixtures) - len(recorded_legs) + 1))
+    if fixture_leg in recorded_legs:
+        raise RegistrationError(f"Leg {fixture_leg} already exists for these two teams this season.")
+    if fixture_leg == 2 and 1 not in recorded_legs:
+        raise RegistrationError("Create the first leg before creating the second leg.")
 
     fixture = Fixture(
         season_id=season.season_id,
         category_id=category_id,
         home_team_id=home_team_id,
         away_team_id=away_team_id,
+        fixture_leg=fixture_leg,
         fixture_date=fixture_date,
         venue=venue.strip(),
         status=status,
@@ -596,14 +625,14 @@ def create_fixture(
     notify_super_admins(
         db,
         "New fixture created",
-        f"{home_team.team_name} vs {away_team.team_name} has been scheduled for {fixture_date:%Y-%m-%d %H:%M} at {venue}.",
+        f"Leg {fixture_leg}: {home_team.team_name} vs {away_team.team_name} has been scheduled for {fixture_date:%Y-%m-%d %H:%M} at {venue}.",
         "/super-admin#fixtures",
     )
     notify_team_admins_for_teams(
         db,
         [home_team_id, away_team_id],
         "Fixture update",
-        f"{home_team.team_name} vs {away_team.team_name} has been scheduled for {fixture_date:%Y-%m-%d %H:%M} at {venue}.",
+        f"Leg {fixture_leg}: {home_team.team_name} vs {away_team.team_name} has been scheduled for {fixture_date:%Y-%m-%d %H:%M} at {venue}.",
         "/team-admin/dashboard#fixtures",
     )
     return fixture
@@ -1541,10 +1570,12 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
                     metrics = head_to_head[row["team"].team_id]
                     row["head_to_head_points"] = metrics["points"]
                     row["head_to_head_goal_difference"] = metrics["goal_difference"]
+                    row["head_to_head_goals_for"] = metrics["goals_for"]
                 point_group.sort(
                     key=lambda row: (
                         -int(row["head_to_head_points"]),
                         -int(row["head_to_head_goal_difference"]),
+                        -int(row["head_to_head_goals_for"]),
                         -int(row["goal_difference"]),
                         -int(row["goals_for"]),
                         str(row["team"].team_name).lower(),
@@ -1553,6 +1584,7 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
             else:
                 point_group[0]["head_to_head_points"] = 0
                 point_group[0]["head_to_head_goal_difference"] = 0
+                point_group[0]["head_to_head_goals_for"] = 0
             ranked_rows[index:group_end] = point_group
             index = group_end
         for position, row in enumerate(ranked_rows, start=1):

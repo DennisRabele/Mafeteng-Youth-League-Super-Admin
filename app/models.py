@@ -460,6 +460,7 @@ class Fixture(Base):
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.category_id"))
     home_team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"))
     away_team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"))
+    fixture_leg: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fixture_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     venue: Mapped[str] = mapped_column(String(150), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default=FixtureStatus.DRAFT.value)

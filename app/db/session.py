@@ -134,6 +134,7 @@ def _ensure_schema_columns() -> None:
         fixture_columns = {column["name"] for column in inspector.get_columns("fixtures")}
         missing_fixture_columns = {
             "created_by_super_admin_id": "ALTER TABLE fixtures ADD COLUMN created_by_super_admin_id INTEGER REFERENCES super_admins(admin_id)",
+            "fixture_leg": "ALTER TABLE fixtures ADD COLUMN fixture_leg INTEGER",
         }
         with engine.begin() as connection:
             for column_name, statement in missing_fixture_columns.items():
