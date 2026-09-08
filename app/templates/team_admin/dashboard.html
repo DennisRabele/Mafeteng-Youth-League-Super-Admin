@@ -169,7 +169,18 @@
                         <input name="full_name" placeholder="Enter full name" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
                       </label>
                       <label>Date Of Birth
-                        <input name="dob" type="date" autocomplete="bday" required>
+                        <div class="dob-picker" style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:0.5rem;">
+                          <select data-dob-year required>
+                            <option value="">Year</option>
+                          </select>
+                          <select data-dob-month required>
+                            <option value="">Month</option>
+                          </select>
+                          <select data-dob-day required>
+                            <option value="">Day</option>
+                          </select>
+                        </div>
+                        <input name="dob" type="hidden" required>
                       </label>
                       <label>Gender
                         <select name="gender" required>
@@ -222,7 +233,18 @@
                     <input name="full_name" placeholder="Enter full name" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
                   </label>
                   <label>Date Of Birth
-                    <input name="dob" type="date" autocomplete="bday" required>
+                    <div class="dob-picker" style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:0.5rem;">
+                      <select data-dob-year required>
+                        <option value="">Year</option>
+                      </select>
+                      <select data-dob-month required>
+                        <option value="">Month</option>
+                      </select>
+                      <select data-dob-day required>
+                        <option value="">Day</option>
+                      </select>
+                    </div>
+                    <input name="dob" type="hidden" required>
                   </label>
                   <label>Gender
                     <select name="gender" required>
@@ -1340,11 +1362,89 @@
             }
           }
 
+          const DOB_YEAR_SPAN = 25;
+          const DOB_MONTHS = [
+            ['01', 'January'],
+            ['02', 'February'],
+            ['03', 'March'],
+            ['04', 'April'],
+            ['05', 'May'],
+            ['06', 'June'],
+            ['07', 'July'],
+            ['08', 'August'],
+            ['09', 'September'],
+            ['10', 'October'],
+            ['11', 'November'],
+            ['12', 'December'],
+          ];
+
+          function getDobControls(entry) {
+            return {
+              year: entry ? entry.querySelector('[data-dob-year]') : null,
+              month: entry ? entry.querySelector('[data-dob-month]') : null,
+              day: entry ? entry.querySelector('[data-dob-day]') : null,
+              hidden: entry ? entry.querySelector('input[name="dob"]') : null,
+            };
+          }
+
+          function populateDobControlOptions(entry) {
+            const controls = getDobControls(entry);
+            if (!controls.year || !controls.month || !controls.day) {
+              return;
+            }
+
+            if (controls.year.dataset.optionsReady !== 'true') {
+              const currentYear = new Date().getFullYear();
+              const yearOptions = ['<option value="">Year</option>'];
+              for (let year = currentYear; year >= currentYear - DOB_YEAR_SPAN; year -= 1) {
+                yearOptions.push(`<option value="${year}">${year}</option>`);
+              }
+              controls.year.innerHTML = yearOptions.join('');
+              controls.month.innerHTML = ['<option value="">Month</option>']
+                .concat(DOB_MONTHS.map(([value, label]) => `<option value="${value}">${label}</option>`))
+                .join('');
+              controls.year.dataset.optionsReady = 'true';
+            }
+
+            const selectedYear = controls.year.value;
+            const selectedMonth = controls.month.value;
+            const selectedDay = controls.day.value;
+            const maxDay = selectedYear && selectedMonth ? new Date(Number(selectedYear), Number(selectedMonth), 0).getDate() : 31;
+            const dayOptions = ['<option value="">Day</option>'];
+            for (let day = 1; day <= maxDay; day += 1) {
+              const value = String(day).padStart(2, '0');
+              dayOptions.push(`<option value="${value}">${day}</option>`);
+            }
+            controls.day.innerHTML = dayOptions.join('');
+            if (selectedDay && Number(selectedDay) <= maxDay) {
+              controls.day.value = selectedDay;
+            }
+          }
+
+          function syncDobField(entry) {
+            const controls = getDobControls(entry);
+            if (!controls.hidden || !controls.year || !controls.month || !controls.day) {
+              return '';
+            }
+
+            const year = controls.year.value;
+            const month = controls.month.value;
+            const day = controls.day.value;
+            const dobValue = year && month && day ? `${year}-${month}-${day}` : '';
+            controls.hidden.value = dobValue;
+            return dobValue;
+          }
+
+          function syncDobSelection(entry) {
+            populateDobControlOptions(entry);
+            syncDobField(entry);
+          }
+
           function calculatePlayerAge(dobValue) {
             if (!dobValue) {
               return { age: null, ageGroup: null, suggestedPeriod: null };
             }
-            const dob = new Date(dobValue);
+            const dob = new Date(`${dobValue}T00:00:00`);
             if (Number.isNaN(dob.getTime())) {
               return { age: null, ageGroup: null, suggestedPeriod: null };
             }
@@ -1419,16 +1519,33 @@
               return;
             }
             entry.dataset.bound = 'true';
+            const yearSelect = entry.querySelector('[data-dob-year]');
+            const monthSelect = entry.querySelector('[data-dob-month]');
+            const daySelect = entry.querySelector('[data-dob-day]');
             const dobInput = entry.querySelector('input[name="dob"]');
             const genderSelect = entry.querySelector('select[name="gender"]');
-            const maxDate = new Date().toISOString().split('T')[0];
-            if (dobInput) {
-              dobInput.max = maxDate;
-              dobInput.addEventListener('input', () => updatePlayerEntryPreview(entry));
-              dobInput.addEventListener('change', () => updatePlayerEntryPreview(entry));
+            if (yearSelect && monthSelect && daySelect) {
+              syncDobSelection(entry);
+              yearSelect.addEventListener('change', () => {
+                populateDobControlOptions(entry);
+                syncDobField(entry);
+                updatePlayerEntryPreview(entry);
+              });
+              monthSelect.addEventListener('change', () => {
+                populateDobControlOptions(entry);
+                syncDobField(entry);
+                updatePlayerEntryPreview(entry);
+              });
+              daySelect.addEventListener('change', () => {
+                syncDobField(entry);
+                updatePlayerEntryPreview(entry);
+              });
             }
             if (genderSelect) {
               genderSelect.addEventListener('change', () => updatePlayerEntryPreview(entry));
+            }
+            if (dobInput) {
+              dobInput.value = dobInput.value || '';
             }
             updatePlayerEntryPreview(entry);
           }
