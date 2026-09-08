@@ -106,15 +106,15 @@
             <p style="color: #666; margin-bottom: 2rem;">Choose what you want to do:</p>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
               <button type="button" class="button button-primary large" onclick="selectRegistrationType('new')" style="padding: 1.5rem;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">âž•</div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#x2795;</div>
                 New Player
               </button>
               <button type="button" class="button button-primary large" onclick="selectRegistrationType('renewal')" style="padding: 1.5rem;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">ðŸ”„</div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#x1F504;</div>
                 Renewal
               </button>
               <button type="button" class="button button-primary large" onclick="selectRegistrationType('transfer')" style="padding: 1.5rem;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">ðŸ”€</div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#x1F500;</div>
                 Transfer
               </button>
             </div>
@@ -123,7 +123,7 @@
 
         <!-- New Player Registration Form -->
         <div id="new-player-form" class="registration-form" style="display: none;">
-          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">â† Back</button>
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">&#x2190; Back</button>
           <section class="panel form-section">
             <div class="panel-heading">
               <h2>New Player Registration</h2>
@@ -258,7 +258,7 @@
         </div>
         <!-- Renewal Registration Form -->
         <div id="renewal-form" class="registration-form" style="display: none;">
-          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">â† Back</button>
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">&#x2190; Back</button>
           <section class="panel form-section">
             <div class="panel-heading">
               <h2>Renewal Registration</h2>
@@ -294,7 +294,7 @@
 
         <!-- Transfer Registration Forms -->
         <div id="transfer-form" class="registration-form" style="display: none;">
-          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">â† Back</button>
+          <button type="button" class="button button-muted" onclick="backToSelector()" style="margin-bottom: 1rem;">&#x2190; Back</button>
           
           <!-- Request Transfer Section -->
           <section class="panel form-section" style="margin-bottom: 2rem;">
@@ -3650,6 +3650,8 @@
   })();
 </script>
 {% endblock %}
+
+
 
 
 
